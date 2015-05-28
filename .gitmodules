@@ -1,0 +1,3 @@
+[submodule "openni2"]
+	path = src/structure/openni2
+	url = https://github.com/occipital/openni2

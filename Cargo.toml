@@ -2,6 +2,7 @@
 name = "nri"
 version = "0.1.0"
 authors = ["Alex Burka <aburka@seas.upenn.edu>"]
+build = "build.rs"
 
 [dependencies]
 log = "0.3"
