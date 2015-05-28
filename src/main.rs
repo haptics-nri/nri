@@ -1,3 +1,9 @@
+#[macro_use]
+extern crate log;
+extern crate env_logger;
+
 fn main() {
-    println!("Hello, world!");
+    env_logger::init().unwrap();
+
+    info!("Hello, world!");
 }
