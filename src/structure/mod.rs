@@ -1,2 +1,2 @@
-mod wrapper;
+pub mod wrapper;
 
