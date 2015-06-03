@@ -3,6 +3,8 @@ use libc::{c_void, c_char};
 use std::ptr;
 use std::mem;
 use std::ffi::CString;
+use std::ops::Deref;
+use std::slice;
 
 #[repr(C)]
 #[derive(PartialEq, Debug)]
@@ -30,6 +32,7 @@ pub enum OniError {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub enum OniSensorType {
 	IR    = 1,
 	Color = 2,
@@ -38,6 +41,7 @@ pub enum OniSensorType {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub enum OniPixelFormat {
 	// Depth
 	Depth1mm   = 100,
@@ -55,16 +59,17 @@ pub enum OniPixelFormat {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct OniFrame {
-	dataSize: i32,
+	pub dataSize: i32,
 	data: *mut c_void,
 
 	sensorType: OniSensorType,
 	timestamp: u64,
 	frameIndex: i32,
 
-	width: i32,
-	height: i32,
+	pub width: i32,
+	pub height: i32,
 
 	videoMode: OniVideoMode,
 	croppingEnabled: i32,
@@ -75,6 +80,7 @@ pub struct OniFrame {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct OniVideoMode {
 	pixelFormat: OniPixelFormat,
 	resolutionX: i32,
@@ -91,11 +97,11 @@ extern "C" {
     fn oniDeviceCreateStream(device: *mut c_void, sensorType: OniSensorType, pStream: *mut *mut c_void) -> OniStatus;
 
     fn oniStreamStart(stream: *mut c_void) -> OniStatus;
-    fn oniStreamReadFrame(stream: *mut c_void, pFrame: *mut *mut c_void) -> OniStatus;
+    fn oniStreamReadFrame(stream: *mut c_void, pFrame: *mut *mut OniFrame) -> OniStatus;
     fn oniStreamStop(stream: *mut c_void);
     fn oniStreamDestroy(stream: *mut c_void);
 
-    pub static ANY_DEVICE: &'static str;
+    fn oniFrameRelease(pFrame: *mut OniFrame);
 }
 
 macro_rules! status2result {
@@ -116,12 +122,19 @@ pub fn shutdown() {
     unsafe { oniShutdown() }
 }
 
+#[derive(Debug)]
 pub struct Device {
     pdev: *mut libc::c_void
 }
 
+#[derive(Debug)]
 pub struct VideoStream {
     pvs: *mut libc::c_void
+}
+
+#[derive(Debug)]
+pub struct Frame {
+    pf: *mut OniFrame
 }
 
 macro_rules! c_str {
@@ -131,37 +144,60 @@ macro_rules! c_str {
 }
 
 impl Device {
-    pub fn new(uri: &str) -> Result<Device,OniError> {
+    pub fn new(uri: Option<&str>) -> Result<Device,OniError> {
         let mut dev = Device { pdev: ptr::null_mut() };
-        status2result!(unsafe { oniDeviceOpen(c_str!(uri), &mut dev.pdev) }, dev)
+        let c_uri = match uri {
+            Some(u) => c_str!(u),
+            None    => ptr::null()
+        };
+        status2result!(unsafe { oniDeviceOpen(c_uri, &mut dev.pdev) }, dev)
     }
 }
 
 impl Drop for Device {
     fn drop(&mut self) {
-        assert_eq!(unsafe { oniDeviceClose(self.pdev) }, OniStatus::Ok)
+        unsafe { oniDeviceClose(self.pdev); } // TODO this returns an error which I am ignoring
     }
 }
 
 impl VideoStream {
-    pub fn new(dev: Device, sensor_type: OniSensorType) -> Result<VideoStream,OniError> {
+    pub fn new(dev: &Device, sensor_type: OniSensorType) -> Result<VideoStream,OniError> {
         let mut vs = VideoStream { pvs: ptr::null_mut() };
         status2result!(unsafe { oniDeviceCreateStream(dev.pdev, sensor_type, &mut vs.pvs) }, vs)
     }
     pub fn start(&self) -> Result<(),OniError> {
         status2result!(unsafe { oniStreamStart(self.pvs) })
     }
-    pub fn readFrame(&self) -> Result<Vec<u8>,OniError> {
-        let mut pframe = ptr::null_mut();
+    pub fn readFrame(&self) -> Result<Frame,OniError> {
+        let mut pframe: *mut OniFrame = ptr::null_mut();
         try!(status2result!(unsafe { oniStreamReadFrame(self.pvs, &mut pframe) }));
-
-        Err(OniError::NotImplemented)
+        Ok(Frame { pf: unsafe { ptr::read(&pframe) } })
     }
     pub fn stop(&self) {
         unsafe { oniStreamStop(self.pvs) }
     }
     pub fn destroy(&self) {
         unsafe { oniStreamDestroy(self.pvs) }
+    }
+}
+
+impl Frame {
+    pub fn data<T>(&self) -> &[T] {
+        &unsafe { slice::from_raw_parts(self.data as *const T, self.dataSize as usize) }
+    }
+}
+
+impl Deref for Frame {
+    type Target = OniFrame;
+
+    fn deref(&self) -> &OniFrame {
+        unsafe { &*self.pf }
+    }
+}
+
+impl Drop for Frame {
+    fn drop(&mut self) {
+        unsafe { oniFrameRelease(self.pf) }
     }
 }
 
