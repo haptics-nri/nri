@@ -25,17 +25,13 @@ fn main() {
     info!("Hello, world!");
 
     structure::wrapper::initialize();
-    let device = structure::wrapper::Device::new();
-    let depth = structure::wrapper::VideoStream::new();
-    device.open(structure::wrapper::ANY_DEVICE);
-    depth.create(device, structure::wrapper::SENSOR_DEPTH);
-    if (depth.isValid()) {
-        depth.start();
-        loop {
-            let frame = depth.readFrame();
-        }
-        depth.stop();
+    let device = structure::wrapper::Device::new(structure::wrapper::ANY_DEVICE).unwrap();
+    let depth = structure::wrapper::VideoStream::new(device, structure::wrapper::OniSensorType::Depth).unwrap();
+    depth.start();
+    loop {
+        let frame = depth.readFrame();
     }
+    depth.stop();
     depth.destroy();
     structure::wrapper::shutdown();
 }
