@@ -1,13 +1,15 @@
 mod structure;
 mod bluefox;
 mod optoforce;
+mod mpmc;
 
 use std::io;
 use std::io::{Write, BufRead};
 use std::fs::File;
 use std::ptr;
 use std::thread;
-use std::sync::mpsc;
+use std::sync::mpsc::{Receiver, TryRecvError};
+use mpmc::MultiSender;
 
 #[macro_use]
 extern crate log;
@@ -24,6 +26,7 @@ macro_rules! errorln(
     )
 );
 
+#[derive(Clone)]
 enum Cmd {
     Start,
     Stop
@@ -34,27 +37,48 @@ fn main() {
 
     info!("Hello, world!");
 
-    let (tx, rx) = mpsc::channel();
+    let mut ansible = MultiSender::new();
 
+    let names = vec!["structure"];
     let threads = vec![
-        thread::spawn(move || structure(&rx))
+        { let rx = ansible.receiver(); thread::spawn(move || structure(rx)) }
         ];
 
     print!("> "); io::stdout().flush();
     let stdin = io::stdin();
     for line in stdin.lock().lines() {
         match line {
-            Ok(line) => match line.trim() {
-                "structure" => {
-                    println!("Starting thread");
-                    tx.send(Cmd::Start);
-                },
-                "quit" => {
-                    println!("Stopping threads");
-                    tx.send(Cmd::Stop);
-                    break;
-                },
-                _ => println!("Unknown command!")
+            Ok(line) => {
+                let mut words = line.trim().split(" ");
+                match words.next().unwrap_or("") {
+                    "" => {},
+                    "start" => {
+                        let dev = words.next().unwrap_or("");
+                        match names.iter().position(|x| *x == dev) {
+                            Some(i) => {
+                                println!("Starting thread for device {} ({})", i, dev);
+                                ansible.send_one(i, Cmd::Start);
+                            },
+                            None => println!("No such device!"),
+                        }
+                    },
+                    "stop" => {
+                        let dev = words.next().unwrap_or("");
+                        match names.iter().position(|x| *x == dev) {
+                            Some(i) => {
+                                println!("Stopping thread for device {} ({})", i, dev);
+                                ansible.send_one(i, Cmd::Stop);
+                            },
+                            None => println!("No such device!"),
+                        }
+                    },
+                    "quit" => {
+                        println!("Stopping threads");
+                        ansible.send(Cmd::Stop);
+                        break;
+                    },
+                    _ => println!("Unknown command!")
+                }
             },
             Err(e) => panic!("Main thread IO error: {}", e)
         }
@@ -66,7 +90,7 @@ fn main() {
     }
 }
 
-fn structure(rx: &mpsc::Receiver<Cmd>) {
+fn structure(rx: Receiver<Cmd>) {
     match rx.recv() {
         Ok(cmd) => match cmd {
             Cmd::Start => {}, // let's go!
@@ -90,8 +114,8 @@ fn structure(rx: &mpsc::Receiver<Cmd>) {
                 Cmd::Stop => break, // shutdown command
             },
             Err(e) => match e {
-                mpsc::TryRecvError::Empty => {}, // continue
-                mpsc::TryRecvError::Disconnected => break, // main thread exploded?
+                TryRecvError::Empty => {}, // continue
+                TryRecvError::Disconnected => break, // main thread exploded?
             },
         }
 

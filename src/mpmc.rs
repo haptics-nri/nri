@@ -1,7 +1,7 @@
 // thanks "panicbit" on irc.mozilla.org #rust
 
 use std::sync::{Mutex,Arc};
-use std::sync::mpsc::{channel,Sender,Receiver};
+use std::sync::mpsc::{channel,Sender,Receiver,SendError};
 
 #[derive(Clone)]
 pub struct MultiSender<T: Send> {
@@ -24,11 +24,16 @@ impl<T: Send+Clone> MultiSender<T> {
         cast_rx
     }
 
-    pub fn send(&mut self, msg: T) {
-        let mut clients = self.clients.lock().unwrap();
-        clients.retain(|client|
-            client.send(msg.clone()).is_ok()
-        );
+    pub fn send(&self, msg: T) {
+        let clients = self.clients.lock().unwrap();
+        for client in clients.iter() {
+            client.send(msg.clone());
+        }
+    }
+
+    pub fn send_one(&self, i: usize, msg: T) -> Result<(), SendError<T>> {
+        let clients = self.clients.lock().unwrap();
+        clients[i].send(msg.clone())
     }
 
     #[allow(dead_code)]
