@@ -10,8 +10,11 @@ use std::io::{Write, BufRead};
 use std::ptr;
 use std::thread;
 use std::sync::mpsc::{Receiver, TryRecvError};
+use std::process::Command;
 use mpmc::MultiSender;
 use comms::Cmd;
+use structure::Structure;
+use web::Web;
 
 #[macro_use]
 extern crate log;
@@ -36,8 +39,8 @@ fn main() {
 
     let names = vec!["web", "structure"];
     let threads = vec![
-        { let rx = ansible.receiver(); thread::spawn(move || web::go(rx)) }      ,
-        { let rx = ansible.receiver(); thread::spawn(move || structure::go(rx)) },
+        { let rx = ansible.receiver(); thread::spawn(move || comms::go::<Web>(rx, true)) },
+        { let rx = ansible.receiver(); thread::spawn(move || comms::go::<Structure>(rx, false)) },
         ];
 
     print!("> "); io::stdout().flush();
@@ -45,35 +48,40 @@ fn main() {
     for line in stdin.lock().lines() {
         match line {
             Ok(line) => {
-                let mut words = line.trim().split(" ");
-                match words.next().unwrap_or("") {
-                    "" => {},
-                    "start" => {
-                        let dev = words.next().unwrap_or("");
-                        match names.iter().position(|x| *x == dev) {
-                            Some(i) => {
-                                println!("Starting thread for {} ({})", i, dev);
-                                ansible.send_one(i, Cmd::Start);
-                            },
-                            None => println!("Start what now?"),
-                        }
-                    },
-                    "stop" => {
-                        let dev = words.next().unwrap_or("");
-                        match names.iter().position(|x| *x == dev) {
-                            Some(i) => {
-                                println!("Stopping thread for {} ({})", i, dev);
-                                ansible.send_one(i, Cmd::Stop);
-                            },
-                            None => println!("Stop what now?"),
-                        }
-                    },
-                    "quit" => {
-                        println!("Stopping threads");
-                        ansible.send(Cmd::Stop);
-                        break;
-                    },
-                    _ => println!("Unknown command!")
+                let line = line.trim();
+                if line.starts_with("!") {
+                    Command::new("sh").args(&["-c", &line[1..]]).status();
+                } else {
+                    let mut words = line.split(" ");
+                    match words.next().unwrap_or("") {
+                        "" => {},
+                        "start" => {
+                            let dev = words.next().unwrap_or("");
+                            match names.iter().position(|x| *x == dev) {
+                                Some(i) => {
+                                    println!("Starting thread for {} ({})", i, dev);
+                                    ansible.send_one(i, Cmd::Start);
+                                },
+                                None => println!("Start what now?"),
+                            }
+                        },
+                        "stop" => {
+                            let dev = words.next().unwrap_or("");
+                            match names.iter().position(|x| *x == dev) {
+                                Some(i) => {
+                                    println!("Stopping thread for {} ({})", i, dev);
+                                    ansible.send_one(i, Cmd::Stop);
+                                },
+                                None => println!("Stop what now?"),
+                            }
+                        },
+                        "quit" => {
+                            println!("Stopping threads");
+                            ansible.send(Cmd::Quit);
+                            break;
+                        },
+                        _ => println!("Unknown command!")
+                    }
                 }
             },
             Err(e) => panic!("Main thread IO error: {}", e)

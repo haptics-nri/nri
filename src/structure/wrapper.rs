@@ -152,11 +152,13 @@ impl Device {
         };
         status2result!(unsafe { oniDeviceOpen(c_uri, &mut dev.pdev) }, dev)
     }
-}
 
-impl Drop for Device {
-    fn drop(&mut self) {
+    pub fn close(&mut self) {
         unsafe { oniDeviceClose(self.pdev); } // TODO this returns an error which I am ignoring
+    }
+
+    pub unsafe fn null() -> Device {
+        Device { pdev: ptr::null_mut() }
     }
 }
 
@@ -164,6 +166,9 @@ impl VideoStream {
     pub fn new(dev: &Device, sensor_type: OniSensorType) -> Result<VideoStream,OniError> {
         let mut vs = VideoStream { pvs: ptr::null_mut() };
         status2result!(unsafe { oniDeviceCreateStream(dev.pdev, sensor_type, &mut vs.pvs) }, vs)
+    }
+    pub unsafe fn null() -> VideoStream {
+        VideoStream { pvs: ptr::null_mut() }
     }
     pub fn start(&self) -> Result<(),OniError> {
         status2result!(unsafe { oniStreamStart(self.pvs) })

@@ -15,4 +15,5 @@ iron = "0.1.18"
 handlebars-iron = "0.6.5"
 staticfile = { version = "0.0.2", default-features = false }
 mount = "0.0.7"
+hyper = "0.5.2"
 
