@@ -1,3 +1,9 @@
 [submodule "openni2"]
 	path = src/structure/openni2
 	url = https://github.com/occipital/openni2
+[submodule "overrides/filetime"]
+	path = overrides/filetime
+	url = git@github.com:alexcrichton/filetime
+[submodule "overrides/staticfile"]
+	path = overrides/staticfile
+	url = git@github.com:iron/staticfile
