@@ -10,4 +10,5 @@ env_logger = "0.3"
 libc = "0.1.8"
 time = "0.1"
 iron = "0.1.18"
+handlebars-iron = "0.6.5"
 
