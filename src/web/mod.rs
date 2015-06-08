@@ -46,7 +46,8 @@ impl Controllable<Web> for Web {
         Web { listening: listening }
     }
 
-    fn step(&mut self) {
+    fn step(&mut self) -> bool {
+        true
     }
     
     fn teardown(&mut self) {

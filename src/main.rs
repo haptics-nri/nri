@@ -39,8 +39,8 @@ fn main() {
 
     let names = vec!["web", "structure"];
     let threads = vec![
-        { let rx = ansible.receiver(); thread::spawn(move || comms::go::<Web>(rx, true)) },
-        { let rx = ansible.receiver(); thread::spawn(move || comms::go::<Structure>(rx, false)) },
+        { let rx = ansible.receiver(); thread::spawn(move || comms::go::<Web>(rx)) },
+        { let rx = ansible.receiver(); thread::spawn(move || comms::go::<Structure>(rx)) },
         ];
 
     print!("> "); io::stdout().flush();

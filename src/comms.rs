@@ -9,11 +9,11 @@ pub enum Cmd {
 
 pub trait Controllable<C> {
     fn setup() -> C;
-    fn step(&mut self);
+    fn step(&mut self) -> bool;
     fn teardown(&mut self);
 }
 
-pub fn go<C: Controllable<C>>(rx: Receiver<Cmd>, block: bool) {
+pub fn go<C: Controllable<C>>(rx: Receiver<Cmd>) {
     loop {
         match rx.recv() {
             Ok(cmd) => match cmd {
@@ -24,9 +24,10 @@ pub fn go<C: Controllable<C>>(rx: Receiver<Cmd>, block: bool) {
         }
 
         let mut c = C::setup();
+        let mut should_block = false;
 
         loop {
-            if block {
+            if should_block {
                 match rx.recv() {
                     Ok(cmd) => match cmd {
                         Cmd::Start => {}, // already started
@@ -49,7 +50,7 @@ pub fn go<C: Controllable<C>>(rx: Receiver<Cmd>, block: bool) {
                 }
             }
 
-            c.step();
+            should_block = c.step();
         }
 
         c.teardown();

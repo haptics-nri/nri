@@ -26,7 +26,7 @@ impl Controllable<Structure> for Structure {
         Structure { device: device, depth: depth, start: start, i: i}
     }
 
-    fn step(&mut self) {
+    fn step(&mut self) -> bool {
         self.i += 1;
 
         let frame = self.depth.readFrame().unwrap();
@@ -34,6 +34,8 @@ impl Controllable<Structure> for Structure {
 
         let mut f = File::create(format!("frame{}.dat", self.i)).unwrap();
         f.write_all(data);
+
+        false
     }
 
     fn teardown(&mut self) {
