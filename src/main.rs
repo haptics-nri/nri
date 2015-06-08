@@ -13,8 +13,10 @@ use std::sync::mpsc::{Receiver, TryRecvError};
 use std::process::Command;
 use mpmc::MultiSender;
 use comms::Cmd;
-use structure::Structure;
 use web::Web;
+use structure::Structure;
+use bluefox::Bluefox;
+use optoforce::Optoforce;
 
 #[macro_use]
 extern crate log;
@@ -37,10 +39,12 @@ fn main() {
 
     let mut ansible = MultiSender::new();
 
-    let names = vec!["web", "structure"];
+    let names = vec!["web", "structure", "bluefox", "optoforce"];
     let threads = vec![
         { let rx = ansible.receiver(); thread::spawn(move || comms::go::<Web>(rx)) },
         { let rx = ansible.receiver(); thread::spawn(move || comms::go::<Structure>(rx)) },
+        { let rx = ansible.receiver(); thread::spawn(move || comms::go::<Bluefox>(rx)) },
+        { let rx = ansible.receiver(); thread::spawn(move || comms::go::<Optoforce>(rx)) },
         ];
 
     print!("> "); io::stdout().flush();
