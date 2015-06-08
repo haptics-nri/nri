@@ -46,7 +46,7 @@ pub fn go(rx: Receiver<Cmd>) {
 
     chain.link_after(HandlebarsEngine::new(relpath!("templates"), ".hbs"));
 
-    let mut listening = Iron::new(chain).http("localhost:3000").unwrap();
+    let mut listening = Iron::new(chain).http("0.0.0.0:3000").unwrap();
 
     loop {
         match rx.try_recv() {
