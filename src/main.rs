@@ -1,3 +1,4 @@
+mod web;
 mod structure;
 mod bluefox;
 mod optoforce;
@@ -33,9 +34,10 @@ fn main() {
 
     let mut ansible = MultiSender::new();
 
-    let names = vec!["structure"];
+    let names = vec!["web", "structure"];
     let threads = vec![
-        { let rx = ansible.receiver(); thread::spawn(move || structure::go(rx)) }
+        { let rx = ansible.receiver(); thread::spawn(move || web::go(rx)) }      ,
+        { let rx = ansible.receiver(); thread::spawn(move || structure::go(rx)) },
         ];
 
     print!("> "); io::stdout().flush();
@@ -50,20 +52,20 @@ fn main() {
                         let dev = words.next().unwrap_or("");
                         match names.iter().position(|x| *x == dev) {
                             Some(i) => {
-                                println!("Starting thread for device {} ({})", i, dev);
+                                println!("Starting thread for {} ({})", i, dev);
                                 ansible.send_one(i, Cmd::Start);
                             },
-                            None => println!("No such device!"),
+                            None => println!("Start what now?"),
                         }
                     },
                     "stop" => {
                         let dev = words.next().unwrap_or("");
                         match names.iter().position(|x| *x == dev) {
                             Some(i) => {
-                                println!("Stopping thread for device {} ({})", i, dev);
+                                println!("Stopping thread for {} ({})", i, dev);
                                 ansible.send_one(i, Cmd::Stop);
                             },
-                            None => println!("No such device!"),
+                            None => println!("Stop what now?"),
                         }
                     },
                     "quit" => {
