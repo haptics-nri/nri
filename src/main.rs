@@ -21,7 +21,6 @@ use optoforce::Optoforce;
 #[macro_use]
 extern crate log;
 extern crate env_logger;
-extern crate libc;
 
 macro_rules! errorln(
     ($($arg:tt)*) => (

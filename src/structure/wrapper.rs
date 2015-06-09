@@ -1,5 +1,5 @@
 extern crate libc;
-use libc::{c_void, c_char};
+use self::libc::{c_void, c_char};
 use std::ptr;
 use std::mem;
 use std::ffi::CString;
@@ -124,12 +124,12 @@ pub fn shutdown() {
 
 #[derive(Debug)]
 pub struct Device {
-    pdev: *mut libc::c_void
+    pdev: *mut c_void
 }
 
 #[derive(Debug)]
 pub struct VideoStream {
-    pvs: *mut libc::c_void
+    pvs: *mut c_void
 }
 
 #[derive(Debug)]

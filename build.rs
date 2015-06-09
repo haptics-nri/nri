@@ -8,5 +8,7 @@ fn main() {
 
     println!("cargo:rustc-link-search=native={}/src/structure", project_dir);
     println!("cargo:rustc-libdir={}/src/structure", project_dir);
+    println!("cargo:rustc-link-search=native={}/src/bluefox", project_dir);
+    println!("cargo:rustc-libdir={}/src/bluefox", project_dir);
 }
 
