@@ -1,6 +1,7 @@
 extern crate libc;
 use self::libc::{c_void, c_int, c_uint, c_char};
 use std::mem;
+use std::ptr;
 use std::ffi::CString;
 
 #[derive(Clone, Copy)] pub struct HDMR(c_int);
@@ -71,6 +72,62 @@ enum DeviceSearchMode {
     UseDevID   = 0x8000
 }
 
+#[repr(C)]
+#[derive(Debug)]
+enum PixelFormat {
+    Raw = 0,
+    Mono8 = 1,
+    Mono16 = 2,
+    RGBx888Packed = 3,
+    YUV422Packed = 4,
+    RGBx888Planar = 5,
+    Mono10 = 6,
+    Mono12 = 7,
+    Mono14 = 8,
+    RGB888Packed = 9,
+    YUV444Planar = 10,
+    Mono32 = 11,
+    YUV422Planar = 12,
+    RGB101010Packed = 13,
+    RGB121212Packed = 14,
+    RGB141414Packed = 15,
+    RGB161616Packed = 16,
+    YUV422_UYVYPacked = 17,
+    Mono12Packed_V2 = 18,
+    YUV422_10Packed = 20,
+    YUV422_UYVY_10Packed = 21,
+    BGR888Packed = 22,
+    BGR101010Packed_V2 = 23,
+    YUV444_UYVPacked = 24,
+    YUV444_UYV_10Packed = 25,
+    YUV444Packed = 26,
+    YUV444_10Packed = 27,
+    Mono12Packed_V1 = 28,
+    Auto = -1
+}
+
+#[repr(C, packed)]
+struct ChannelData {
+    __fix_alignment: [u64; 0],
+    pub channel_offset: c_int,
+    pub line_pitch: c_int,
+    pub pixel_pitch: c_int,
+    pub channel_desc: [c_char; 8192]
+}
+
+#[repr(C, packed)]
+struct ImageBuffer {
+    __fix_alignment: [u64; 0],
+    pub bytes_per_pixel: c_int,
+    pub channel_count: c_int,
+    pub height: c_int,
+    pub size: c_int,
+    pub width: c_int,
+    pub channels: *mut ChannelData,
+    pub pixel_format: PixelFormat,
+    pub data: *mut c_void
+}
+
 #[link(name = "mvDeviceManager")]
 extern "C" {
     // note: DMR_CALL = "" (on Linux)
@@ -81,6 +138,11 @@ extern "C" {
     fn DMR_GetDevice(pHDev: *mut HDEV, searchMode: DeviceSearchMode, pSearchString: *const c_char, devNr: c_uint, wildcard: c_char) -> TDMR_ERROR;
     fn DMR_OpenDevice(hDev: HDEV, pHDrv: *mut HDRV) -> TDMR_ERROR;
     fn DMR_CloseDevice(hDrv: HDRV, hDev: HDEV) -> TDMR_ERROR;
+
+    fn DMR_ImageRequestSingle(hDrv: HDRV, requestCtrl: c_int, pRequestUsed: *mut c_int) -> TDMR_ERROR;
+    fn DMR_ImageRequestWaitFor(hDrv: HDRV, timeout_ms: c_int, queueNr: c_int, pRequestNr: *mut c_int) -> TDMR_ERROR;
+    fn DMR_ImageRequestUnlock(hDrv: HDRV, requestNr: c_int) -> TDMR_ERROR;
+    fn DMR_GetImageRequestBuffer(hDrv: HDRV, requestNr: c_int, ppBuffer: *mut *mut ImageBuffer) -> TDMR_ERROR;
 }
 
 macro_rules! status2result {
@@ -112,6 +174,15 @@ impl Device {
 
         try!(status2result!(unsafe { DMR_GetDevice(&mut this.dev, DeviceSearchMode::Serial, c_str!("*"), 0, b'*' as c_char) }));
         status2result!(unsafe { DMR_OpenDevice(this.dev, &mut this.drv) }, this)
+    }
+
+    pub fn request(&self) -> Result<ImageBuffer,TDMR_ERROR> {
+        try!(status2result!(unsafe { DMR_ImageRequestSingle(self.drv, 0, ptr::null_mut()) }));
+        let mut reqnr: c_int = 0;
+        try!(status2result!(unsafe { DMR_ImageRequestWaitFor(self.drv, -1, 0, &mut reqnr) }));
+        let mut image = ImageBuffer { __fix_alignment: [], bytes_per_pixel: 0, channel_count: 0, height: 0, size: 0, width: 0, channels: ptr::null_mut(), pixel_format: PixelFormat::Mono8, data: ptr::null_mut() };
+        try!(status2result!(unsafe { DMR_GetImageRequestBuffer(self.drv, reqnr, &mut &mut image as *mut &mut ImageBuffer as *mut *mut ImageBuffer) }));
+        status2result!(unsafe { DMR_ImageRequestUnlock(self.drv, reqnr) }, image)
     }
 
     pub fn close(&self) -> Result<(),TDMR_ERROR> {
