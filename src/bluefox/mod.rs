@@ -1,6 +1,8 @@
 mod wrapper;
 
 extern crate time;
+use std::fs::File;
+use std::io::Write;
 use super::comms::Controllable;
 
 pub struct Bluefox {
@@ -21,7 +23,10 @@ impl Controllable<Bluefox> for Bluefox {
         self.i += 1;
 
         let image = self.device.request().unwrap();
-        println!("got frame #{}, a {}x{} {}-ch bluefox image", self.i, image.height, image.width, image.channel_count);
+        println!("got frame #{}, a {:?} image in {:?} format", self.i, image.size(), image.format());
+
+        let mut f = File::create(format!("bluefox{}.dat", self.i)).unwrap();
+        f.write_all(image.data());
 
         false
     }

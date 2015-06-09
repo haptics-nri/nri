@@ -1,5 +1,6 @@
 extern crate libc;
 use self::libc::{c_void, c_int, c_uint, c_char};
+use std::slice;
 use std::mem;
 use std::ptr;
 use std::ffi::CString;
@@ -73,7 +74,7 @@ enum DeviceSearchMode {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 enum PixelFormat {
     Raw = 0,
     Mono8 = 1,
@@ -126,6 +127,12 @@ struct ImageBuffer {
     pub channels: *mut ChannelData,
 }
 
+struct Image<'a> {
+    buf: ImageBuffer,
+    reqnr: c_int,
+    parent: &'a Device,
+}
+
 #[link(name = "mvDeviceManager")]
 extern "C" {
     // note: DMR_CALL = "" (on Linux)
@@ -175,18 +182,37 @@ impl Device {
         status2result!(unsafe { DMR_OpenDevice(this.dev, &mut this.drv) }, this)
     }
 
-    pub fn request(&self) -> Result<ImageBuffer,TDMR_ERROR> {
+    pub fn request(&self) -> Result<Image,TDMR_ERROR> {
         try!(status2result!(unsafe { DMR_ImageRequestSingle(self.drv, 0, ptr::null_mut()) }));
         let mut reqnr: c_int = 0;
         try!(status2result!(unsafe { DMR_ImageRequestWaitFor(self.drv, -1, 0, &mut reqnr) }));
-        let mut image = ImageBuffer { bytes_per_pixel: 0, channel_count: 0, height: 0, size: 0, width: 0, channels: ptr::null_mut(), pixel_format: PixelFormat::Mono8, data: ptr::null_mut() };
-        try!(status2result!(unsafe { DMR_GetImageRequestBuffer(self.drv, reqnr, &mut &mut image as *mut &mut ImageBuffer as *mut *mut ImageBuffer) }));
-        status2result!(unsafe { DMR_ImageRequestUnlock(self.drv, reqnr) }, image)
+        let mut image_buf = ImageBuffer { bytes_per_pixel: 0, channel_count: 0, height: 0, size: 0, width: 0, channels: ptr::null_mut(), pixel_format: PixelFormat::Mono8, data: ptr::null_mut() };
+        status2result!(unsafe { DMR_GetImageRequestBuffer(self.drv, reqnr, &mut &mut image_buf as *mut &mut ImageBuffer as *mut *mut ImageBuffer) }, Image { buf: image_buf, reqnr: reqnr, parent: self })
     }
 
     pub fn close(&self) -> Result<(),TDMR_ERROR> {
         try!(status2result!(unsafe { DMR_CloseDevice(self.drv, self.dev) }));
         status2result!(unsafe { DMR_Close() })
+    }
+}
+
+impl<'a> Image<'a> {
+    pub fn size(&self) -> (usize, usize) {
+        (self.buf.height as usize, self.buf.width as usize)
+    }
+
+    pub fn format(&self) -> PixelFormat {
+        self.buf.pixel_format
+    }
+
+    pub fn data(&self) -> &[u8] {
+        &unsafe { slice::from_raw_parts(mem::transmute(self.buf.data), self.buf.size as usize) }
+    }
+}
+
+impl<'a> Drop for Image<'a> {
+    fn drop(&mut self) {
+        unsafe { DMR_ImageRequestUnlock(self.parent.drv, self.reqnr); }
     }
 }
 

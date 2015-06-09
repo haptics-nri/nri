@@ -4,7 +4,6 @@ extern crate time;
 use std::fs::File;
 use std::io::Write;
 use super::comms::Controllable;
-use std::ptr;
 
 pub struct Structure {
     device: wrapper::Device,
@@ -32,7 +31,7 @@ impl Controllable<Structure> for Structure {
         let frame = self.depth.readFrame().unwrap();
         let data: &[u8] = frame.data();
 
-        let mut f = File::create(format!("frame{}.dat", self.i)).unwrap();
+        let mut f = File::create(format!("structure{}.dat", self.i)).unwrap();
         f.write_all(data);
 
         false
