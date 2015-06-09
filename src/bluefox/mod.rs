@@ -13,7 +13,7 @@ impl Controllable<Bluefox> for Bluefox {
     fn setup() -> Bluefox {
         let device = wrapper::Device::new().unwrap();
         //device.request_reset();
-
+        
         Bluefox { device: device, i: 0, start: time::now() }
     }
 
@@ -21,7 +21,7 @@ impl Controllable<Bluefox> for Bluefox {
         self.i += 1;
 
         let image = self.device.request().unwrap();
-        println!("got a {}x{} {}-ch bluefox image", image.height, image.width, image.channel_count);
+        println!("got frame #{}, a {}x{} {}-ch bluefox image", self.i, image.height, image.width, image.channel_count);
 
         false
     }

@@ -108,24 +108,22 @@ enum PixelFormat {
 
 #[repr(C, packed)]
 struct ChannelData {
-    __fix_alignment: [u64; 0],
     pub channel_offset: c_int,
     pub line_pitch: c_int,
     pub pixel_pitch: c_int,
-    pub channel_desc: [c_char; 8192]
+    pub channel_desc: [c_char; 8192],
 }
 
 #[repr(C, packed)]
 struct ImageBuffer {
-    __fix_alignment: [u64; 0],
     pub bytes_per_pixel: c_int,
-    pub channel_count: c_int,
     pub height: c_int,
-    pub size: c_int,
     pub width: c_int,
-    pub channels: *mut ChannelData,
     pub pixel_format: PixelFormat,
-    pub data: *mut c_void
+    pub size: c_int,
+    pub data: *mut c_void,
+    pub channel_count: c_int,
+    pub channels: *mut ChannelData,
 }
 
 #[link(name = "mvDeviceManager")]
@@ -169,6 +167,7 @@ pub struct Device {
 
 impl Device {
     pub fn new() -> Result<Device,TDMR_ERROR> {
+        println!("bluefox::wrapper::ImageBuffer is aligned at {} (min {})", mem::align_of::<ImageBuffer>(), mem::min_align_of::<ImageBuffer>());
         let mut this = Device { dmr: HDMR(0), dev: HDEV(0), drv: HDRV(0) };
         try!(status2result!(unsafe { DMR_Init(&mut this.dmr) }));
 
@@ -180,7 +179,7 @@ impl Device {
         try!(status2result!(unsafe { DMR_ImageRequestSingle(self.drv, 0, ptr::null_mut()) }));
         let mut reqnr: c_int = 0;
         try!(status2result!(unsafe { DMR_ImageRequestWaitFor(self.drv, -1, 0, &mut reqnr) }));
-        let mut image = ImageBuffer { __fix_alignment: [], bytes_per_pixel: 0, channel_count: 0, height: 0, size: 0, width: 0, channels: ptr::null_mut(), pixel_format: PixelFormat::Mono8, data: ptr::null_mut() };
+        let mut image = ImageBuffer { bytes_per_pixel: 0, channel_count: 0, height: 0, size: 0, width: 0, channels: ptr::null_mut(), pixel_format: PixelFormat::Mono8, data: ptr::null_mut() };
         try!(status2result!(unsafe { DMR_GetImageRequestBuffer(self.drv, reqnr, &mut &mut image as *mut &mut ImageBuffer as *mut *mut ImageBuffer) }));
         status2result!(unsafe { DMR_ImageRequestUnlock(self.drv, reqnr) }, image)
     }
