@@ -7,3 +7,6 @@
 [submodule "overrides/staticfile"]
 	path = overrides/staticfile
 	url = git@github.com:iron/staticfile
+[submodule "overrides/handlebars-iron"]
+	path = overrides/handlebars-iron
+	url = git@github.com:sunng87/handlebars-iron
