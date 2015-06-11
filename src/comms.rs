@@ -33,6 +33,10 @@ pub trait Controllable<C> {
     fn teardown(&mut self);
 }
 
+/// Service driving function
+///
+/// Runs in a loop receiving commands from th supervisor thread. Manages a Controllable instance,
+/// calling its setup()/step()/teardown() methods as necessary.
 pub fn go<C: Controllable<C>>(rx: Receiver<Cmd>) {
     loop {
         match rx.recv() {
