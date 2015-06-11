@@ -32,6 +32,7 @@ struct Service {
 }
 
 impl Service {
+    /// Create a new service descriptor with the given name
     fn new(s: &str) -> Service {
         Service { name: s.to_string() }
     }
@@ -45,10 +46,12 @@ impl ToJson for Service {
     }
 }
 
+/// Make a path relative to the current file's directory
 fn relpath(path: &str) -> String {
     String::from(Path::new(file!()).parent().unwrap().join(path).to_str().unwrap())
 }
 
+/// Handler for the main page of the web interface
 fn index(req: &mut Request) -> IronResult<Response> {
     let mut data = BTreeMap::<String, Json>::new();
     data.insert("services".to_string(), vec![ Service::new("Structure Sensor"),
@@ -62,8 +65,9 @@ fn index(req: &mut Request) -> IronResult<Response> {
     Ok(resp)
 }
 
-/// Controll
+/// Controllable struct for the web server
 pub struct Web {
+    /// Private handle to the server
     listening: Listening,
 }
 

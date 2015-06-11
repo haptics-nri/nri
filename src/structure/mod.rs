@@ -7,10 +7,18 @@ use std::fs::File;
 use std::io::Write;
 use super::comms::Controllable;
 
+/// Controllable struct for the camera
 pub struct Structure {
+    /// Private handle to the device
     device: wrapper::Device,
+
+    /// Private handle to the data stream
     depth: wrapper::VideoStream,
+
+    /// Time that setup() was last called (used for calculating frame rates)
     start: time::Tm,
+
+    /// Number of frames captured since setup() was last called (used for calculating frame rates)
     i: usize,
 }
 

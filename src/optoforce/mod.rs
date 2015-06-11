@@ -2,6 +2,7 @@
 
 use super::comms::Controllable;
 
+/// Controllable struct for the sensor
 pub struct Optoforce;
 
 impl Controllable<Optoforce> for Optoforce {
