@@ -11,8 +11,25 @@ pub enum Cmd {
 
 /// A service that can be setup and torn down based on commands from a higher power.
 pub trait Controllable<C> {
+    /// Setup the service.
+    ///
+    /// Should initialize any necessary libraries and devices. May be called more than once, but
+    /// teardown() will be called in between.
     fn setup() -> C;
+
+    /// Run one "step".
+    ///
+    /// In the case of a device driver, this corresponds to gathering one frame or sample of data.
+    ///
+    /// Return true if we should wait for a command from the supervisor thread before calling
+    /// step() again. Return false to call step() again right away (unless there is a pending
+    /// command).
     fn step(&mut self) -> bool;
+
+    /// Tear down the service.
+    ///
+    /// Should shut down any necessary libraries or services. Either the program is exiting, or the
+    /// service is just being paused (setup() could be called again).
     fn teardown(&mut self);
 }
 
