@@ -1,3 +1,5 @@
+//! COMMS DOCS HERE
+
 use std::sync::mpsc::{Receiver, TryRecvError};
 
 #[derive(Clone)]
@@ -7,6 +9,7 @@ pub enum Cmd {
     Quit ,
 }
 
+/// A service that can be setup and torn down based on commands from a higher power.
 pub trait Controllable<C> {
     fn setup() -> C;
     fn step(&mut self) -> bool;

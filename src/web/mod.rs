@@ -1,3 +1,7 @@
+//! Web interface to view and control running services
+//!
+//! Uses the Iron web framework, Handlebars templates, and Twitter Boostrap.
+
 extern crate iron;
 extern crate handlebars_iron as hbs;
 extern crate staticfile;
@@ -17,6 +21,12 @@ use self::staticfile::Static;
 use self::mount::Mount;
 use self::hyper::server::Listening;
 
+/// Service descriptor
+///
+/// Unlike the one in main.rs, this descriptor only needs to contain things that are useful for
+/// display in the interface. However, they should probably be unified (TODO). The "web descriptor"
+/// could be just a subfield of the main.rs service descriptor, and then those could get passed in
+/// here (somehow).
 struct Service {
     name: String,
 }
@@ -52,6 +62,7 @@ fn index(req: &mut Request) -> IronResult<Response> {
     Ok(resp)
 }
 
+/// Controll
 pub struct Web {
     listening: Listening,
 }
