@@ -1,3 +1,5 @@
+//! Service to capture frames from the mvBlueFOX3 camera
+
 mod wrapper;
 
 extern crate time;

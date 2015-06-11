@@ -1,3 +1,5 @@
+//! Service to capture frames from the Structure Sensor
+
 mod wrapper;
 
 extern crate time;

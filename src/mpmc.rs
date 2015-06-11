@@ -1,9 +1,11 @@
+//! Multi-producer/multi-consumer channels
+//!
 //! thanks "panicbit" on irc.mozilla.org #rust
 
 use std::sync::{Mutex,Arc};
 use std::sync::mpsc::{channel,Sender,Receiver,SendError};
 
-/// Multi-produce, multi-consumer manager. Hands out channels and holds onto the sending ends, and
+/// Multi-producer, multi-consumer manager. Hands out channels and holds onto the sending ends, and
 /// has methods for sending to one or all of them.
 #[derive(Clone)]
 pub struct MultiSender<T: Send> {

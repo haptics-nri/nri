@@ -1,4 +1,4 @@
-//! COMMS DOCS HERE
+//! Utilities for communication between the supervisor thread and services
 
 use std::sync::mpsc::{Receiver, TryRecvError};
 

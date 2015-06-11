@@ -1,3 +1,5 @@
+//! Service to read data from the OptoForce sensor
+
 use super::comms::Controllable;
 
 pub struct Optoforce;

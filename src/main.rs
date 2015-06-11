@@ -9,29 +9,28 @@
 //!
 //! - Run cargo doc in the NRI repo:
 //!
-//! ```text
-//! nri$ cargo doc
-//! ```
+//! <pre>nri$ cargo doc
+//! </pre>
 //! - Now we need the rustdoc command for this crate.
 //!
-//! ```text
+//! <pre>
 //! nri$ touch src/main.rs
 //! nri$ cargo doc -v | grep rustdoc | awk "-FRunning " '{print substr($NF, 2, length($NF)-2)}' > cargo-doc-command
-//! ```
-//! - Edit <tt>cargo-doc-command</tt> and add <tt>--no-defaults --passes "collapse-docs" --passes "unindent-comments"</tt> after <tt>src/main.rs</tt>. Then run it.
+//! </pre>
+//! - Edit <code>cargo-doc-command</code> and add <code>--no-defaults --passes "collapse-docs" --passes "unindent-comments"</code> after <code>src/main.rs</code>. Then run it.
 //!
-//! ```text
+//! <pre>
 //! nri$ source cargo-doc-command
-//! ```
-//! - Copy the docs to the Github Pages repo, commit, and push.
+//! </pre>
+//! - You can now access the docs at <code>target/doc/nri/index.html</code>. If you want them on the web: copy the docs to the Github Pages repo, commit, and push.
 //!
-//! ```text
+//! <pre>
 //! nri$ rsync -a target/doc ../haptics-nri.github.io
 //! nri$ cd ../haptics-nri.github.io
 //! haptics-nri.github.io$ git add doc
 //! haptics-nri.github.io$ git commit -m "cargo doc"
 //! haptics-nri.github.io$ git push
-//! ```
+//! </pre>
 //! - The docs are now live (after 30s or so) at http://haptics-nri.github.io/doc/nri.
 //!
 //! ## ... set up the wi-fi hotspot
@@ -48,14 +47,14 @@
 //! 5. Go to the "Wi-Fi Security" tab and choose sane options.
 //! 6. Go to the "IPv4 Settings" tab and set the Method to "Shared to other computers".
 //! 7. Click Save.
-//! 8. Edit the file /etc/NetworkManager/system-connections/<SSID> and change
-//!    <tt>mode=infrastructure</tt> to <tt>mode=ap</tt>.
+//! 8. Edit the file <code>/etc/NetworkManager/system-connections/$SSID</code> and change
+//!    <code>mode=infrastructure</code> to <code>mode=ap</code>.
 //! 9. Deactivate and reactivate Wi-Fi. Then you should be able to select the new SSID to
-//!    "connect". And then you should be able to connect from other devices!
+//!    "connect" (meaning broadcast). And then you should be able to connect from other devices!
 //!
 //! Note that (obviously) when the NUC is running as a hotspot, it has no internet connection. I
 //! tried to get DNS running, but I failed, so for now you have to use an IP address to access the
-//! NUC. You can see what it chose by running <tt>ip a</tt> -- it seems to like 10.42.0.1.
+//! NUC. You can see what it chose by running <code>hostname -I</code> -- it seems to like 10.42.0.1.
 
 mod web;
 mod structure;
