@@ -2,10 +2,14 @@
 
 use std::sync::mpsc::{Receiver, TryRecvError};
 
+/// Commands sent from the supervisor thread to services
 #[derive(Clone)]
 pub enum Cmd {
+    /// Start the service
     Start,
+    /// Stop the service (but keep the thread running)
     Stop ,
+    /// Stop the service and kill the thread
     Quit ,
 }
 
