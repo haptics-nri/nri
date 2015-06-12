@@ -5,7 +5,8 @@ mod wrapper;
 extern crate time;
 use std::fs::File;
 use std::io::Write;
-use super::comms::Controllable;
+use std::sync::mpsc::{channel, Sender};
+use super::comms::{Controllable, CmdFrom};
 
 /// Controllable struct for the camera
 pub struct Structure {
@@ -35,7 +36,7 @@ impl Controllable<Structure> for Structure {
         Structure { device: device, depth: depth, start: start, i: i}
     }
 
-    fn step(&mut self) -> bool {
+    fn step(&mut self, tx: Sender<CmdFrom>) -> bool {
         self.i += 1;
 
         let frame = self.depth.readFrame().unwrap();

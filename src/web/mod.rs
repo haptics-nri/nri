@@ -11,8 +11,9 @@ extern crate rustc_serialize as serialize;
 
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::mpsc::{channel, Sender};
 use std::collections::BTreeMap;
-use super::comms::Controllable;
+use super::comms::{Controllable, CmdFrom};
 use self::iron::prelude::*;
 use self::iron::status;
 use self::hbs::{Template, HandlebarsEngine, Watchable};
@@ -92,7 +93,7 @@ impl Controllable<Web> for Web {
         Web { listening: listening }
     }
 
-    fn step(&mut self) -> bool {
+    fn step(&mut self, tx: Sender<CmdFrom>) -> bool {
         true
     }
     

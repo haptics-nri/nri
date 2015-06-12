@@ -5,7 +5,8 @@ mod wrapper;
 extern crate time;
 use std::fs::File;
 use std::io::Write;
-use super::comms::Controllable;
+use std::sync::mpsc::{channel, Sender};
+use super::comms::{Controllable, CmdFrom};
 
 /// Controllable struct for the camera
 pub struct Bluefox {
@@ -27,7 +28,7 @@ impl Controllable<Bluefox> for Bluefox {
         Bluefox { device: device, i: 0, start: time::now() }
     }
 
-    fn step(&mut self) -> bool {
+    fn step(&mut self, tx: Sender<CmdFrom>) -> bool {
         self.i += 1;
 
         let image = self.device.request().unwrap();

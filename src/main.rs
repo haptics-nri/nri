@@ -56,31 +56,6 @@
 //! tried to get DNS running, but I failed, so for now you have to use an IP address to access the
 //! NUC. You can see what it chose by running <code>hostname -I</code> -- it seems to like 10.42.0.1.
 
-mod web;
-mod structure;
-mod bluefox;
-mod optoforce;
-mod comms;
-mod mpmc;
-
-use std::io;
-use std::io::{Write, BufRead};
-use std::ascii::AsciiExt;
-use std::ptr;
-use std::thread;
-use std::sync::mpsc::{channel, Receiver, TryRecvError};
-use std::process::Command;
-use mpmc::MultiSender;
-use comms::Cmd;
-use web::Web;
-use structure::Structure;
-use bluefox::Bluefox;
-use optoforce::Optoforce;
-
-#[macro_use]
-extern crate log;
-extern crate env_logger;
-
 macro_rules! errorln(
     ($($arg:tt)*) => (
         match writeln!(&mut ::std::io::stderr(), $($arg)* ) {
@@ -90,16 +65,44 @@ macro_rules! errorln(
     )
 );
 
+#[macro_use] mod comms;
+mod cli;
+mod web;
+mod structure;
+mod bluefox;
+mod optoforce;
+mod mpmc;
+
+use std::io;
+use std::io::{Write, BufRead};
+use std::ascii::AsciiExt;
+use std::ptr;
+use std::thread;
+use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError};
+use std::process::Command;
+use mpmc::MultiSender;
+use comms::{CmdTo, CmdFrom};
+use cli::CLI;
+use web::Web;
+use structure::Structure;
+use bluefox::Bluefox;
+use optoforce::Optoforce;
+
+#[macro_use]
+extern crate log;
+extern crate env_logger;
+
 macro_rules! rxspawn {
-    ($ansible:expr, $reply:expr; $($s:ty),*) => {
+    ($reply:expr; $($s:ty),*) => {
         vec![
             $(
                 {
-                    let rx = $ansible.receiver();
-                    let tx = $reply.clone();
+                    let (thread_tx, thread_rx) = channel();
+                    let master_tx = $reply.clone();
                     Service {
                         name: stringify!($s).to_ascii_lowercase(),
-                        thread: thread::spawn(move || comms::go::<$s>(rx, tx))
+                        thread: Some(thread::spawn(move || comms::go::<$s>(thread_rx, master_tx))),
+                        tx: thread_tx
                     }
                 }
             ),*
@@ -110,7 +113,30 @@ macro_rules! rxspawn {
 /// Service descriptor
 struct Service {
     name: String,
-    thread: thread::JoinHandle<()>,
+    thread: Option<thread::JoinHandle<()>>,
+    tx: Sender<CmdTo>,
+}
+
+fn send_to(services: &[Service], s: String, cmd: CmdTo) -> bool {
+    match services.iter().position(|x| x.name == s) {
+        Some(i) => { services[i].tx.send(cmd); true },
+        None => false 
+    }
+}
+
+fn start(services: &[Service], s: String) -> bool {
+    send_to(services, s, CmdTo::Start)
+}
+
+fn stop(services: &[Service], s: String) -> bool {
+    send_to(services, s, CmdTo::Stop)
+}
+
+fn stop_all(services: &mut [Service]) {
+    for s in services {
+        s.tx.send(CmdTo::Quit);
+        s.thread.take().map(|t| t.join().unwrap_or_else(|e| errorln!("Failed to join {} thread: {:?}", s.name, e)));
+    }
 }
 
 /// Main function that does everything
@@ -122,59 +148,25 @@ fn main() {
 
     info!("Hello, world!");
 
-    let mut ansible = MultiSender::new();
     let (reply_tx, reply_rx) = channel();
 
-    let services = rxspawn!(ansible, reply_tx; Web, Structure, Bluefox, Optoforce);
+    let mut services = rxspawn!(reply_tx; CLI, Web, Structure, Bluefox, Optoforce);
 
-    print!("> "); io::stdout().flush();
-    let stdin = io::stdin();
-    for line in stdin.lock().lines() {
-        match line {
-            Ok(line) => {
-                let line = line.trim();
-                if line.starts_with("!") {
-                    Command::new("sh").args(&["-c", &line[1..]]).status();
-                } else {
-                    let mut words = line.split(" ");
-                    match words.next().unwrap_or("") {
-                        "" => {},
-                        "start" => {
-                            let dev = words.next().unwrap_or("");
-                            match services.iter().position(|x| x.name == dev) {
-                                Some(i) => {
-                                    println!("Starting thread for {} ({})", i, dev);
-                                    ansible.send_one(i, Cmd::Start);
-                                },
-                                None => println!("Start what now?"),
-                            }
-                        },
-                        "stop" => {
-                            let dev = words.next().unwrap_or("");
-                            match services.iter().position(|x| x.name == dev) {
-                                Some(i) => {
-                                    println!("Stopping thread for {} ({})", i, dev);
-                                    ansible.send_one(i, Cmd::Stop);
-                                },
-                                None => println!("Stop what now?"),
-                            }
-                        },
-                        "quit" => {
-                            println!("Stopping threads");
-                            ansible.send(Cmd::Quit);
-                            break;
-                        },
-                        _ => println!("Unknown command!")
-                    }
-                }
+    start(&services, "cli".to_string());
+
+    loop {
+        match reply_rx.recv() {
+            Ok(cmd) => match cmd {
+                CmdFrom::Start(s, tx) => { tx.send(start(&services, s)); },
+                CmdFrom::Stop(s, tx) => { tx.send(stop(&services, s)); },
+                CmdFrom::Quit => { stop_all(&mut services[1..]); break; }
             },
-            Err(e) => panic!("Main thread IO error: {}", e)
+            Err(_) => { stop_all(&mut services[1..]); break; }
         }
-        print!("> "); io::stdout().flush();
     }
 
-    for s in services {
-        s.thread.join().unwrap();
-    }
+    // we can't really join or kill the CLI thread, because it is waiting on stdin
+    // so just exit, and it will be killed
+
 }
 
