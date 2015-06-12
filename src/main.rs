@@ -68,7 +68,7 @@ use std::io::{Write, BufRead};
 use std::ascii::AsciiExt;
 use std::ptr;
 use std::thread;
-use std::sync::mpsc::{Receiver, TryRecvError};
+use std::sync::mpsc::{channel, Receiver, TryRecvError};
 use std::process::Command;
 use mpmc::MultiSender;
 use comms::Cmd;
@@ -91,14 +91,15 @@ macro_rules! errorln(
 );
 
 macro_rules! rxspawn {
-    ($ansible:expr; $($s:ty),*) => {
+    ($ansible:expr, $reply:expr; $($s:ty),*) => {
         vec![
             $(
                 {
                     let rx = $ansible.receiver();
+                    let tx = $reply.clone();
                     Service {
                         name: stringify!($s).to_ascii_lowercase(),
-                        thread: thread::spawn(move || comms::go::<$s>(rx))
+                        thread: thread::spawn(move || comms::go::<$s>(rx, tx))
                     }
                 }
             ),*
@@ -122,8 +123,9 @@ fn main() {
     info!("Hello, world!");
 
     let mut ansible = MultiSender::new();
+    let (reply_tx, reply_rx) = channel();
 
-    let services = rxspawn!(ansible; Web, Structure, Bluefox, Optoforce);
+    let services = rxspawn!(ansible, reply_tx; Web, Structure, Bluefox, Optoforce);
 
     print!("> "); io::stdout().flush();
     let stdin = io::stdin();

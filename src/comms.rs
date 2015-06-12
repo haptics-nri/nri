@@ -1,6 +1,6 @@
 //! Utilities for communication between the supervisor thread and services
 
-use std::sync::mpsc::{Receiver, TryRecvError};
+use std::sync::mpsc::{Sender, Receiver, TryRecvError};
 
 /// Commands sent from the supervisor thread to services
 #[derive(Clone)]
@@ -43,7 +43,7 @@ pub trait Controllable<C> {
 ///
 /// Runs in a loop receiving commands from th supervisor thread. Manages a Controllable instance,
 /// calling its setup()/step()/teardown() methods as necessary.
-pub fn go<C: Controllable<C>>(rx: Receiver<Cmd>) {
+pub fn go<C: Controllable<C>>(rx: Receiver<Cmd>, tx: Sender<Cmd>) {
     loop {
         match rx.recv() {
             Ok(cmd) => match cmd {
