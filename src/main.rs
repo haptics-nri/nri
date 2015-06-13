@@ -25,13 +25,21 @@
 //! - You can now access the docs at <code>target/doc/nri/index.html</code>. If you want them on the web: copy the docs to the Github Pages repo, commit, and push.
 //!
 //! <pre>
+//! nri$ pushd ../haptics-nri.github.io
+//! haptics-nri.github.io$ git pull
+//! haptics-nri.github.io$ popd
 //! nri$ rsync -a target/doc ../haptics-nri.github.io
-//! nri$ cd ../haptics-nri.github.io
+//! nri$ pushd ../haptics-nri.github.io
 //! haptics-nri.github.io$ git add doc
 //! haptics-nri.github.io$ git commit -m "cargo doc"
 //! haptics-nri.github.io$ git push
+//! haptics-nri.github.io$ popd
 //! </pre>
 //! - The docs are now live (after 30s or so) at http://haptics-nri.github.io/doc/nri.
+//!
+//! ## ... lint this code
+//!
+//! - The script <code>clippy.sh</code> modifies Cargo.toml and src/main.rs to include [rust-clippy](https://crates.io/crates/clippy), changes the toolchain to nightly (using [multirust](https://github.com/brson/multirust)), runs <code>cargo run</code> to generate all the lint warnings, and then switches everything back.
 //!
 //! ## ... set up the wi-fi hotspot
 //!
