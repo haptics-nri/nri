@@ -149,7 +149,6 @@ fn stop_all(services: &mut [Service]) {
 
 /// Main function that does everything
 ///
-/// TODO split out CLI interface into a mod
 /// TODO actually use the logging infrastructure
 fn main() {
     env_logger::init().unwrap();
