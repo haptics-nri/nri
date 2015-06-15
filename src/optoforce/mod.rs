@@ -6,7 +6,7 @@ use std::sync::mpsc::{channel, Sender};
 /// Controllable struct for the sensor
 pub struct Optoforce;
 
-impl Controllable<Optoforce> for Optoforce {
+impl Controllable for Optoforce {
     fn setup() -> Optoforce {
         Optoforce
     }

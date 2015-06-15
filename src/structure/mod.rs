@@ -23,7 +23,7 @@ pub struct Structure {
     i: usize,
 }
 
-impl Controllable<Structure> for Structure {
+impl Controllable for Structure {
     fn setup() -> Structure {
         wrapper::initialize();
         let device = wrapper::Device::new(None).unwrap();

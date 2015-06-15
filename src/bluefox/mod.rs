@@ -20,7 +20,7 @@ pub struct Bluefox {
     i: usize,
 }
 
-impl Controllable<Bluefox> for Bluefox {
+impl Controllable for Bluefox {
     fn setup() -> Bluefox {
         let device = wrapper::Device::new().unwrap();
         //device.request_reset();

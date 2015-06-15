@@ -72,7 +72,7 @@ pub struct Web {
     listening: Listening,
 }
 
-impl Controllable<Web> for Web {
+impl Controllable for Web {
     fn setup() -> Web {
         let mut mount = Mount::new();
         for p in ["css", "fonts", "js"].iter() {

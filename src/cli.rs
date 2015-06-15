@@ -9,7 +9,7 @@ use std::sync::mpsc::{channel, Sender};
 /// Controllable struct for the CLI
 pub struct CLI;
 
-impl Controllable<CLI> for CLI {
+impl Controllable for CLI {
     fn setup() -> CLI {
         CLI
     }

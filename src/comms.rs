@@ -29,12 +29,12 @@ pub enum CmdFrom {
 }
 
 /// A service that can be setup and torn down based on commands from a higher power.
-pub trait Controllable<C> {
+pub trait Controllable {
     /// Setup the service.
     ///
     /// Should initialize any necessary libraries and devices. May be called more than once, but
     /// teardown() will be called in between.
-    fn setup() -> C;
+    fn setup() -> Self;
 
     /// Run one "step".
     ///
@@ -65,7 +65,7 @@ macro_rules! rpc {
 ///
 /// Runs in a loop receiving commands from th supervisor thread. Manages a Controllable instance,
 /// calling its setup()/step()/teardown() methods as necessary.
-pub fn go<C: Controllable<C>>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
+pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
     loop {
         match rx.recv() {
             Ok(cmd) => match cmd {
