@@ -6,20 +6,23 @@ extern crate iron;
 extern crate handlebars_iron as hbs;
 extern crate staticfile;
 extern crate mount;
+extern crate router;
 extern crate hyper;
 extern crate rustc_serialize as serialize;
 
+use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::mpsc::{channel, Sender};
 use std::collections::BTreeMap;
 use super::comms::{Controllable, CmdFrom};
 use self::iron::prelude::*;
-use self::iron::status;
+use self::iron::{status, typemap};
 use self::hbs::{Template, HandlebarsEngine, Watchable};
 use self::serialize::json::{ToJson, Json};
 use self::staticfile::Static;
 use self::mount::Mount;
+use self::router::Router;
 use self::hyper::server::Listening;
 
 /// Service descriptor
@@ -30,12 +33,13 @@ use self::hyper::server::Listening;
 /// here (somehow).
 struct Service {
     name: String,
+    shortname: String,
 }
 
 impl Service {
     /// Create a new service descriptor with the given name
-    fn new(s: &str) -> Service {
-        Service { name: s.to_string() }
+    fn new(s: &str, t: &str) -> Service {
+        Service { name: s.to_string(), shortname: t.to_string() }
     }
 }
 
@@ -55,15 +59,23 @@ fn relpath(path: &str) -> String {
 /// Handler for the main page of the web interface
 fn index(req: &mut Request) -> IronResult<Response> {
     let mut data = BTreeMap::<String, Json>::new();
-    data.insert("services".to_string(), vec![ Service::new("Structure Sensor"),
-                                              Service::new("mvBlueFOX3"),
-                                              Service::new("OptoForce"),
-                                              Service::new("SynTouch BioTac"),
+    data.insert("services".to_string(), vec![ Service::new("Structure Sensor", "structure"),
+                                              Service::new("mvBlueFOX3",       "bluefox"  ),
+                                              Service::new("OptoForce",        "optoforce"),
+                                              Service::new("SynTouch BioTac",  "biotac"   ),
                                             ].to_json());
 
     let mut resp = Response::new();
     resp.set_mut(Template::new("index", data)).set_mut(status::Ok);
     Ok(resp)
+}
+
+/// Handler for starting/stopping a service
+fn control(req: &mut Request) -> IronResult<Response> {
+    let params = req.extensions.get::<Router>().unwrap();
+    errorln!("I was asked to {} the {} service!", params.find("action").unwrap(),
+                                                  params.find("service").unwrap());
+    Ok(Response::with(status::NotImplemented))
 }
 
 /// Controllable struct for the web server
@@ -80,7 +92,11 @@ impl Controllable for Web {
                         Static::new(Path::new(&relpath("bootstrap")).join(p)));
         }
 
-        mount.mount("/", index);
+        let mut router = Router::new();
+        router.get("/", index);
+        router.post("/control/:service/:action", control);
+
+        mount.mount("/", router);
 
         let mut chain = Chain::new(mount);
 

@@ -20,13 +20,19 @@
 
             <div class="page-header">
                 <h2>All Services</h2>
-                {{#each services}}
-                    <div class="container">
-                        <h3>{{name}}</h3>
-                        <button type="button" class="btn btn-success">Start</button>
-                        <button type="button" class="btn btn-danger">Stop</button>
-                    </div>
-                {{/each}}
+                <form method="POST">
+                    {{#each services}}
+                        <div class="container">
+                            <h3>{{name}}</h3>
+                            <button formaction="/control/{{shortname}}/start"
+                                    type="submit"
+                                    class="btn btn-success">Start</button>
+                            <button formaction="/control/{{shortname}}/stop"
+                                    type="submit"
+                                    class="btn btn-danger">Stop</button>
+                        </div>
+                    {{/each}}
+                </form>
             </div>
         </div>
     </body>

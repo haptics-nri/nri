@@ -16,5 +16,6 @@ handlebars-iron = "0.7.0"
 staticfile = { version = "0.0.2", default-features = false }
 mount = "0.0.7"
 hyper = "0.5.2"
+router = "0.0.10"
 rustc-serialize = "0.3.15"
 
