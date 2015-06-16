@@ -27,7 +27,7 @@ pub struct Structure {
 
 #[cfg(target_os = "linux")]
 impl Controllable for Structure {
-    fn setup() -> Structure {
+    fn setup(tx: Sender<CmdFrom>) -> Structure {
         wrapper::initialize();
         let device = wrapper::Device::new(None).unwrap();
         let depth = wrapper::VideoStream::new(&device, wrapper::OniSensorType::Depth).unwrap();
@@ -39,7 +39,7 @@ impl Controllable for Structure {
         Structure { device: device, depth: depth, start: start, i: i}
     }
 
-    fn step(&mut self, tx: Sender<CmdFrom>) -> bool {
+    fn step(&mut self) -> bool {
         self.i += 1;
 
         let frame = self.depth.readFrame().unwrap();
@@ -62,19 +62,5 @@ impl Controllable for Structure {
 }
 
 #[cfg(not(target_os = "linux"))]
-pub struct Structure;
-
-#[cfg(not(target_os = "linux"))]
-impl Controllable for Structure {
-    fn setup() -> Structure {
-        Structure
-    }
-
-    fn step(&mut self, tx: Sender<CmdFrom>) -> bool {
-        true
-    }
-
-    fn teardown(&mut self) {
-    }
-}
+stub!(Structure);
 

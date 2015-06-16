@@ -34,7 +34,7 @@ pub trait Controllable {
     ///
     /// Should initialize any necessary libraries and devices. May be called more than once, but
     /// teardown() will be called in between.
-    fn setup() -> Self;
+    fn setup(Sender<CmdFrom>) -> Self;
 
     /// Run one "step".
     ///
@@ -43,7 +43,7 @@ pub trait Controllable {
     /// Return true if we should wait for a command from the supervisor thread before calling
     /// step() again. Return false to call step() again right away (unless there is a pending
     /// command).
-    fn step(&mut self, Sender<CmdFrom>) -> bool;
+    fn step(&mut self) -> bool;
 
     /// Tear down the service.
     ///
@@ -61,6 +61,24 @@ macro_rules! rpc {
     }}
 }
 
+macro_rules! stub {
+    ($t:ident) => {
+        pub struct $t;
+        impl Controllable for $t {
+            fn setup(tx: Sender<CmdFrom>) -> $t {
+                $t
+            }
+
+            fn step(&mut self) -> bool {
+                true
+            }
+
+            fn teardown(&mut self) {
+            }
+        }
+    }
+}
+
 /// Service driving function
 ///
 /// Runs in a loop receiving commands from th supervisor thread. Manages a Controllable instance,
@@ -75,7 +93,7 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
             Err(e) => return, // main thread exploded?
         }
 
-        let mut c = C::setup();
+        let mut c = C::setup(tx.clone());
         let mut should_block = false;
 
         loop {
@@ -102,7 +120,7 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
                 }
             }
 
-            should_block = c.step(tx.clone());
+            should_block = c.step();
         }
 
         c.teardown();

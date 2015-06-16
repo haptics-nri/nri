@@ -24,14 +24,14 @@ pub struct Bluefox {
 
 #[cfg(target_os = "linux")]
 impl Controllable for Bluefox {
-    fn setup() -> Bluefox {
+    fn setup(tx: Sender<CmdFrom>) -> Bluefox {
         let device = wrapper::Device::new().unwrap();
         //device.request_reset();
         
         Bluefox { device: device, i: 0, start: time::now() }
     }
 
-    fn step(&mut self, tx: Sender<CmdFrom>) -> bool {
+    fn step(&mut self) -> bool {
         self.i += 1;
 
         let image = self.device.request().unwrap();
@@ -52,19 +52,5 @@ impl Controllable for Bluefox {
 }
 
 #[cfg(not(target_os = "linux"))]
-pub struct Bluefox;
-
-#[cfg(not(target_os = "linux"))]
-impl Controllable for Bluefox {
-    fn setup() -> Bluefox {
-        Bluefox
-    }
-
-    fn step(&mut self, tx: Sender<CmdFrom>) -> bool {
-        true
-    }
-
-    fn teardown(&mut self) {
-    }
-}
+stub!(Bluefox);
 

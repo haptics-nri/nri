@@ -7,14 +7,16 @@ use std::process::Command;
 use std::sync::mpsc::{channel, Sender};
 
 /// Controllable struct for the CLI
-pub struct CLI;
+pub struct CLI {
+    tx: Sender<CmdFrom>,
+}
 
 impl Controllable for CLI {
-    fn setup() -> CLI {
-        CLI
+    fn setup(tx: Sender<CmdFrom>) -> CLI {
+        CLI { tx: tx }
     }
 
-    fn step(&mut self, tx: Sender<CmdFrom>) -> bool {
+    fn step(&mut self) -> bool {
         print!("> "); io::stdout().flush();
 
         let stdin = io::stdin();
@@ -29,18 +31,18 @@ impl Controllable for CLI {
                 "" => {},
                 "start" => {
                     let dev = words.next().unwrap_or("");
-                    if !rpc!(tx, CmdFrom::Start; dev.to_string()).unwrap() {
+                    if !rpc!(self.tx, CmdFrom::Start; dev.to_string()).unwrap() {
                         errorln!("Failed to start {}", dev);
                     }
                 },
                 "stop" => {
                     let dev = words.next().unwrap_or("");
-                    if !rpc!(tx, CmdFrom::Stop; dev.to_string()).unwrap() {
+                    if !rpc!(self.tx, CmdFrom::Stop; dev.to_string()).unwrap() {
                         errorln!("Failed to stop {}", dev);
                     }
                 },
                 "quit" => {
-                    tx.send(CmdFrom::Quit);
+                    self.tx.send(CmdFrom::Quit);
                 },
                 _ => println!("Unknown command!")
             }
