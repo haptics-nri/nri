@@ -31,13 +31,13 @@ impl Controllable for CLI {
                 "" => {},
                 "start" => {
                     let dev = words.next().unwrap_or("");
-                    if !rpc!(self.tx, CmdFrom::Start; dev.to_string()).unwrap() {
+                    if !rpc!(self.tx, CmdFrom::Start, dev.to_string()).unwrap() {
                         errorln!("Failed to start {}", dev);
                     }
                 },
                 "stop" => {
                     let dev = words.next().unwrap_or("");
-                    if !rpc!(self.tx, CmdFrom::Stop; dev.to_string()).unwrap() {
+                    if !rpc!(self.tx, CmdFrom::Stop, dev.to_string()).unwrap() {
                         errorln!("Failed to stop {}", dev);
                     }
                 },
