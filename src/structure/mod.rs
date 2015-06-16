@@ -1,5 +1,6 @@
 //! Service to capture frames from the Structure Sensor
 
+#[cfg(target_os = "linux")]
 mod wrapper;
 
 extern crate time;
@@ -8,6 +9,7 @@ use std::io::Write;
 use std::sync::mpsc::{channel, Sender};
 use super::comms::{Controllable, CmdFrom};
 
+#[cfg(target_os = "linux")]
 /// Controllable struct for the camera
 pub struct Structure {
     /// Private handle to the device
@@ -23,6 +25,7 @@ pub struct Structure {
     i: usize,
 }
 
+#[cfg(target_os = "linux")]
 impl Controllable for Structure {
     fn setup() -> Structure {
         wrapper::initialize();
@@ -55,6 +58,23 @@ impl Controllable for Structure {
         self.device.close();
         wrapper::shutdown();
         println!("{} frames grabbed in {} s ({} FPS)!", self.i, (end - self.start).num_seconds(), 1000.0*(self.i as f64)/((end - self.start).num_milliseconds() as f64));
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+pub struct Structure;
+
+#[cfg(not(target_os = "linux"))]
+impl Controllable for Structure {
+    fn setup() -> Structure {
+        Structure
+    }
+
+    fn step(&mut self, tx: Sender<CmdFrom>) -> bool {
+        true
+    }
+
+    fn teardown(&mut self) {
     }
 }
 
