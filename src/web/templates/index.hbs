@@ -20,7 +20,7 @@
 
             <div class="page-header">
                 <h2>All Services</h2>
-                <form method="POST">
+                <form method="POST" target="response">
                     {{#each services}}
                         <div class="container">
                             <h3>{{name}}</h3>
@@ -33,6 +33,10 @@
                         </div>
                     {{/each}}
                 </form>
+            </div>
+            <div class="page-header">
+                <h2>Server Response</h2>
+                <iframe name="response"></iframe>
             </div>
         </div>
     </body>

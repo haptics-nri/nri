@@ -47,6 +47,7 @@ impl ToJson for Service {
     fn to_json(&self) -> Json {
         let mut m: BTreeMap<String, Json> = BTreeMap::new();
         m.insert("name".to_string(), self.name.to_json());
+        m.insert("shortname".to_string(), self.shortname.to_json());
         m.to_json()
     }
 }
@@ -75,7 +76,7 @@ fn control(req: &mut Request) -> IronResult<Response> {
     let params = req.extensions.get::<Router>().unwrap();
     errorln!("I was asked to {} the {} service!", params.find("action").unwrap(),
                                                   params.find("service").unwrap());
-    Ok(Response::with(status::NotImplemented))
+    Ok(Response::with((status::NotImplemented, "not implemented")))
 }
 
 /// Controllable struct for the web server
