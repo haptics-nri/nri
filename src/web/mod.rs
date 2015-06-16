@@ -12,12 +12,13 @@ extern crate rustc_serialize as serialize;
 
 use std::io::Write;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{channel, Sender};
 use std::collections::BTreeMap;
 use super::comms::{Controllable, CmdFrom};
 use self::iron::prelude::*;
 use self::iron::{status, typemap};
+use self::iron::middleware::Handler;
 use self::hbs::{Template, HandlebarsEngine, Watchable};
 use self::serialize::json::{ToJson, Json};
 use self::staticfile::Static;
@@ -72,11 +73,29 @@ fn index(req: &mut Request) -> IronResult<Response> {
 }
 
 /// Handler for starting/stopping a service
-fn control(req: &mut Request) -> IronResult<Response> {
-    let params = req.extensions.get::<Router>().unwrap();
-    errorln!("I was asked to {} the {} service!", params.find("action").unwrap(),
-                                                  params.find("service").unwrap());
-    Ok(Response::with((status::NotImplemented, "not implemented")))
+fn control(tx: Sender<CmdFrom>) -> Box<Handler> {
+    let mtx = Mutex::new(tx);
+    Box::new(move |req: &mut Request| -> IronResult<Response> {
+        let params = req.extensions.get::<Router>().unwrap();
+        let service = params.find("service").unwrap();
+        let action = params.find("action").unwrap();
+
+        match action {
+            "start" =>
+                if rpc!(mtx.lock().unwrap(), CmdFrom::Start; service.to_string()).unwrap() {
+                    Ok(Response::with((status::Ok, format!("Started {}", service))))
+                } else {
+                    Ok(Response::with((status::InternalServerError, format!("Failed to start {}", service))))
+                },
+            "stop" =>
+                if rpc!(mtx.lock().unwrap(), CmdFrom::Stop; service.to_string()).unwrap() {
+                    Ok(Response::with((status::Ok, format!("Stopped {}", service))))
+                } else {
+                    Ok(Response::with((status::InternalServerError, format!("Failed to stop {}", service))))
+                },
+            _ => Ok(Response::with((status::BadRequest, format!("What does {} mean?", action))))
+        }
+    })
 }
 
 /// Controllable struct for the web server
@@ -86,7 +105,7 @@ pub struct Web {
 }
 
 impl Controllable for Web {
-    fn setup() -> Web {
+    fn setup(tx: Sender<CmdFrom>) -> Web {
         let mut mount = Mount::new();
         for p in ["css", "fonts", "js"].iter() {
             mount.mount(&format!("/{}/", p),
@@ -95,7 +114,7 @@ impl Controllable for Web {
 
         let mut router = Router::new();
         router.get("/", index);
-        router.post("/control/:service/:action", control);
+        router.post("/control/:service/:action", control(tx));
 
         mount.mount("/", router);
 
@@ -103,6 +122,7 @@ impl Controllable for Web {
 
         let watcher = Arc::new(HandlebarsEngine::new(&relpath("templates"), ".hbs"));
         watcher.watch();
+
         chain.link_after(watcher);
 
         let listening = Iron::new(chain).http("0.0.0.0:3000").unwrap();
@@ -110,7 +130,7 @@ impl Controllable for Web {
         Web { listening: listening }
     }
 
-    fn step(&mut self, tx: Sender<CmdFrom>) -> bool {
+    fn step(&mut self) -> bool {
         true
     }
     
