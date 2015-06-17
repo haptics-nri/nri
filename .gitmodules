@@ -10,3 +10,6 @@
 [submodule "src/optoforce/liboptoforce"]
 	path = src/optoforce/liboptoforce
 	url = git@github.com:ethz-asl/liboptoforce
+[submodule "src/optoforce/remake"]
+	path = src/optoforce/remake
+	url = git@github.com:kralf/remake
