@@ -54,7 +54,7 @@ pub trait Controllable {
 
 // (Sender<CmdFrom>, name of CmdFrom variant; CmdFrom variant params) -> Result<reply, RecvError>
 macro_rules! rpc {
-    ($tx:expr, CmdFrom::$name:ident; $($param:expr),*) => {{
+    ($tx:expr, CmdFrom::$name:ident, $($param:expr),*) => {{
         let (msg_tx, msg_rx) = channel();
         $tx.send(CmdFrom::$name($($param),*, msg_tx));
         msg_rx.recv()

@@ -82,13 +82,13 @@ fn control(tx: Sender<CmdFrom>) -> Box<Handler> {
 
         match action {
             "start" =>
-                if rpc!(mtx.lock().unwrap(), CmdFrom::Start; service.to_string()).unwrap() {
+                if rpc!(mtx.lock().unwrap(), CmdFrom::Start, service.to_string()).unwrap() {
                     Ok(Response::with((status::Ok, format!("Started {}", service))))
                 } else {
                     Ok(Response::with((status::InternalServerError, format!("Failed to start {}", service))))
                 },
             "stop" =>
-                if rpc!(mtx.lock().unwrap(), CmdFrom::Stop; service.to_string()).unwrap() {
+                if rpc!(mtx.lock().unwrap(), CmdFrom::Stop, service.to_string()).unwrap() {
                     Ok(Response::with((status::Ok, format!("Stopped {}", service))))
                 } else {
                     Ok(Response::with((status::InternalServerError, format!("Failed to stop {}", service))))
