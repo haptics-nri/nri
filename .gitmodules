@@ -7,3 +7,6 @@
 [submodule "overrides/staticfile"]
 	path = overrides/staticfile
 	url = git@github.com:iron/staticfile
+[submodule "src/optoforce/liboptoforce"]
+	path = src/optoforce/liboptoforce
+	url = git@github.com:ethz-asl/liboptoforce
