@@ -53,7 +53,7 @@ pub trait Controllable {
 }
 
 /// Convenience macro for making an "RPC" call from a service up to the main thread. This is done
-/// by generating a nonce channel, stuffind the sending end into a message that gets sent to the
+/// by generating a nonce channel, stuffing the sending end into a message that gets sent to the
 /// main thread, and then waiting for the main thread to send back a reply.
 /// 
 /// This is a macro instead of a function because you need to pass in the _name_ of a CmdFrom
@@ -61,11 +61,12 @@ pub trait Controllable {
 /// creating the channel for you). Possibly a better design would be structs and a trait/generic.
 ///
 /// * Inputs:
-///     - tx: Sender<CmdFrom> = Sender that the service uses to send commands to the main thread
+///     - tx: Sender\<CmdFrom> = Sender that the service uses to send commands to the main thread
 ///     - name = name of a CmdFrom variant that has a Sender<T> as the last parameter
 ///     - params = any other parameters for the CmdFrom variant
 /// * Outputs:
-///     - Result<T, mpsc::RecvError> = the response received (or not) from the main thread
+///     - Result\<T, mpsc::RecvError> = the response received (or not) from the main thread
+#[macro_export]
 macro_rules! rpc {
     ($tx:expr, CmdFrom::$name:ident, $($param:expr),*) => {{
         let (msg_tx, msg_rx) = ::std::sync::mpsc::channel();
