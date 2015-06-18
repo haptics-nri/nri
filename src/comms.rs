@@ -52,20 +52,42 @@ pub trait Controllable {
     fn teardown(&mut self);
 }
 
-// (Sender<CmdFrom>, name of CmdFrom variant; CmdFrom variant params) -> Result<reply, RecvError>
+/// Convenience macro for making an "RPC" call from a service up to the main thread. This is done
+/// by generating a nonce channel, stuffing the sending end into a message that gets sent to the
+/// main thread, and then waiting for the main thread to send back a reply.
+/// 
+/// This is a macro instead of a function because you need to pass in the _name_ of a CmdFrom
+/// variant without constructing it (because a Sender is needed to construct it, but the macro is
+/// creating the channel for you). Possibly a better design would be structs and a trait/generic.
+///
+/// * Inputs:
+///     - tx: Sender\<CmdFrom> = Sender that the service uses to send commands to the main thread
+///     - name = name of a CmdFrom variant that has a Sender<T> as the last parameter
+///     - params = any other parameters for the CmdFrom variant
+/// * Outputs:
+///     - Result\<T, mpsc::RecvError> = the response received (or not) from the main thread
+#[macro_export]
 macro_rules! rpc {
     ($tx:expr, CmdFrom::$name:ident, $($param:expr),*) => {{
-        let (msg_tx, msg_rx) = channel();
-        $tx.send(CmdFrom::$name($($param),*, msg_tx));
+        let (msg_tx, msg_rx) = ::std::sync::mpsc::channel();
+        $tx.send($crate::comms::CmdFrom::$name($($param),*, msg_tx));
         msg_rx.recv()
     }}
 }
 
+/// Convenience macro for defining a stub service that doesn't do anything (yet). Defines a
+/// zero-sized struct and an impl that blocks between receiving messages from the main thread (so
+/// it doesn't do anything, but it doesn't sit in a CPU-busy loop either).
+///
+/// * Inputs:
+///     - t = name of the Controllable
+/// * Items created:
+///     - pub struct (named $t) and stub impl
 macro_rules! stub {
     ($t:ident) => {
         pub struct $t;
-        impl Controllable for $t {
-            fn setup(tx: Sender<CmdFrom>) -> $t {
+        impl $crate::comms::Controllable for $t {
+            fn setup(tx: ::std::sync::mpsc::Sender<$crate::comms::CmdFrom>) -> $t {
                 $t
             }
 
