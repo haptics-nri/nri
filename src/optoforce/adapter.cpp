@@ -36,8 +36,9 @@ void lofa_free_sensor(LOFA_SENSOR_HANDLE that)
 
 lofa_xyz lofa_sensor_read(const LOFA_SENSOR_HANDLE that)
 {
-    // TODO check hasPackages or catch NoSuchPackageException
-    SensorReading reading = that->getReading();
+    while (!that->hasPackages());
+    SensorPackage package = that->getPackage();
+    SensorReading reading = that->getReading(Sensor::buffer_position_newest, false);
     return {.x = reading.getForceX(), .y = reading.getForceY(), .z = reading.getForceZ()};
 }
 
