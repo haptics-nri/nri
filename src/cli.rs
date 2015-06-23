@@ -12,11 +12,11 @@ pub struct CLI {
 }
 
 impl Controllable for CLI {
-    fn setup(tx: Sender<CmdFrom>) -> CLI {
+    fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> CLI {
         CLI { tx: tx }
     }
 
-    fn step(&mut self) -> bool {
+    fn step(&mut self, _: Option<String>) -> bool {
         print!("> "); io::stdout().flush();
 
         let stdin = io::stdin();

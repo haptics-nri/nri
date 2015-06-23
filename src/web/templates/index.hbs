@@ -13,13 +13,15 @@
         <script src="/js/jquery.min.js"></script>
         <script src="/js/bootstrap.min.js"></script>
         <script type="text/javascript">
-            $(function() {
-                setInterval(function() {
-                    $(".latest").each(function(i, img) {
-                        $(img).attr("src", $(img).attr("src").split("?")[0] + "?" + new Date().getTime());
-                    });
-                }, 500);
-            });
+            var socket = new WebSocket("ws://{{server}}", "rust-websocket");
+            socket.onmessage = function (event) {
+                console.log(event.data);
+                switch (event.data) {
+                    case "kick":
+                        $(".latest").each(function () { this.src = this.src.split("?")[0] + "?" + new Date().getTime(); });
+                        break;
+                }
+            };
         </script>
 
         <div class="container theme-showcase" role="main">

@@ -14,7 +14,11 @@ pub enum CmdTo {
     Stop,
 
     /// Stop the service and kill the thread
-    Quit
+    Quit,
+
+    /// Some data
+    // TODO enum instead of str, somehow each service defines its own variants
+    Data(String),
 }
 
 /// Commands sent from services up to the supervisor thread
@@ -26,6 +30,10 @@ pub enum CmdFrom {
     /// Stop another service
     Stop(String, Sender<bool>),
 
+    /// Some data
+    // TODO enum instead of str, somehow each service defines its own variants
+    Data(String),
+
     /// Shut down everything
     Quit
 }
@@ -36,7 +44,7 @@ pub trait Controllable {
     ///
     /// Should initialize any necessary libraries and devices. May be called more than once, but
     /// teardown() will be called in between.
-    fn setup(Sender<CmdFrom>) -> Self;
+    fn setup(Sender<CmdFrom>, Option<String>) -> Self;
 
     /// Run one "step".
     ///
@@ -45,7 +53,7 @@ pub trait Controllable {
     /// Return true if we should wait for a command from the supervisor thread before calling
     /// step() again. Return false to call step() again right away (unless there is a pending
     /// command).
-    fn step(&mut self) -> bool;
+    fn step(&mut self, data: Option<String>) -> bool;
 
     /// Tear down the service.
     ///
@@ -89,11 +97,11 @@ macro_rules! stub {
     ($t:ident) => {
         pub struct $t;
         impl $crate::comms::Controllable for $t {
-            fn setup(tx: ::std::sync::mpsc::Sender<$crate::comms::CmdFrom>) -> $t {
+            fn setup(tx: ::std::sync::mpsc::Sender<$crate::comms::CmdFrom>, _: Option<String>) -> $t {
                 $t
             }
 
-            fn step(&mut self) -> bool {
+            fn step(&mut self, _: Option<String>) -> bool {
                 true
             }
 
@@ -105,28 +113,34 @@ macro_rules! stub {
 
 /// Service driving function
 ///
-/// Runs in a loop receiving commands from th supervisor thread. Manages a Controllable instance,
+/// Runs in a loop receiving commands from the supervisor thread. Manages a Controllable instance,
 /// calling its setup()/step()/teardown() methods as necessary.
 pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
     loop {
+        let mut data = None;
+
         match rx.recv() {
             Ok(cmd) => match cmd {
                 CmdTo::Start => {}, // let's go!
+                CmdTo::Data(d) => data = Some(d),
                 CmdTo::Stop | CmdTo::Quit => return, // didn't even get to start
             },
             Err(e) => return, // main thread exploded?
         }
 
-        let mut c = C::setup(tx.clone());
+        let mut c = C::setup(tx.clone(), data);
         let mut should_block = false;
 
         loop {
+            data = None;
+
             if should_block {
                 match rx.recv() {
                     Ok(cmd) => match cmd {
                         CmdTo::Start => {}, // already started
                         CmdTo::Stop => break, // shutdown command
                         CmdTo::Quit => { c.teardown(); return }, // real shutdown command
+                        CmdTo::Data(d) => data = Some(d),
                     },
                     Err(_) => { c.teardown(); return }
                 }
@@ -136,6 +150,7 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
                         CmdTo::Start => {}, // already started
                         CmdTo::Stop => break, // shutdown command
                         CmdTo::Quit => { c.teardown(); return }, // real shutdown command
+                        CmdTo::Data(d) => data = Some(d),
                     },
                     Err(e) => match e {
                         TryRecvError::Empty => {}, // continue
@@ -144,7 +159,7 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
                 }
             }
 
-            should_block = c.step();
+            should_block = c.step(data);
         }
 
         c.teardown();

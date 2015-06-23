@@ -6,18 +6,19 @@ build = "build.rs"
 exclude = ["src/web/templates/*", "src/web/bootstrap/*"] # TODO take this out before packaging
 
 [dependencies]
-log = "0.3"
-env_logger = "0.3"
-libc = "0.1.8"
-time = "0.1"
-image = "0.3.11"
+log = "*"
+env_logger = "*"
+libc = "*"
+time = "*"
+image = "*"
 
 # iron deps
-iron = "0.1.18"
-handlebars-iron = "0.7.0"
-staticfile = { version = "0.0.2", default-features = false }
-mount = "0.0.7"
-hyper = "0.5.2"
-router = "0.0.10"
-rustc-serialize = "0.3.15"
+iron = "*"
+handlebars-iron = "*"
+staticfile = { version = "*", default-features = false }
+mount = "*"
+hyper = "*"
+router = "*"
+rustc-serialize = "*"
+websocket = "*"
 

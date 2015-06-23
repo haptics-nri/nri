@@ -12,6 +12,7 @@ use std::fs::File;
 use std::io::{Read, Write};
 use self::image::{imageops, ImageBuffer, ColorType, FilterType};
 use self::image::png::PNGEncoder;
+use std::sync::Mutex;
 use std::sync::mpsc::{channel, Sender, SendError};
 use super::comms::{Controllable, CmdFrom, RestartableThread};
 
@@ -35,16 +36,17 @@ pub struct Bluefox {
 
 #[cfg(target_os = "linux")]
 impl Controllable for Bluefox {
-    fn setup(tx: Sender<CmdFrom>) -> Bluefox {
+    fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Bluefox {
         let device = wrapper::Device::new().unwrap();
         //device.request_reset();
         
+        let mtx = Mutex::new(tx);
         Bluefox {
             device: device,
             i: 0,
             start: time::now(),
 
-            png: RestartableThread::new(|(i, (h, w), bd)| {
+            png: RestartableThread::new(move |(i, (h, w), bd)| {
                 let mut read = File::open(format!("bluefox{}.dat", i)).unwrap();
                 let mut write = File::create(format!("bluefox{}.png", i)).unwrap();
                 let mut unencoded = Vec::with_capacity(w*h);
@@ -54,18 +56,19 @@ impl Controllable for Bluefox {
                 PNGEncoder::new(&mut write).encode(&resized, (w as u32)/10, (h as u32)/10, bd);
                 fs::remove_file("src/web/bootstrap/img/bluefox_latest.png").unwrap_or(());
                 fs::soft_link(format!("../../../../bluefox{}.png", i), "src/web/bootstrap/img/bluefox_latest.png").unwrap();
+                mtx.lock().unwrap().send(CmdFrom::Data("bluefox".to_string()));
             })
         }
     }
 
-    fn step(&mut self) -> bool {
+    fn step(&mut self, _: Option<String>) -> bool {
         self.i += 1;
 
         let image = self.device.request().unwrap();
 
         let mut f = File::create(format!("bluefox{}.dat", self.i)).unwrap();
         f.write_all(image.data());
-        if self.i % 50 == 0 { self.png.send((self.i, image.size(), ColorType::RGB(8))); }
+        if self.i % 10 == 0 { self.png.send((self.i, image.size(), ColorType::RGB(8))); }
         //PNGEncoder::new(&mut f).encode(image.data(), image.size().1 as u32, image.size().0 as u32, ColorType::RGB(8));
 
         false

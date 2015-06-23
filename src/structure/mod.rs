@@ -27,11 +27,14 @@ pub struct Structure {
 
     /// Number of frames captured since setup() was last called (used for calculating frame rates)
     i: usize,
+
+    /// For sending stuff back up to the supervisor
+    tx: Sender<CmdFrom>,
 }
 
 #[cfg(target_os = "linux")]
 impl Controllable for Structure {
-    fn setup(tx: Sender<CmdFrom>) -> Structure {
+    fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Structure {
         wrapper::initialize();
         let device = wrapper::Device::new(None).unwrap();
         let depth = wrapper::VideoStream::new(&device, wrapper::OniSensorType::Depth).unwrap();
@@ -40,10 +43,10 @@ impl Controllable for Structure {
         depth.start();
         let start = time::now();
         let i = 0;
-        Structure { device: device, depth: depth, start: start, i: i}
+        Structure { tx: tx, device: device, depth: depth, start: start, i: i}
     }
 
-    fn step(&mut self) -> bool {
+    fn step(&mut self, _: Option<String>) -> bool {
         self.i += 1;
 
         let frame = self.depth.readFrame().unwrap();
@@ -53,6 +56,8 @@ impl Controllable for Structure {
         PNGEncoder::new(&mut f).encode(data, frame.width as u32, frame.height as u32, ColorType::Gray(16));
         fs::remove_file("src/web/bootstrap/img/structure_latest.png").unwrap_or(());
         fs::soft_link(format!("../../../../structure{}.png", self.i), "src/web/bootstrap/img/structure_latest.png").unwrap();
+
+        self.tx.send(CmdFrom::Data("structure".to_string()));
 
         false
     }
