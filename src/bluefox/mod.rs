@@ -16,12 +16,23 @@ use std::sync::mpsc::{channel, Sender, SendError};
 use super::comms::{Controllable, CmdFrom};
 
 // TODO move this out somewhere
+/// Container for a thread that repeatedly performs some action in response to input. Can be
+/// stopped and restarted.
 struct RestartableThread<Data: Send + 'static> {
+    /// Sending end of a channel used to send inputs to the thread.
+    /// Wrapped in a Option so it can be dropped without moving self.
     tx: Option<Sender<Data>>,
+
+    /// Handle to the running thread
+    /// Wrapped in an option so it can be joined without moving self.
     thread: Option<thread::JoinHandle<()>>
 }
 
 impl<Data: Send + 'static> RestartableThread<Data> {
+    /// Create a new RestartableThread which performs the given action in response to input.
+    /// The thread will run (and wait for input) until RestartableThread::join() is called or the
+    /// RestartableThread instance is dropped.
+    /// To pass input, use RestartableThread::send().
     fn new<F>(f: F) -> RestartableThread<Data> where F: Send + 'static + Fn(Data)
     {
         let (tx, rx) = channel();
@@ -35,6 +46,8 @@ impl<Data: Send + 'static> RestartableThread<Data> {
         }
     }
 
+    /// Kill the thread. This shuts down the message queue, causing the thread to exit, and then
+    /// waits for it to finish up any outstanding work. No deadlocks here!
     fn join(&mut self) {
         if self.thread.is_some() {
             self.tx = None; // this causes the Sender to be dropped
@@ -45,6 +58,9 @@ impl<Data: Send + 'static> RestartableThread<Data> {
         }
     }
 
+    /// Send some input to the thread. Nonblocking.
+    /// Returns a SendError if Sender::send() fails or if the private Sender has somehow
+    /// disappeared (which is impossible).
     fn send(&self, d: Data) -> Result<(), SendError<Data>> {
         if let Some(ref s) = self.tx {
             s.send(d)
@@ -55,6 +71,7 @@ impl<Data: Send + 'static> RestartableThread<Data> {
 }
 
 impl<Data: Send + 'static> Drop for RestartableThread<Data> {
+    /// When the RestartableThread goes out of scope, kill the thread.
     fn drop(&mut self) {
         self.join();
     }
