@@ -35,20 +35,29 @@ use self::hyper::server::Listening;
 struct Service {
     name: String,
     shortname: String,
+    extra: String
 }
 
 impl Service {
     /// Create a new service descriptor with the given name
-    fn new(s: &str, t: &str) -> Service {
-        Service { name: s.to_string(), shortname: t.to_string() }
+    fn new(s: &str, t: &str, e: &str) -> Service {
+        Service { name: s.to_string(), shortname: t.to_string(), extra: e.to_string() }
     }
+}
+
+macro_rules! jsonize {
+    ($map:ident, $selph:ident, $var:ident) => {{
+        $map.insert(stringify!($var).to_string(), $selph.$var.to_json())
+    }};
+    ($map:ident, $selph:ident; $($var:ident),+) => {{
+        $(jsonize!($map, $selph, $var));+
+    }}
 }
 
 impl ToJson for Service {
     fn to_json(&self) -> Json {
         let mut m: BTreeMap<String, Json> = BTreeMap::new();
-        m.insert("name".to_string(), self.name.to_json());
-        m.insert("shortname".to_string(), self.shortname.to_json());
+        jsonize!(m, self; name, shortname, extra);
         m.to_json()
     }
 }
@@ -61,10 +70,10 @@ fn relpath(path: &str) -> String {
 /// Handler for the main page of the web interface
 fn index(req: &mut Request) -> IronResult<Response> {
     let mut data = BTreeMap::<String, Json>::new();
-    data.insert("services".to_string(), vec![ Service::new("Structure Sensor", "structure"),
-                                              Service::new("mvBlueFOX3",       "bluefox"  ),
-                                              Service::new("OptoForce",        "optoforce"),
-                                              Service::new("SynTouch BioTac",  "biotac"   ),
+    data.insert("services".to_string(), vec![ Service::new("Structure Sensor", "structure", "<img id=\"structure\" class=\"latest\" src=\"img/structure_latest.png\" />"),
+                                              Service::new("mvBlueFOX3",       "bluefox"  , "<img id=\"bluefox\" class=\"latest\" src=\"img/bluefox_latest.png\" />"),
+                                              Service::new("OptoForce",        "optoforce", ""),
+                                              Service::new("SynTouch BioTac",  "biotac"   , ""),
                                             ].to_json());
 
     let mut resp = Response::new();
@@ -107,7 +116,7 @@ pub struct Web {
 impl Controllable for Web {
     fn setup(tx: Sender<CmdFrom>) -> Web {
         let mut mount = Mount::new();
-        for p in ["css", "fonts", "js"].iter() {
+        for p in ["css", "fonts", "js", "img"].iter() {
             mount.mount(&format!("/{}/", p),
                         Static::new(Path::new(&relpath("bootstrap")).join(p)));
         }

@@ -12,6 +12,15 @@
     <body>
         <script src="/js/jquery.min.js"></script>
         <script src="/js/bootstrap.min.js"></script>
+        <script type="text/javascript">
+            $(function() {
+                setInterval(function() {
+                    $(".latest").each(function(i, img) {
+                        $(img).attr("src", $(img).attr("src").split("?")[0] + "?" + new Date().getTime());
+                    });
+                }, 500);
+            });
+        </script>
 
         <div class="container theme-showcase" role="main">
             <div class="jumbotron">
@@ -24,6 +33,8 @@
                     {{#each services}}
                         <div class="container">
                             <h3>{{name}}</h3>
+                            {{{extra}}}
+                            <p>
                             <button formaction="/control/{{shortname}}/start"
                                     type="submit"
                                     class="btn btn-success">Start</button>

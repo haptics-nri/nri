@@ -4,8 +4,12 @@
 mod wrapper;
 
 extern crate time;
+extern crate image;
+use std::fs;
 use std::fs::File;
 use std::io::Write;
+use self::image::ColorType;
+use self::image::png::PNGEncoder;
 use std::sync::mpsc::{channel, Sender};
 use super::comms::{Controllable, CmdFrom};
 
@@ -45,8 +49,10 @@ impl Controllable for Structure {
         let frame = self.depth.readFrame().unwrap();
         let data: &[u8] = frame.data();
 
-        let mut f = File::create(format!("structure{}.dat", self.i)).unwrap();
-        f.write_all(data);
+        let mut f = File::create(format!("structure{}.png", self.i)).unwrap();
+        PNGEncoder::new(&mut f).encode(data, frame.width as u32, frame.height as u32, ColorType::Gray(16));
+        fs::remove_file("src/web/bootstrap/img/structure_latest.png").unwrap_or(());
+        fs::soft_link(format!("../../../../structure{}.png", self.i), "src/web/bootstrap/img/structure_latest.png").unwrap();
 
         false
     }
@@ -57,7 +63,8 @@ impl Controllable for Structure {
         self.depth.destroy();
         self.device.close();
         wrapper::shutdown();
-        println!("{} frames grabbed in {} s ({} FPS)!", self.i, (end - self.start).num_seconds(), 1000.0*(self.i as f64)/((end - self.start).num_milliseconds() as f64));
+        let millis = (end - self.start).num_milliseconds() as f64;
+        println!("{} structure frames grabbed in {} s ({} FPS)!", self.i, millis/1000.0, 1000.0*(self.i as f64)/millis);
     }
 }
 
