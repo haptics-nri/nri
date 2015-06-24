@@ -11,6 +11,8 @@ pub struct CLI {
     tx: Sender<CmdFrom>,
 }
 
+associated!(CLI);
+
 impl Controllable for CLI {
     fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> CLI {
         CLI { tx: tx }

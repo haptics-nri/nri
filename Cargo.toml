@@ -11,6 +11,7 @@ env_logger = "*"
 libc = "*"
 time = "*"
 image = "*"
+hprof = "*"
 
 # iron deps
 iron = "*"

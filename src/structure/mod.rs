@@ -32,6 +32,8 @@ pub struct Structure {
     tx: Sender<CmdFrom>,
 }
 
+associated!(Structure);
+
 #[cfg(target_os = "linux")]
 impl Controllable for Structure {
     fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Structure {

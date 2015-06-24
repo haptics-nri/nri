@@ -38,8 +38,12 @@ pub enum CmdFrom {
     Quit
 }
 
+pub trait Associated<T> {
+    fn get(&self) -> T;
+}
+
 /// A service that can be setup and torn down based on commands from a higher power.
-pub trait Controllable {
+pub trait Controllable: Associated<&'static str> {
     /// Setup the service.
     ///
     /// Should initialize any necessary libraries and devices. May be called more than once, but
@@ -85,6 +89,17 @@ macro_rules! rpc {
     }}
 }
 
+macro_rules! associated {
+    ($t:ident) => { associated!($t, stringify!($t) => &'static str); };
+    ($t:ident, $val:expr => $typ:ty) => {
+        impl $crate::comms::Associated<$typ> for $t {
+            fn get(&self) -> &'static str {
+                $val
+            }
+        }
+    }
+}
+
 /// Convenience macro for defining a stub service that doesn't do anything (yet). Defines a
 /// zero-sized struct and an impl that blocks between receiving messages from the main thread (so
 /// it doesn't do anything, but it doesn't sit in a CPU-busy loop either).
@@ -96,6 +111,7 @@ macro_rules! rpc {
 macro_rules! stub {
     ($t:ident) => {
         pub struct $t;
+
         impl $crate::comms::Controllable for $t {
             fn setup(tx: ::std::sync::mpsc::Sender<$crate::comms::CmdFrom>, _: Option<String>) -> $t {
                 $t
@@ -108,6 +124,8 @@ macro_rules! stub {
             fn teardown(&mut self) {
             }
         }
+
+        associated!($t);
     }
 }
 
@@ -119,13 +137,15 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
     loop {
         let mut data = None;
 
-        match rx.recv() {
-            Ok(cmd) => match cmd {
-                CmdTo::Start => {}, // let's go!
-                CmdTo::Data(d) => data = Some(d),
-                CmdTo::Stop | CmdTo::Quit => return, // didn't even get to start
-            },
-            Err(e) => return, // main thread exploded?
+        loop {
+            match rx.recv() {
+                Ok(cmd) => match cmd {
+                    CmdTo::Start => break, // let's go!
+                    CmdTo::Data(_) => continue, // sorry, not listening yet
+                    CmdTo::Stop | CmdTo::Quit => return, // didn't even get to start
+                },
+                Err(_) => return, // main thread exploded?
+            }
         }
 
         let mut c = C::setup(tx.clone(), data);
@@ -134,13 +154,14 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
         loop {
             data = None;
 
+            // TODO remove this code duplication
             if should_block {
                 match rx.recv() {
                     Ok(cmd) => match cmd {
                         CmdTo::Start => {}, // already started
                         CmdTo::Stop => break, // shutdown command
                         CmdTo::Quit => { c.teardown(); return }, // real shutdown command
-                        CmdTo::Data(d) => data = Some(d),
+                        CmdTo::Data(d) => data = Some(d), // have data!
                     },
                     Err(_) => { c.teardown(); return }
                 }
@@ -150,7 +171,7 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
                         CmdTo::Start => {}, // already started
                         CmdTo::Stop => break, // shutdown command
                         CmdTo::Quit => { c.teardown(); return }, // real shutdown command
-                        CmdTo::Data(d) => data = Some(d),
+                        CmdTo::Data(d) => data = Some(d), // have data!
                     },
                     Err(e) => match e {
                         TryRecvError::Empty => {}, // continue
@@ -159,7 +180,7 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
                 }
             }
 
-            should_block = c.step(data);
+            should_block = prof!(c.get(), { c.step(data) });
         }
 
         c.teardown();

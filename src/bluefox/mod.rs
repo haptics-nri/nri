@@ -37,6 +37,8 @@ pub struct Bluefox {
     png: RestartableThread<PngStuff>,
 }
 
+associated!(Bluefox);
+
 #[cfg(target_os = "linux")]
 impl Controllable for Bluefox {
     fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Bluefox {

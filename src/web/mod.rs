@@ -128,6 +128,8 @@ pub struct Web {
     wstx: mpsc::Sender<ws::Message>,
 }
 
+associated!(Web);
+
 impl Controllable for Web {
     fn setup(tx: mpsc::Sender<CmdFrom>, _: Option<String>) -> Web {
         let mut mount = Mount::new();

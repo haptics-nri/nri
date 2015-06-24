@@ -64,14 +64,24 @@
 //! tried to get DNS running, but I failed, so for now you have to use an IP address to access the
 //! NUC. You can see what it chose by running <code>hostname -I</code> -- it seems to like 10.42.0.1.
 
-macro_rules! errorln(
+/// Just like println!, but prints to stderr
+macro_rules! errorln {
     ($($arg:tt)*) => (
         match writeln!(&mut ::std::io::stderr(), $($arg)* ) {
             Ok(_) => {},
             Err(x) => panic!("Unable to write to stderr: {}", x),
         }
     )
-);
+}
+
+macro_rules! prof {
+    ($n:expr, $b:block) => {{
+        let g = $crate::hprof::enter($n);
+        let ret = { $b };
+        drop(g);
+        ret
+    }}
+}
 
 #[macro_use] mod comms;
 mod cli;
@@ -99,6 +109,7 @@ use optoforce::Optoforce;
 #[macro_use]
 extern crate log;
 extern crate env_logger;
+extern crate hprof;
 
 macro_rules! rxspawn {
     ($reply:expr; $($s:ty),*) => {
@@ -151,33 +162,50 @@ fn stop_all(services: &mut [Service]) {
 ///
 /// TODO actually use the logging infrastructure
 fn main() {
-    env_logger::init().unwrap();
+    prof!("main", {
 
-    info!("Hello, world!");
+        env_logger::init().unwrap();
 
-    let (reply_tx, reply_rx) = channel();
+        info!("Hello, world!");
 
-    let mut services = rxspawn!(reply_tx; CLI, Web, Structure, Bluefox, Optoforce);
+        let (reply_tx, reply_rx) = channel();
 
-    start(&services, "cli".to_string());
+        let mut services = rxspawn!(reply_tx; CLI, Web, Structure, Bluefox, Optoforce);
 
-    loop {
-        match reply_rx.recv() {
-            Ok(cmd) => match cmd {
-                CmdFrom::Start(s, tx) => { tx.send(start(&services, s)); },
-                CmdFrom::Stop(s, tx)  => { tx.send(stop(&services, s)); },
-                CmdFrom::Quit         => { stop_all(&mut services[1..]); break; },
-                CmdFrom::Data(d)      => match &*d.split(' ').next().unwrap() {
-                    "structure" | "bluefox" => { send_to(&services, "web".to_string(), CmdTo::Data(d)); },
-                    _                       => { errorln!("Strange message {} received from a service", d); }
-                }
-            },
-            Err(_) => { stop_all(&mut services[1..]); break; }
+        start(&services, "cli".to_string());
+
+        loop {
+            match reply_rx.recv() {
+                Ok(cmd) => match cmd {
+                    CmdFrom::Start(s, tx) => {
+                        println!("STARTING {}", s);
+                        tx.send(start(&services, s));
+                    },
+                    CmdFrom::Stop(s, tx)  => {
+                        println!("STOPPING {}", s);
+                        tx.send(stop(&services, s));
+                    },
+                    CmdFrom::Quit         => {
+                        println!("STOPPING ALL");
+                        stop_all(&mut services[1..]);
+                        println!("EXITING");
+                        break;
+                    },
+                    CmdFrom::Data(d)      => match &*d.split(' ').next().unwrap() {
+                        "structure" | "bluefox" => { send_to(&services, "web".to_string(), CmdTo::Data(d)); },
+                        _                       => { errorln!("Strange message {} received from a service", d); }
+                    }
+                },
+                Err(_) => { stop_all(&mut services[1..]); break; }
+            }
         }
-    }
 
-    // we can't really join or kill the CLI thread, because it is waiting on stdin
-    // so just exit, and it will be killed
+        // we can't really join or kill the CLI thread, because it is waiting on stdin
+        // so just exit, and it will be killed
 
+    });
+    
+    println!("\n\n");
+    hprof::profiler().print_timing();
 }
 
