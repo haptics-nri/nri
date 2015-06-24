@@ -167,8 +167,8 @@ fn main() {
                 CmdFrom::Start(s, tx) => { tx.send(start(&services, s)); },
                 CmdFrom::Stop(s, tx)  => { tx.send(stop(&services, s)); },
                 CmdFrom::Quit         => { stop_all(&mut services[1..]); break; },
-                CmdFrom::Data(d)      => match &*d {
-                    "structure" | "bluefox" => { send_to(&services, "web".to_string(), CmdTo::Data("kick".to_string())); },
+                CmdFrom::Data(d)      => match &*d.split(' ').next().unwrap() {
+                    "structure" | "bluefox" => { send_to(&services, "web".to_string(), CmdTo::Data(d)); },
                     _                       => { errorln!("Strange message {} received from a service", d); }
                 }
             },

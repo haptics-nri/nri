@@ -16,9 +16,12 @@
             var socket = new WebSocket("ws://{{server}}", "rust-websocket");
             socket.onmessage = function (event) {
                 console.log(event.data);
-                switch (event.data) {
-                    case "kick":
-                        $(".latest").each(function () { this.src = this.src.split("?")[0] + "?" + new Date().getTime(); });
+                switch (event.data.split(' ')[0]) {
+                    case "structure":
+                        $("#structure.latest").each(function () { this.src = event.data.split(' ')[1]; });
+                        break;
+                    case "bluefox":
+                        $("#bluefox.latest").each(function () { this.src = event.data.split(' ')[1]; });
                         break;
                 }
             };

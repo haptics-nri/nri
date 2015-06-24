@@ -52,12 +52,11 @@ impl Controllable for Structure {
         let frame = self.depth.readFrame().unwrap();
         let data: &[u8] = frame.data();
 
-        let mut f = File::create(format!("structure{}.png", self.i)).unwrap();
+        let fname = format!("structure{}.png", self.i);
+        let mut f = File::create(&fname).unwrap();
         PNGEncoder::new(&mut f).encode(data, frame.width as u32, frame.height as u32, ColorType::Gray(16));
-        fs::remove_file("src/web/bootstrap/img/structure_latest.png").unwrap_or(());
-        fs::soft_link(format!("../../../../structure{}.png", self.i), "src/web/bootstrap/img/structure_latest.png").unwrap();
 
-        self.tx.send(CmdFrom::Data("structure".to_string()));
+        self.tx.send(CmdFrom::Data(format!("structure {}", fname)));
 
         false
     }

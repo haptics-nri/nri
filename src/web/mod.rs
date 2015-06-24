@@ -213,10 +213,7 @@ impl Controllable for Web {
 
     fn step(&mut self, data: Option<String>) -> bool {
         if let Some(d) = data {
-            match &*d {
-                "kick" => { self.wstx.send(ws::Message::Text("kick".to_string())); },
-                _      => { errorln!("Strange message {} sent to web service", d); }
-            }
+            self.wstx.send(ws::Message::Text(d));
         }
 
         true
