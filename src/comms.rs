@@ -93,7 +93,7 @@ macro_rules! associated {
     ($t:ident) => { associated!($t, stringify!($t) => &'static str); };
     ($t:ident, $val:expr => $typ:ty) => {
         impl $crate::comms::Associated<$typ> for $t {
-            fn get(&self) -> &'static str {
+            fn get(&self) -> $typ {
                 $val
             }
         }
