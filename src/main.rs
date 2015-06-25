@@ -74,13 +74,25 @@ macro_rules! errorln {
     )
 }
 
+// TODO move this profiling stuff to a mod
+use std::cell::RefCell;
+
+thread_local!(static PROF: RefCell<Option<hprof::Profiler>> = RefCell::new(None));
+
 macro_rules! prof {
-    ($n:expr, $b:block) => {{
-        let g = $crate::hprof::enter($n);
-        let ret = { $b };
-        drop(g);
-        ret
-    }}
+    ($b:expr) => { prof!(stringify!($b), $b) };
+    ($n:expr, $b:expr) => {
+        $crate::PROF.with(|wrapped_prof| {
+            let appease_borrowck = wrapped_prof.borrow();
+            let g = match *appease_borrowck {
+                Some(ref prof) => prof.enter($n),
+                None => $crate::hprof::enter($n)
+            };
+            let ret = { $b };
+            drop(g);
+            ret
+        })
+    }
 }
 
 #[macro_use] mod comms;

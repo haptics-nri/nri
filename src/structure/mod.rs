@@ -5,11 +5,14 @@ mod wrapper;
 
 extern crate time;
 extern crate image;
+extern crate rustc_serialize as serialize;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
 use self::image::ColorType;
 use self::image::png::PNGEncoder;
+use self::serialize::base64;
+use self::serialize::base64::ToBase64;
 use std::sync::mpsc::{channel, Sender};
 use super::comms::{Controllable, CmdFrom};
 
@@ -51,14 +54,16 @@ impl Controllable for Structure {
     fn step(&mut self, _: Option<String>) -> bool {
         self.i += 1;
 
-        let frame = self.depth.readFrame().unwrap();
-        let data: &[u8] = frame.data();
+        let frame = prof!("readFrame", self.depth.readFrame().unwrap());
+        let data: &[u8] = prof!(frame.data());
 
-        let fname = format!("structure{}.png", self.i);
+        let fname = format!("data/structure{}.png", self.i);
         let mut f = File::create(&fname).unwrap();
-        PNGEncoder::new(&mut f).encode(data, frame.width as u32, frame.height as u32, ColorType::Gray(16));
+        let mut encoded = Vec::with_capacity(data.len());
+        prof!("PNGEncoder", PNGEncoder::new(&mut encoded).encode(data, frame.width as u32, frame.height as u32, ColorType::Gray(16)));
+        f.write_all(&encoded);
 
-        self.tx.send(CmdFrom::Data(format!("structure {}", fname)));
+        prof!("tx.send", self.tx.send(CmdFrom::Data(format!("structure data:image/png;base64,{}", encoded.to_base64(base64::STANDARD)))));
 
         false
     }

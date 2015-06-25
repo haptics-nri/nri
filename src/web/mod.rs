@@ -133,7 +133,7 @@ associated!(Web);
 impl Controllable for Web {
     fn setup(tx: mpsc::Sender<CmdFrom>, _: Option<String>) -> Web {
         let mut mount = Mount::new();
-        for p in ["css", "fonts", "js", "img"].iter() {
+        for p in ["css", "fonts", "js"].iter() {
             mount.mount(&format!("/{}/", p),
                         Static::new(Path::new(&relpath("bootstrap")).join(p)));
         }

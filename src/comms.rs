@@ -3,6 +3,7 @@
 use std::sync::mpsc::{channel, Sender, Receiver, RecvError, TryRecvError, SendError};
 use std::thread;
 use std::mem;
+use super::hprof;
 
 /// Commands sent from the supervisor thread to services
 #[derive(Clone)]
@@ -134,15 +135,15 @@ macro_rules! stub {
 /// Runs in a loop receiving commands from the supervisor thread. Manages a Controllable instance,
 /// calling its setup()/step()/teardown() methods as necessary.
 pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
-    loop {
+    'outer: loop {
         let mut data = None;
 
-        loop {
+        'inner: loop {
             match rx.recv() {
                 Ok(cmd) => match cmd {
-                    CmdTo::Start => break, // let's go!
-                    CmdTo::Data(_) => continue, // sorry, not listening yet
-                    CmdTo::Stop | CmdTo::Quit => return, // didn't even get to start
+                    CmdTo::Start => break 'inner, // let's go!
+                    CmdTo::Data(_) => continue 'inner, // sorry, not listening yet
+                    CmdTo::Stop | CmdTo::Quit => break 'outer, // didn't even get to start
                 },
                 Err(_) => return, // main thread exploded?
             }
@@ -151,7 +152,11 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
         let mut c = C::setup(tx.clone(), data);
         let mut should_block = false;
 
-        loop {
+        super::PROF.with(|wrapped_prof| {
+            *wrapped_prof.borrow_mut() = Some(hprof::Profiler::new(c.get()));
+        });
+
+        'inner: loop {
             data = None;
 
             // TODO remove this code duplication
@@ -159,32 +164,39 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
                 match rx.recv() {
                     Ok(cmd) => match cmd {
                         CmdTo::Start => {}, // already started
-                        CmdTo::Stop => break, // shutdown command
-                        CmdTo::Quit => { c.teardown(); return }, // real shutdown command
+                        CmdTo::Stop => break 'inner, // shutdown command
+                        CmdTo::Quit => { c.teardown(); break 'outer; }, // real shutdown command
                         CmdTo::Data(d) => data = Some(d), // have data!
                     },
-                    Err(_) => { c.teardown(); return }
+                    Err(_) => { c.teardown(); break 'outer; }
                 }
             } else {
                 match rx.try_recv() {
                     Ok(cmd) => match cmd {
                         CmdTo::Start => {}, // already started
-                        CmdTo::Stop => break, // shutdown command
-                        CmdTo::Quit => { c.teardown(); return }, // real shutdown command
+                        CmdTo::Stop => break 'inner, // shutdown command
+                        CmdTo::Quit => { c.teardown(); break 'outer; }, // real shutdown command
                         CmdTo::Data(d) => data = Some(d), // have data!
                     },
                     Err(e) => match e {
                         TryRecvError::Empty => {}, // continue
-                        TryRecvError::Disconnected => { c.teardown(); return }, // main thread exploded?
+                        TryRecvError::Disconnected => { c.teardown(); break 'outer; }, // main thread exploded?
                     },
                 }
             }
 
-            should_block = prof!(c.get(), { c.step(data) });
+            should_block = prof!("step", { c.step(data) });
         }
 
         c.teardown();
     }
+
+    println!("\n\n");
+    super::PROF.with(|wrapped_prof| {
+        if let Some(ref prof) = *wrapped_prof.borrow() {
+            prof.print_timing();
+        }
+    });
 }
 
 /// Container for a thread that repeatedly performs some action in response to input. Can be
@@ -204,15 +216,25 @@ impl<Data: Send + 'static> RestartableThread<Data> {
     /// The thread will run (and wait for input) until RestartableThread::join() is called or the
     /// RestartableThread instance is dropped.
     /// To pass input, use RestartableThread::send().
-    pub fn new<F>(f: F) -> RestartableThread<Data> where F: Send + 'static + Fn(Data)
+    pub fn new<F>(n: &'static str, f: F) -> RestartableThread<Data> where F: Send + 'static + Fn(Data)
     {
         let (tx, rx) = channel();
         RestartableThread {
             tx: Some(tx),
             thread: Some(thread::spawn(move || {
+                super::PROF.with(|wrapped_prof| {
+                    *wrapped_prof.borrow_mut() = Some(hprof::Profiler::new(n));
+                });
+
                 while let Ok(x) = rx.recv() {
-                    f(x);
+                    prof!("step", f(x));
                 }
+
+                super::PROF.with(|wrapped_prof| {
+                    if let Some(ref prof) = *wrapped_prof.borrow() {
+                        prof.print_timing();
+                    }
+                });
             }))
         }
     }
