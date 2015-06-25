@@ -1,2 +1,2 @@
-paths = ["overrides/filetime", "overrides/staticfile"]
+paths = ["overrides/filetime", "overrides/staticfile", "overrides/hprof"]
 

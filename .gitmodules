@@ -16,3 +16,6 @@
 [submodule "overrides/rust-websocket"]
 	path = overrides/rust-websocket
 	url = git@github.com:cyderize/rust-websocket
+[submodule "overrides/hprof"]
+	path = overrides/hprof
+	url = git@github.com:cmr/hprof
