@@ -2,3 +2,5 @@ target
 *.so
 *.swp
 Session.vim
+*.dat
+*.png
