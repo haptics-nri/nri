@@ -1,25 +1,25 @@
 //! Service to capture frames from the mvBlueFOX3 camera
 
-extern crate time;
-extern crate image;
-extern crate rustc_serialize as serialize;
-use std::thread;
-use std::mem;
-use std::fs;
-use std::fs::File;
-use std::io::{Read, Write};
-use self::image::{imageops, ImageBuffer, ColorType, FilterType};
-use self::image::png::PNGEncoder;
-use self::serialize::base64;
-use self::serialize::base64::ToBase64;
-use std::sync::Mutex;
-use std::sync::mpsc::{channel, Sender, SendError};
-use super::comms::{Controllable, CmdFrom, RestartableThread};
-
-type PngStuff = (Vec<u8>, (usize, usize), ColorType);
-
 group_attr!{
     #[cfg(target_os = "linux")]
+
+    extern crate time;
+    extern crate image;
+    extern crate rustc_serialize as serialize;
+    use std::thread;
+    use std::mem;
+    use std::fs;
+    use std::fs::File;
+    use std::io::{Read, Write};
+    use self::image::{imageops, ImageBuffer, ColorType, FilterType};
+    use self::image::png::PNGEncoder;
+    use self::serialize::base64;
+    use self::serialize::base64::ToBase64;
+    use std::sync::Mutex;
+    use std::sync::mpsc::{channel, Sender, SendError};
+    use ::comms::{Controllable, CmdFrom, RestartableThread};
+
+type PngStuff = (Vec<u8>, (usize, usize), ColorType);
 
     mod wrapper;
 

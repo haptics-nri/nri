@@ -44,11 +44,12 @@
 //!
 //! [liboptoforce]: https://github.com/ethz-asl/liboptoforce
 
-use super::comms::{Controllable, CmdFrom};
-use std::sync::mpsc::{channel, Sender};
-
 group_attr!{
     #[cfg(target_os = "linux")]
+
+    use ::comms::{Controllable, CmdFrom};
+    use std::sync::mpsc::{channel, Sender};
+
 
     mod wrapper;
 
@@ -61,9 +62,11 @@ group_attr!{
             const NAME: &'static str = "optoforce",
 
             fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Optoforce {
+                Optoforce { device: wrapper::Device }
             }
 
             fn step(&mut self, _: Option<String>) -> bool {
+                true
             }
 
             fn teardown(&mut self) {

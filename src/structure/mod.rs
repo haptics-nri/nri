@@ -1,20 +1,20 @@
 //! Service to capture frames from the Structure Sensor
 
-extern crate time;
-extern crate image;
-extern crate rustc_serialize as serialize;
-use std::fs;
-use std::fs::File;
-use std::io::Write;
-use self::image::ColorType;
-use self::image::png::PNGEncoder;
-use self::serialize::base64;
-use self::serialize::base64::ToBase64;
-use std::sync::mpsc::{channel, Sender};
-use super::comms::{Controllable, CmdFrom};
-
 group_attr!{
     #[cfg(target_os = "linux")]
+
+    extern crate time;
+    extern crate image;
+    extern crate rustc_serialize as serialize;
+    use std::fs;
+    use std::fs::File;
+    use std::io::Write;
+    use self::image::ColorType;
+    use self::image::png::PNGEncoder;
+    use self::serialize::base64;
+    use self::serialize::base64::ToBase64;
+    use std::sync::mpsc::{channel, Sender};
+    use ::comms::{Controllable, CmdFrom};
 
     mod wrapper;
 
