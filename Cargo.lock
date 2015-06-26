@@ -3,6 +3,7 @@ name = "nri"
 version = "0.1.0"
 dependencies = [
  "env_logger 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "guilt-by-association 0.1.0",
  "handlebars-iron 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hprof 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hyper 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -125,6 +126,10 @@ dependencies = [
 name = "glob"
 version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "guilt-by-association"
+version = "0.1.0"
 
 [[package]]
 name = "handlebars"

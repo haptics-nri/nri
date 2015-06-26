@@ -19,3 +19,6 @@
 [submodule "overrides/hprof"]
 	path = overrides/hprof
 	url = git@github.com:cmr/hprof
+[submodule "crates/guilt-by-association"]
+	path = crates/guilt-by-association
+	url = git@github.com:durka/guilt-by-association

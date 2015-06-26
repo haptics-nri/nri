@@ -1,6 +1,7 @@
 target
 *.so
 *.swp
+*.swo
 Session.vim
 *.dat
 *.png

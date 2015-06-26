@@ -23,3 +23,6 @@ router = "*"
 rustc-serialize = "*"
 websocket = "*"
 
+[dependencies.guilt-by-association]
+path = "crates/guilt-by-association"
+

@@ -1,8 +1,5 @@
 //! Service to capture frames from the Structure Sensor
 
-#[cfg(target_os = "linux")]
-mod wrapper;
-
 extern crate time;
 extern crate image;
 extern crate rustc_serialize as serialize;
@@ -16,66 +13,72 @@ use self::serialize::base64::ToBase64;
 use std::sync::mpsc::{channel, Sender};
 use super::comms::{Controllable, CmdFrom};
 
-#[cfg(target_os = "linux")]
-/// Controllable struct for the camera
-pub struct Structure {
-    /// Private handle to the device
-    device: wrapper::Device,
+group_attr!{
+    #[cfg(target_os = "linux")]
 
-    /// Private handle to the data stream
-    depth: wrapper::VideoStream,
+    mod wrapper;
 
-    /// Time that setup() was last called (used for calculating frame rates)
-    start: time::Tm,
+    /// Controllable struct for the camera
+    pub struct Structure {
+        /// Private handle to the device
+        device: wrapper::Device,
 
-    /// Number of frames captured since setup() was last called (used for calculating frame rates)
-    i: usize,
+        /// Private handle to the data stream
+        depth: wrapper::VideoStream,
 
-    /// For sending stuff back up to the supervisor
-    tx: Sender<CmdFrom>,
-}
+        /// Time that setup() was last called (used for calculating frame rates)
+        start: time::Tm,
 
-associated!(Structure);
+        /// Number of frames captured since setup() was last called (used for calculating frame rates)
+        i: usize,
 
-#[cfg(target_os = "linux")]
-impl Controllable for Structure {
-    fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Structure {
-        wrapper::initialize();
-        let device = wrapper::Device::new(None).unwrap();
-        let depth = wrapper::VideoStream::new(&device, wrapper::OniSensorType::Depth).unwrap();
-        println!("device = {:?}", device);
-        println!("depth = {:?}", depth);
-        depth.start();
-        let start = time::now();
-        let i = 0;
-        Structure { tx: tx, device: device, depth: depth, start: start, i: i}
+        /// For sending stuff back up to the supervisor
+        tx: Sender<CmdFrom>,
     }
 
-    fn step(&mut self, _: Option<String>) -> bool {
-        self.i += 1;
+    guilty!{
+        impl Controllable for Structure {
+            const NAME: &'static str = "structure",
 
-        let frame = prof!("readFrame", self.depth.readFrame().unwrap());
-        let data: &[u8] = prof!(frame.data());
+            fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Structure {
+                wrapper::initialize();
+                let device = wrapper::Device::new(None).unwrap();
+                let depth = wrapper::VideoStream::new(&device, wrapper::OniSensorType::Depth).unwrap();
+                println!("device = {:?}", device);
+                println!("depth = {:?}", depth);
+                depth.start();
+                let start = time::now();
+                let i = 0;
+                Structure { tx: tx, device: device, depth: depth, start: start, i: i}
+            }
 
-        let fname = format!("data/structure{}.png", self.i);
-        let mut f = File::create(&fname).unwrap();
-        let mut encoded = Vec::with_capacity(data.len());
-        prof!("PNGEncoder", PNGEncoder::new(&mut encoded).encode(data, frame.width as u32, frame.height as u32, ColorType::Gray(16)));
-        f.write_all(&encoded);
+            fn step(&mut self, _: Option<String>) -> bool {
+                self.i += 1;
 
-        prof!("tx.send", self.tx.send(CmdFrom::Data(format!("structure data:image/png;base64,{}", encoded.to_base64(base64::STANDARD)))));
+                let frame = prof!("readFrame", self.depth.readFrame().unwrap());
+                let data: &[u8] = prof!(frame.data());
 
-        false
-    }
+                let fname = format!("data/structure{}.png", self.i);
+                let mut f = File::create(&fname).unwrap();
+                let mut encoded = Vec::with_capacity(data.len());
+                prof!("PNGEncoder", PNGEncoder::new(&mut encoded).encode(data, frame.width as u32, frame.height as u32, ColorType::Gray(16)));
+                f.write_all(&encoded);
 
-    fn teardown(&mut self) {
-        let end = time::now();
-        self.depth.stop();
-        self.depth.destroy();
-        self.device.close();
-        wrapper::shutdown();
-        let millis = (end - self.start).num_milliseconds() as f64;
-        println!("{} structure frames grabbed in {} s ({} FPS)!", self.i, millis/1000.0, 1000.0*(self.i as f64)/millis);
+                prof!("tx.send", self.tx.send(CmdFrom::Data(format!("structure data:image/png;base64,{}", encoded.to_base64(base64::STANDARD)))));
+
+                false
+            }
+
+            fn teardown(&mut self) {
+                let end = time::now();
+                self.depth.stop();
+                self.depth.destroy();
+                self.device.close();
+                wrapper::shutdown();
+                let millis = (end - self.start).num_milliseconds() as f64;
+                println!("{} structure frames grabbed in {} s ({} FPS)!", self.i, millis/1000.0, 1000.0*(self.i as f64)/millis);
+            }
+        }
     }
 }
 

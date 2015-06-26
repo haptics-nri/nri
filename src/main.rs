@@ -74,6 +74,25 @@ macro_rules! errorln {
     )
 }
 
+macro_rules! group_attr {
+    (#[cfg($attr:meta)] $($yes:item)*) => { group_attr!{internal #[cfg($attr)] $($yes)* } };
+
+    ($modname:ident #[cfg($attr:meta)] $($yes:item)*) => {
+        #[cfg($attr)]
+        mod $modname {
+            $($yes)*
+        }
+
+        #[cfg(not($attr))]
+        mod $modname {
+        }
+
+        pub use self::$modname::*;
+    };
+}
+
+#[macro_use] extern crate guilt_by_association;
+
 // TODO move this profiling stuff to a mod
 use std::cell::RefCell;
 

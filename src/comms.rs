@@ -39,32 +39,32 @@ pub enum CmdFrom {
     Quit
 }
 
-pub trait Associated<T> {
-    fn get(&self) -> T;
-}
-
 /// A service that can be setup and torn down based on commands from a higher power.
-pub trait Controllable: Associated<&'static str> {
-    /// Setup the service.
-    ///
-    /// Should initialize any necessary libraries and devices. May be called more than once, but
-    /// teardown() will be called in between.
-    fn setup(Sender<CmdFrom>, Option<String>) -> Self;
+guilty!{
+    pub trait Controllable {
+        const NAME: &'static str,
 
-    /// Run one "step".
-    ///
-    /// In the case of a device driver, this corresponds to gathering one frame or sample of data.
-    ///
-    /// Return true if we should wait for a command from the supervisor thread before calling
-    /// step() again. Return false to call step() again right away (unless there is a pending
-    /// command).
-    fn step(&mut self, data: Option<String>) -> bool;
+        /// Setup the service.
+        ///
+        /// Should initialize any necessary libraries and devices. May be called more than once, but
+        /// teardown() will be called in between.
+        fn setup(Sender<CmdFrom>, Option<String>) -> Self;
 
-    /// Tear down the service.
-    ///
-    /// Should shut down any necessary libraries or services. Either the program is exiting, or the
-    /// service is just being paused (setup() could be called again).
-    fn teardown(&mut self);
+        /// Run one "step".
+        ///
+        /// In the case of a device driver, this corresponds to gathering one frame or sample of data.
+        ///
+        /// Return true if we should wait for a command from the supervisor thread before calling
+        /// step() again. Return false to call step() again right away (unless there is a pending
+        /// command).
+        fn step(&mut self, data: Option<String>) -> bool;
+
+        /// Tear down the service.
+        ///
+        /// Should shut down any necessary libraries or services. Either the program is exiting, or the
+        /// service is just being paused (setup() could be called again).
+        fn teardown(&mut self);
+    }
 }
 
 /// Convenience macro for making an "RPC" call from a service up to the main thread. This is done
@@ -90,17 +90,6 @@ macro_rules! rpc {
     }}
 }
 
-macro_rules! associated {
-    ($t:ident) => { associated!($t, stringify!($t) => &'static str); };
-    ($t:ident, $val:expr => $typ:ty) => {
-        impl $crate::comms::Associated<$typ> for $t {
-            fn get(&self) -> $typ {
-                $val
-            }
-        }
-    }
-}
-
 /// Convenience macro for defining a stub service that doesn't do anything (yet). Defines a
 /// zero-sized struct and an impl that blocks between receiving messages from the main thread (so
 /// it doesn't do anything, but it doesn't sit in a CPU-busy loop either).
@@ -113,20 +102,22 @@ macro_rules! stub {
     ($t:ident) => {
         pub struct $t;
 
-        impl $crate::comms::Controllable for $t {
-            fn setup(tx: ::std::sync::mpsc::Sender<$crate::comms::CmdFrom>, _: Option<String>) -> $t {
-                $t
-            }
+        guilty!{
+            impl Controllable for $t {
+                const NAME: &'static str = concat!("Stub ", stringify!($t)),
 
-            fn step(&mut self, _: Option<String>) -> bool {
-                true
-            }
+                fn setup(tx: ::std::sync::mpsc::Sender<$crate::comms::CmdFrom>, _: Option<String>) -> $t {
+                    $t
+                }
 
-            fn teardown(&mut self) {
+                fn step(&mut self, _: Option<String>) -> bool {
+                    true
+                }
+
+                fn teardown(&mut self) {
+                }
             }
         }
-
-        associated!($t);
     }
 }
 
@@ -153,7 +144,7 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
         let mut should_block = false;
 
         super::PROF.with(|wrapped_prof| {
-            *wrapped_prof.borrow_mut() = Some(hprof::Profiler::new(c.get()));
+            *wrapped_prof.borrow_mut() = Some(hprof::Profiler::new(guilty!(C::NAME)));
         });
 
         'inner: loop {

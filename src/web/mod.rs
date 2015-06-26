@@ -128,102 +128,104 @@ pub struct Web {
     wstx: mpsc::Sender<ws::Message>,
 }
 
-associated!(Web);
+guilty!{
+    impl Controllable for Web {
+        const NAME: &'static str = "web",
 
-impl Controllable for Web {
-    fn setup(tx: mpsc::Sender<CmdFrom>, _: Option<String>) -> Web {
-        let mut mount = Mount::new();
-        for p in ["css", "fonts", "js"].iter() {
-            mount.mount(&format!("/{}/", p),
-                        Static::new(Path::new(&relpath("bootstrap")).join(p)));
-        }
-
-        let mut router = Router::new();
-        router.get("/", index);
-        router.post("/control/:service/:action", control(tx));
-
-        mount.mount("/", router);
-
-        let mut chain = Chain::new(mount);
-
-        let watcher = Arc::new(HandlebarsEngine::new(&relpath("templates"), ".hbs"));
-        watcher.watch();
-
-        chain.link_after(watcher);
-
-        let listening = Iron::new(chain).http(("0.0.0.0", HTTP_PORT)).unwrap();
-
-        let (wstx, wsrx) = mpsc::channel();
-        let thread = thread::spawn(move || {
-
-            let ws = ws::Server::bind(("0.0.0.0", WS_PORT)).unwrap();
-
-            for connection in ws {
-                let request = connection.unwrap().read_request().unwrap(); // Get the request
-                let headers = request.headers.clone(); // Keep the headers so we can check them
-                
-                request.validate().unwrap(); // Validate the request
-                
-                let mut response = request.accept(); // Form a response
-                
-                if let Some(&ws::header::WebSocketProtocol(ref protocols)) = headers.get() {
-                    if protocols.contains(&("rust-websocket".to_string())) {
-                        // We have a protocol we want to use
-                        response.headers.set(ws::header::WebSocketProtocol(vec!["rust-websocket".to_string()]));
-                    }
-                }
-                
-                let mut client = response.send().unwrap(); // Send the response
-                
-                let ip = client.get_mut_sender()
-                    .get_mut()
-                    .peer_addr()
-                    .unwrap();
-                
-                println!("Websocket connection from {}", ip);
-                
-                let message = ws::Message::Text("Hello".to_string());
-                client.send_message(message).unwrap();
-                
-                let (mut sender, mut receiver) = client.split();
-                
-                /*for message in receiver.incoming_messages() {
-                    let message = message.unwrap();
-                    
-                    match message {
-                        ws::Message::Close(_) => {
-                            let message = ws::Message::Close(None);
-                            sender.send_message(message).unwrap();
-                            println!("Websocket client {} disconnected", ip);
-                            return;
-                        }
-                        ws::Message::Ping(data) => {
-                            let message = ws::Message::Pong(data);
-                            sender.send_message(message).unwrap();
-                        }
-                        _ => sender.send_message(message).unwrap(),
-                    }
-                }*/
-                while let Ok(msg) = wsrx.recv() {
-                    sender.send_message(msg).unwrap();
-                }
+        fn setup(tx: mpsc::Sender<CmdFrom>, _: Option<String>) -> Web {
+            let mut mount = Mount::new();
+            for p in ["css", "fonts", "js"].iter() {
+                mount.mount(&format!("/{}/", p),
+                            Static::new(Path::new(&relpath("bootstrap")).join(p)));
             }
-        });
 
-        Web { listening: listening, websocket: thread, wstx: wstx }
-    }
+            let mut router = Router::new();
+            router.get("/", index);
+            router.post("/control/:service/:action", control(tx));
 
-    fn step(&mut self, data: Option<String>) -> bool {
-        if let Some(d) = data {
-            self.wstx.send(ws::Message::Text(d));
+            mount.mount("/", router);
+
+            let mut chain = Chain::new(mount);
+
+            let watcher = Arc::new(HandlebarsEngine::new(&relpath("templates"), ".hbs"));
+            watcher.watch();
+
+            chain.link_after(watcher);
+
+            let listening = Iron::new(chain).http(("0.0.0.0", HTTP_PORT)).unwrap();
+
+            let (wstx, wsrx) = mpsc::channel();
+            let thread = thread::spawn(move || {
+
+                let ws = ws::Server::bind(("0.0.0.0", WS_PORT)).unwrap();
+
+                for connection in ws {
+                    let request = connection.unwrap().read_request().unwrap(); // Get the request
+                    let headers = request.headers.clone(); // Keep the headers so we can check them
+                    
+                    request.validate().unwrap(); // Validate the request
+                    
+                    let mut response = request.accept(); // Form a response
+                    
+                    if let Some(&ws::header::WebSocketProtocol(ref protocols)) = headers.get() {
+                        if protocols.contains(&("rust-websocket".to_string())) {
+                            // We have a protocol we want to use
+                            response.headers.set(ws::header::WebSocketProtocol(vec!["rust-websocket".to_string()]));
+                        }
+                    }
+                    
+                    let mut client = response.send().unwrap(); // Send the response
+                    
+                    let ip = client.get_mut_sender()
+                        .get_mut()
+                        .peer_addr()
+                        .unwrap();
+                    
+                    println!("Websocket connection from {}", ip);
+                    
+                    let message = ws::Message::Text("Hello".to_string());
+                    client.send_message(message).unwrap();
+                    
+                    let (mut sender, mut receiver) = client.split();
+                    
+                    /*for message in receiver.incoming_messages() {
+                        let message = message.unwrap();
+                        
+                        match message {
+                            ws::Message::Close(_) => {
+                                let message = ws::Message::Close(None);
+                                sender.send_message(message).unwrap();
+                                println!("Websocket client {} disconnected", ip);
+                                return;
+                            }
+                            ws::Message::Ping(data) => {
+                                let message = ws::Message::Pong(data);
+                                sender.send_message(message).unwrap();
+                            }
+                            _ => sender.send_message(message).unwrap(),
+                        }
+                    }*/
+                    while let Ok(msg) = wsrx.recv() {
+                        sender.send_message(msg).unwrap();
+                    }
+                }
+            });
+
+            Web { listening: listening, websocket: thread, wstx: wstx }
         }
 
-        true
-    }
-    
-    fn teardown(&mut self) {
-        self.listening.close().unwrap(); // FIXME this does not do anything (known bug in hyper)
-        // FIXME no way to close the websocket server?
+        fn step(&mut self, data: Option<String>) -> bool {
+            if let Some(d) = data {
+                self.wstx.send(ws::Message::Text(d));
+            }
+
+            true
+        }
+        
+        fn teardown(&mut self) {
+            self.listening.close().unwrap(); // FIXME this does not do anything (known bug in hyper)
+            // FIXME no way to close the websocket server?
+        }
     }
 }
 

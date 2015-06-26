@@ -47,6 +47,31 @@
 use super::comms::{Controllable, CmdFrom};
 use std::sync::mpsc::{channel, Sender};
 
-stub!(Optoforce);
+group_attr!{
+    #[cfg(target_os = "linux")]
 
+    mod wrapper;
+
+    pub struct Optoforce {
+        device: wrapper::Device
+    }
+
+    guilty!{
+        impl Controllable for Optoforce {
+            const NAME: &'static str = "optoforce",
+
+            fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Optoforce {
+            }
+
+            fn step(&mut self, _: Option<String>) -> bool {
+            }
+
+            fn teardown(&mut self) {
+            }
+        }
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+stub!(Optoforce);
 
