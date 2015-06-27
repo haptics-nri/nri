@@ -100,6 +100,8 @@ macro_rules! rpc {
 ///     - pub struct (named $t) and stub impl
 macro_rules! stub {
     ($t:ident) => {
+        use ::comms::Controllable;
+
         pub struct $t;
 
         guilty!{
