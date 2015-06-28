@@ -11,7 +11,6 @@ extern crate hyper;
 extern crate rustc_serialize as serialize;
 extern crate websocket as ws;
 
-use std::io::Write;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc;
@@ -20,7 +19,7 @@ use std::thread::JoinHandle;
 use std::collections::BTreeMap;
 use super::comms::{Controllable, CmdFrom};
 use self::iron::prelude::*;
-use self::iron::{status, typemap};
+use self::iron::status;
 use self::iron::middleware::Handler;
 use self::hbs::{Template, HandlebarsEngine, Watchable};
 use self::serialize::json::{ToJson, Json};
@@ -29,7 +28,6 @@ use self::mount::Mount;
 use self::router::Router;
 use self::hyper::server::Listening;
 use self::ws::Sender as WebsocketSender;
-use self::ws::Receiver as WebsocketReceiver;
 
 static HTTP_PORT: u16 = 3000;
 static WS_PORT: u16   = 3001;
@@ -187,6 +185,7 @@ guilty!{
                     client.send_message(message).unwrap();
                     
                     let (mut sender, mut receiver) = client.split();
+                    // TODO multiplex the receiver with the mpsc Receiver somehow
                     
                     /*for message in receiver.incoming_messages() {
                         let message = message.unwrap();
@@ -216,7 +215,7 @@ guilty!{
 
         fn step(&mut self, data: Option<String>) -> bool {
             if let Some(d) = data {
-                self.wstx.send(ws::Message::Text(d));
+                self.wstx.send(ws::Message::Text(d)).unwrap();
             }
 
             true
@@ -224,7 +223,7 @@ guilty!{
         
         fn teardown(&mut self) {
             self.listening.close().unwrap(); // FIXME this does not do anything (known bug in hyper)
-            // FIXME no way to close the websocket server?
+            // TODO send a message to the websocket thread telling it to shut down
         }
     }
 }

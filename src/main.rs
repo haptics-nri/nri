@@ -64,6 +64,8 @@
 //! tried to get DNS running, but I failed, so for now you have to use an IP address to access the
 //! NUC. You can see what it chose by running <code>hostname -I</code> -- it seems to like 10.42.0.1.
 
+#![cfg_attr(not(target_os = "linux"), allow(dead_code))]
+
 /// Just like println!, but prints to stderr
 macro_rules! errorln {
     ($($arg:tt)*) => (
@@ -120,16 +122,11 @@ mod web;
 mod structure;
 mod bluefox;
 mod optoforce;
-mod mpmc;
 
-use std::io;
 use std::io::{Write, BufRead};
 use std::ascii::AsciiExt;
-use std::ptr;
 use std::thread;
-use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError};
-use std::process::Command;
-use mpmc::MultiSender;
+use std::sync::mpsc::{channel, Sender};
 use comms::{CmdTo, CmdFrom};
 use cli::CLI;
 use web::Web;
@@ -169,7 +166,10 @@ struct Service {
 
 fn send_to(services: &[Service], s: String, cmd: CmdTo) -> bool {
     match services.iter().position(|x| x.name == s) {
-        Some(i) => { services[i].tx.send(cmd); true },
+        Some(i) => {
+            services[i].tx.send(cmd).unwrap();
+            true
+        },
         None => false 
     }
 }
@@ -184,7 +184,7 @@ fn stop(services: &[Service], s: String) -> bool {
 
 fn stop_all(services: &mut [Service]) {
     for s in services {
-        s.tx.send(CmdTo::Quit);
+        s.tx.send(CmdTo::Quit).unwrap();
         s.thread.take().map(|t| t.join().unwrap_or_else(|e| errorln!("Failed to join {} thread: {:?}", s.name, e)));
     }
 }
@@ -210,11 +210,11 @@ fn main() {
                 Ok(cmd) => match cmd {
                     CmdFrom::Start(s, tx) => {
                         println!("STARTING {}", s);
-                        tx.send(start(&services, s));
+                        tx.send(start(&services, s)).unwrap();
                     },
                     CmdFrom::Stop(s, tx)  => {
                         println!("STOPPING {}", s);
-                        tx.send(stop(&services, s));
+                        tx.send(stop(&services, s)).unwrap();
                     },
                     CmdFrom::Quit         => {
                         println!("STOPPING ALL");

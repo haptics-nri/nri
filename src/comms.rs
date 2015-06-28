@@ -1,6 +1,6 @@
 //! Utilities for communication between the supervisor thread and services
 
-use std::sync::mpsc::{channel, Sender, Receiver, RecvError, TryRecvError, SendError};
+use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError, SendError};
 use std::thread;
 use std::mem;
 use super::hprof;
@@ -85,7 +85,7 @@ guilty!{
 macro_rules! rpc {
     ($tx:expr, CmdFrom::$name:ident, $($param:expr),*) => {{
         let (msg_tx, msg_rx) = ::std::sync::mpsc::channel();
-        $tx.send($crate::comms::CmdFrom::$name($($param),*, msg_tx));
+        $tx.send($crate::comms::CmdFrom::$name($($param),*, msg_tx)).unwrap();
         msg_rx.recv()
     }}
 }
@@ -108,7 +108,7 @@ macro_rules! stub {
             impl Controllable for $t {
                 const NAME: &'static str = concat!("Stub ", stringify!($t)),
 
-                fn setup(tx: ::std::sync::mpsc::Sender<$crate::comms::CmdFrom>, _: Option<String>) -> $t {
+                fn setup(_: ::std::sync::mpsc::Sender<$crate::comms::CmdFrom>, _: Option<String>) -> $t {
                     $t
                 }
 
@@ -128,15 +128,15 @@ macro_rules! stub {
 /// Runs in a loop receiving commands from the supervisor thread. Manages a Controllable instance,
 /// calling its setup()/step()/teardown() methods as necessary.
 pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
-    'outer: loop {
+    'alive: loop {
         let mut data = None;
 
-        'inner: loop {
+        'hatching: loop {
             match rx.recv() {
                 Ok(cmd) => match cmd {
-                    CmdTo::Start => break 'inner, // let's go!
-                    CmdTo::Data(_) => continue 'inner, // sorry, not listening yet
-                    CmdTo::Stop | CmdTo::Quit => break 'outer, // didn't even get to start
+                    CmdTo::Start => break 'hatching, // let's go!
+                    CmdTo::Data(_) => continue 'hatching, // sorry, not listening yet
+                    CmdTo::Stop | CmdTo::Quit => break 'alive, // didn't even get to start
                 },
                 Err(_) => return, // main thread exploded?
             }
@@ -149,7 +149,7 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
             *wrapped_prof.borrow_mut() = Some(hprof::Profiler::new(guilty!(C::NAME)));
         });
 
-        'inner: loop {
+        'running: loop {
             data = None;
 
             // TODO remove this code duplication
@@ -157,23 +157,23 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
                 match rx.recv() {
                     Ok(cmd) => match cmd {
                         CmdTo::Start => {}, // already started
-                        CmdTo::Stop => break 'inner, // shutdown command
-                        CmdTo::Quit => { c.teardown(); break 'outer; }, // real shutdown command
+                        CmdTo::Stop => break 'running, // shutdown command
+                        CmdTo::Quit => { c.teardown(); break 'alive; }, // real shutdown command
                         CmdTo::Data(d) => data = Some(d), // have data!
                     },
-                    Err(_) => { c.teardown(); break 'outer; }
+                    Err(_) => { c.teardown(); break 'alive; }
                 }
             } else {
                 match rx.try_recv() {
                     Ok(cmd) => match cmd {
                         CmdTo::Start => {}, // already started
-                        CmdTo::Stop => break 'inner, // shutdown command
-                        CmdTo::Quit => { c.teardown(); break 'outer; }, // real shutdown command
+                        CmdTo::Stop => break 'running, // shutdown command
+                        CmdTo::Quit => { c.teardown(); break 'alive; }, // real shutdown command
                         CmdTo::Data(d) => data = Some(d), // have data!
                     },
                     Err(e) => match e {
                         TryRecvError::Empty => {}, // continue
-                        TryRecvError::Disconnected => { c.teardown(); break 'outer; }, // main thread exploded?
+                        TryRecvError::Disconnected => { c.teardown(); break 'alive; }, // main thread exploded?
                     },
                 }
             }
