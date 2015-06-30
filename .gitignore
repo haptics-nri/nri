@@ -5,3 +5,4 @@ target
 Session.vim
 *.dat
 *.png
+*.csv
