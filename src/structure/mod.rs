@@ -70,7 +70,7 @@ group_attr!{
                     f.write("\n".as_bytes()).unwrap();
                 }
 
-                prof!("tx.send", self.tx.send(CmdFrom::Data(format!("structure data:image/png;base64,{}", encoded.to_base64(base64::STANDARD)))).unwrap());
+                prof!("tx.send", self.tx.send(CmdFrom::Data(format!("structure {} data:image/png;base64,{}", self.i, encoded.to_base64(base64::STANDARD)))).unwrap());
 
                 false
             }

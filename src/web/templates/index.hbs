@@ -16,14 +16,9 @@
             var socket = new WebSocket("ws://{{server}}", "rust-websocket");
             socket.onmessage = function (event) {
                 console.log(event.data);
-                switch (event.data.split(' ')[0]) {
-                    case "structure":
-                        $("#structure.latest").each(function () { this.src = event.data.split(' ')[1]; });
-                        break;
-                    case "bluefox":
-                        $("#bluefox.latest").each(function () { this.src = event.data.split(' ')[1]; });
-                        break;
-                }
+                words = event.data.split(' ');
+                $("." + words[0] + ".framenum").each(function () { this.innerHTML = words[1]; });
+                $("." + words[0] + ".latest")  .each(function () { this.src       = words[2]; });
             };
         </script>
 
@@ -46,6 +41,9 @@
                             <button formaction="/control/{{shortname}}/stop"
                                     type="submit"
                                     class="btn btn-danger">Stop</button>
+                            <button formaction="/control/{{shortname}}/kick"
+                                    type="submit"
+                                    class="btn btn-warning">Kick</button>
                         </div>
                     {{/each}}
                 </form>

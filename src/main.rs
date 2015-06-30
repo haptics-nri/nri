@@ -222,9 +222,13 @@ fn main() {
                         println!("EXITING");
                         break;
                     },
-                    CmdFrom::Data(d)      => match &*d.split(' ').next().unwrap() {
-                        "structure" | "bluefox" => { send_to(&services, "web".to_string(), CmdTo::Data(d)); },
-                        _                       => { errorln!("Strange message {} received from a service", d); }
+                    CmdFrom::Data(d)      => {
+                        let mut words = d.split(' ');
+                        match &*words.next().unwrap() {
+                            "structure" | "bluefox" => { send_to(&services, "web".to_string(), CmdTo::Data(d.to_owned())); },
+                            "kick"                  => { send_to(&services, words.next().unwrap().to_string(), CmdTo::Data("kick".to_string())); },
+                            _                       => { errorln!("Strange message {} received from a service", d); }
+                        }
                     }
                 },
                 Err(_) => { stop_all(&mut services[1..]); break; }

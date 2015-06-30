@@ -6,6 +6,8 @@ group_attr!{
     extern crate time;
     extern crate image;
     extern crate rustc_serialize as serialize;
+    use std::fs::File;
+    use std::io::Write;
     use self::image::{imageops, ImageBuffer, ColorType, FilterType};
     use self::image::png::PNGEncoder;
     use self::serialize::base64;
@@ -14,7 +16,7 @@ group_attr!{
     use std::sync::mpsc::Sender;
     use ::comms::{Controllable, CmdFrom, RestartableThread};
 
-type PngStuff = (Vec<u8>, (usize, usize), ColorType);
+type PngStuff = (usize, Vec<u8>, (usize, usize), ColorType);
 
     mod wrapper;
 
@@ -47,25 +49,28 @@ type PngStuff = (Vec<u8>, (usize, usize), ColorType);
                     i: 0,
                     start: time::now(),
 
-                    png: RestartableThread::new("Bluefox PNG thread", move |(unencoded, (h, w), bd)| {
+                    png: RestartableThread::new("Bluefox PNG thread", move |(i, unencoded, (h, w), bd)| {
                         let mut encoded = Vec::with_capacity(w*h);
                         let to_resize = prof!("imagebuffer", ImageBuffer::<image::Rgb<u8>, _>::from_raw(w as u32, h as u32, unencoded).unwrap());
                         let (ww, hh) = ((w as u32)/4, (h as u32)/4);
                         let resized = prof!("resize", imageops::resize(&to_resize, ww, hh, FilterType::Nearest));
                         prof!("encode", PNGEncoder::new(&mut encoded).encode(&resized, ww, hh, bd).unwrap());
-                        prof!("send", mtx.lock().unwrap().send(CmdFrom::Data(format!("bluefox data:image/png;base64,{}", prof!("base64", encoded.to_base64(base64::STANDARD))))).unwrap());
+                        prof!("send", mtx.lock().unwrap().send(CmdFrom::Data(format!("bluefox {} data:image/png;base64,{}", i, prof!("base64", encoded.to_base64(base64::STANDARD))))).unwrap());
                     })
                 }
             }
 
-            fn step(&mut self, _: Option<String>) -> bool {
+            fn step(&mut self, data: Option<String>) -> bool {
                 self.i += 1;
 
                 let image = self.device.request().unwrap();
 
-                //let mut f = File::create(format!("data/bluefox{}.dat", self.i)).unwrap();
-                //f.write_all(image.data());
-                if self.i % 1 == 0 { prof!("send to thread", self.png.send((image.data().into(), image.size(), ColorType::RGB(8))).unwrap()); }
+                let mut f = File::create(format!("data/bluefox{}.dat", self.i)).unwrap();
+                f.write_all(image.data()).unwrap();
+                match data.as_ref().map(|s| s as &str) {
+                    Some("kick") => prof!("send to thread", self.png.send((self.i, image.data().into(), image.size(), ColorType::RGB(8))).unwrap()),
+                    Some(_) | None => ()
+                }
                 //PNGEncoder::new(&mut f).encode(image.data(), image.size().1 as u32, image.size().0 as u32, ColorType::RGB(8));
 
                 false

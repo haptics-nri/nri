@@ -76,8 +76,8 @@ fn relpath(path: &str) -> String {
 /// Handler for the main page of the web interface
 fn index(req: &mut Request) -> IronResult<Response> {
     let mut data = BTreeMap::<String, Json>::new();
-    data.insert("services".to_string(), vec![ Service::new("Structure Sensor", "structure", "<img id=\"structure\" class=\"latest\" src=\"img/structure_latest.png\" />"),
-                                              Service::new("mvBlueFOX3",       "bluefox"  , "<img id=\"bluefox\" class=\"latest\" src=\"img/bluefox_latest.png\" />"),
+    data.insert("services".to_string(), vec![ Service::new("Structure Sensor", "structure", "<img class=\"structure latest\" src=\"img/structure_latest.png\" /><div class=\"structure framenum\">NaN</div>"),
+                                              Service::new("mvBlueFOX3",       "bluefox"  , "<img class=\"bluefox latest\" src=\"img/bluefox_latest.png\" /><div class=\"bluefox framenum\">NaN</div>"),
                                               Service::new("OptoForce",        "optoforce", ""),
                                               Service::new("SynTouch BioTac",  "biotac"   , ""),
                                             ].to_json());
@@ -108,6 +108,11 @@ fn control(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
                     Ok(Response::with((status::Ok, format!("Stopped {}", service))))
                 } else {
                     Ok(Response::with((status::InternalServerError, format!("Failed to stop {}", service))))
+                },
+            "kick" => 
+                match mtx.lock().unwrap().send(CmdFrom::Data(format!("kick {}", service))) {
+                    Ok(_) => Ok(Response::with((status::Ok, format!("Kicked {}", service)))),
+                    Err(_) => Ok(Response::with((status::InternalServerError, format!("Failed to kick {}", service))))
                 },
             _ => Ok(Response::with((status::BadRequest, format!("What does {} mean?", action))))
         }
