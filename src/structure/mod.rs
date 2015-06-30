@@ -6,14 +6,14 @@ group_attr!{
     extern crate time;
     extern crate image;
     extern crate rustc_serialize as serialize;
-    use std::fs;
+    use std::mem;
     use std::fs::File;
     use std::io::Write;
     use self::image::ColorType;
     use self::image::png::PNGEncoder;
     use self::serialize::base64;
     use self::serialize::base64::ToBase64;
-    use std::sync::mpsc::{channel, Sender};
+    use std::sync::mpsc::Sender;
     use ::comms::{Controllable, CmdFrom};
 
     mod wrapper;
@@ -41,12 +41,12 @@ group_attr!{
             const NAME: &'static str = "structure",
 
             fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Structure {
-                wrapper::initialize();
+                wrapper::initialize().unwrap();
                 let device = wrapper::Device::new(None).unwrap();
                 let depth = wrapper::VideoStream::new(&device, wrapper::OniSensorType::Depth).unwrap();
                 println!("device = {:?}", device);
                 println!("depth = {:?}", depth);
-                depth.start();
+                depth.start().unwrap();
                 let start = time::now();
                 let i = 0;
                 Structure { tx: tx, device: device, depth: depth, start: start, i: i}
@@ -55,16 +55,22 @@ group_attr!{
             fn step(&mut self, _: Option<String>) -> bool {
                 self.i += 1;
 
-                let frame = prof!("readFrame", self.depth.readFrame().unwrap());
+                let frame = prof!("readFrame", self.depth.read_frame().unwrap());
                 let data: &[u8] = prof!(frame.data());
 
-                let fname = format!("data/structure{}.png", self.i);
+                let fname = format!("data/structure{}.csv", self.i);
                 let mut f = File::create(&fname).unwrap();
                 let mut encoded = Vec::with_capacity(data.len());
-                prof!("PNGEncoder", PNGEncoder::new(&mut encoded).encode(data, frame.width as u32, frame.height as u32, ColorType::Gray(16)));
-                f.write_all(&encoded);
+                prof!("PNGEncoder", PNGEncoder::new(&mut encoded).encode(data, frame.width as u32, frame.height as u32, ColorType::Gray(16)).unwrap());
+                let wide_data : &[u16] = unsafe { mem::transmute(data) };
+                for w in 0..frame.width {
+                    for h in 0..frame.height {
+                        f.write(format!("{}, ", wide_data[(h*frame.width + w) as usize]).as_bytes()).unwrap();
+                    }
+                    f.write("\n".as_bytes()).unwrap();
+                }
 
-                prof!("tx.send", self.tx.send(CmdFrom::Data(format!("structure data:image/png;base64,{}", encoded.to_base64(base64::STANDARD)))));
+                prof!("tx.send", self.tx.send(CmdFrom::Data(format!("structure data:image/png;base64,{}", encoded.to_base64(base64::STANDARD)))).unwrap());
 
                 false
             }

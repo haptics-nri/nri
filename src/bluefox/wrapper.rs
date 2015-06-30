@@ -5,12 +5,13 @@ use std::mem;
 use std::ptr;
 use std::ffi::CString;
 
-#[derive(Clone, Copy)] pub struct HDMR(c_int);
-#[derive(Clone, Copy)] pub struct HDEV(c_int);
-#[derive(Clone, Copy)] pub struct HDRV(c_int);
+#[repr(C)] #[derive(Clone, Copy)] pub struct HDMR(c_int);
+#[repr(C)] #[derive(Clone, Copy)] pub struct HDEV(c_int);
+#[repr(C)] #[derive(Clone, Copy)] pub struct HDRV(c_int);
 
 #[repr(C)]
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum TDMR_ERROR {
     DMR_NO_ERROR = 0,
     DMR_DEV_NOT_FOUND = -2100,
@@ -66,6 +67,7 @@ pub enum TDMR_ERROR {
 
 #[repr(C)]
 #[derive(Debug)]
+#[allow(dead_code)]
 enum DeviceSearchMode {
     Serial     = 1,
     Family     = 2,
@@ -75,6 +77,7 @@ enum DeviceSearchMode {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
+#[allow(dead_code)]
 enum PixelFormat {
     Raw = 0,
     Mono8 = 1,

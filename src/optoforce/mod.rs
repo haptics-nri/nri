@@ -48,7 +48,7 @@ group_attr!{
     #[cfg(target_os = "linux")]
 
     use ::comms::{Controllable, CmdFrom};
-    use std::sync::mpsc::{channel, Sender};
+    use std::sync::mpsc::Sender;
 
 
     mod wrapper;
@@ -61,7 +61,7 @@ group_attr!{
         impl Controllable for Optoforce {
             const NAME: &'static str = "optoforce",
 
-            fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Optoforce {
+            fn setup(_: Sender<CmdFrom>, _: Option<String>) -> Optoforce {
                 Optoforce { device: wrapper::Device }
             }
 
