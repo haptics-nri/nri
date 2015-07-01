@@ -46,6 +46,16 @@ group_attr!{
                 let depth = wrapper::VideoStream::new(&device, wrapper::OniSensorType::Depth).unwrap();
                 println!("device = {:?}", device);
                 println!("depth = {:?}", depth);
+                println!("{:?}", *depth.info().unwrap());
+                println!("{:?}", depth.get(StreamProperty::VideoMode));
+                for mode in depth.info().unwrap().video_modes() { println!("{:?}", mode); }
+                depth.set(wrapper::StreamProperty::VideoMode(
+                        wrapper::OniVideoMode {
+                            pixel_format: wrapper::OniPixelFormat::Depth100um,
+                            resolution_x: 640,
+                            resolution_y: 480,
+                            fps: 30
+                        })).unwrap();
                 depth.start().unwrap();
                 let start = time::now();
                 let i = 0;
@@ -57,6 +67,10 @@ group_attr!{
 
                 let frame = prof!("readFrame", self.depth.read_frame().unwrap());
                 let data: &[u8] = prof!(frame.data());
+
+                if self.i == 1 {
+                    println!("Structure video mode: {:?}", *frame);
+                }
 
                 let fname = format!("data/structure{}.csv", self.i);
                 let mut f = File::create(&fname).unwrap();
