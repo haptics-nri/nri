@@ -13,12 +13,9 @@
 [submodule "src/optoforce/remake"]
 	path = src/optoforce/remake
 	url = git@github.com:kralf/remake
-[submodule "overrides/rust-websocket"]
-	path = overrides/rust-websocket
-	url = git@github.com:cyderize/rust-websocket
 [submodule "overrides/hprof"]
 	path = overrides/hprof
 	url = git@github.com:cmr/hprof
 [submodule "overrides/websocket"]
 	path = overrides/websocket
-	url = git@github.com:cyderize/rust-websocket
+	url = git@github.com:haptics-nri/rust-websocket
