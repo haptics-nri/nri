@@ -47,15 +47,15 @@ group_attr!{
                 println!("device = {:?}", device);
                 println!("depth = {:?}", depth);
                 println!("{:?}", *depth.info().unwrap());
-                println!("{:?}", depth.get(StreamProperty::VideoMode));
+                println!("{:?}", depth.get::<wrapper::prop::VideoMode>());
                 for mode in depth.info().unwrap().video_modes() { println!("{:?}", mode); }
-                depth.set(wrapper::StreamProperty::VideoMode(
+                depth.set::<wrapper::prop::VideoMode>(
                         wrapper::OniVideoMode {
                             pixel_format: wrapper::OniPixelFormat::Depth100um,
                             resolution_x: 640,
                             resolution_y: 480,
                             fps: 30
-                        })).unwrap();
+                        }).unwrap();
                 depth.start().unwrap();
                 let start = time::now();
                 let i = 0;

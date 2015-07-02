@@ -62,46 +62,93 @@ pub enum OniPixelFormat {
 	YUYV       = 205,
 }
 
-pub enum StreamProperty
-{
-	Cropping(OniCropping),
-	HorizontalFOV(f32), // radians
-	VerticalFOV(f32), // radians
-	VideoMode(OniVideoMode),
+pub mod prop {
 
-	MaxValue(i32),
-	MinValue(i32),
+    guilty! {
+        pub trait Stream {
+            const ID: i32,
 
-	Stride(i32),
-	Mirroring(bool),
+            type Data;
+            type CData;
 
-	NumberOfFrames(i32),
-
-	// Camera
-	AutoWhiteBalance(bool),
-	AutoExposure(bool),
-	Exposure(i32),
-	Gain(i32),
-}
-
-impl Into<(c_int, *const c_void, c_int)> for StreamProperty {
-    fn into(self) -> (c_int, *const c_void, c_int) {
-        match self {
-            StreamProperty::Cropping(cropping)    => (0,   &cropping            as *const _ as *const c_void, mem::size_of::<OniCropping>()  as c_int),
-            StreamProperty::HorizontalFOV(fov)    => (1,   &(fov    as c_float) as *const _ as *const c_void, mem::size_of::<c_float>()      as c_int),
-            StreamProperty::VerticalFOV(fov)      => (2,   &(fov    as c_float) as *const _ as *const c_void, mem::size_of::<c_float>()      as c_int),
-            StreamProperty::VideoMode(mode)       => (3,   &mode                as *const _ as *const c_void, mem::size_of::<OniVideoMode>() as c_int),
-            StreamProperty::MaxValue(max)         => (4,   &(max    as c_int)   as *const _ as *const c_void, mem::size_of::<c_int>()        as c_int),
-            StreamProperty::MinValue(min)         => (5,   &(min    as c_int)   as *const _ as *const c_void, mem::size_of::<c_int>()        as c_int),
-            StreamProperty::Stride(stride)        => (6,   &(stride as c_int)   as *const _ as *const c_void, mem::size_of::<c_int>()        as c_int),
-            StreamProperty::Mirroring(mirror)     => (7,   &(mirror as c_int)   as *const _ as *const c_void, mem::size_of::<c_int>()        as c_int),
-            StreamProperty::NumberOfFrames(nf)    => (8,   &(nf     as c_int)   as *const _ as *const c_void, mem::size_of::<c_int>()        as c_int),
-            StreamProperty::AutoWhiteBalance(awb) => (100, &(awb    as c_int)   as *const _ as *const c_void, mem::size_of::<c_int>()        as c_int),
-            StreamProperty::AutoExposure(ae)      => (101, &(ae     as c_int)   as *const _ as *const c_void, mem::size_of::<c_int>()        as c_int),
-            StreamProperty::Exposure(exp)         => (102, &(exp    as c_int)   as *const _ as *const c_void, mem::size_of::<c_int>()        as c_int),
-            StreamProperty::Gain(gain)            => (103, &(gain   as c_int)   as *const _ as *const c_void, mem::size_of::<c_int>()        as c_int),
+            fn to_c(data: Self::Data) -> Self::CData;
+            fn from_c(cdata: Self::CData) -> Self::Data;
         }
     }
+
+    macro_rules! stream_property_impl {
+        // multiple names with the same data types (+ short forms)
+        ([$($name:ident = $id:expr),*],
+         $data:ty) => {
+             $(
+                 stream_property_impl!($name = $id,
+                                       $data);
+              )*
+         };
+        ([$($name:ident = $id:expr),*],
+         $data:ty => $cdata:ty) => {
+             $(
+                 stream_property_impl!($name = $id,
+                                       $data => $cdata);
+              )*
+         };
+        ([$($name:ident = $id:expr),*],
+         $data:ty => $cdata:ty,
+         |$to_param:ident| $to_body:expr,
+         |$from_param:ident| $from_body:expr) => {
+             $(
+                 stream_property_impl!($name = $id,
+                                       $data => $cdata,
+                                       |$to_param| $to_body,
+                                       |$from_param| $from_body);
+              )*
+         };
+
+        // short form: converters default to straight casts
+        ($name:ident = $id:expr,
+         $data:ty => $cdata:ty) => {
+             stream_property_impl!($name = $id,
+                                   $data => $cdata,
+                                   |d| d as $cdata,
+                                   |cd| cd as $data);
+         };
+
+        // shorter form: $cdata defaults to $data (and therefore the converters are no-ops)
+        ($name:ident = $id:expr,
+         $data:ty) => {
+             stream_property_impl!($name = $id, $data => $data, |d| d, |cd| cd);
+         };
+
+        ($name:ident = $id:expr,
+         $data:ty => $cdata:ty,
+         |$to_param:ident| $to_body:expr,
+         |$from_param:ident| $from_body:expr) => {
+            pub struct $name;
+            guilty! {
+                impl Stream for $name {
+                    const ID: i32 = $id,
+
+                    type Data = $data;
+                    type CData = $cdata;
+
+                    fn to_c($to_param: $data) -> $cdata { $to_body }
+                    fn from_c($from_param: $cdata) -> $data { $from_body }
+                }
+            }
+        };
+    }
+
+    use super::{OniCropping, OniVideoMode};
+    use super::libc::{c_int, c_float};
+
+    type Radians = f32;
+
+    stream_property_impl!(Cropping = 0, OniCropping);
+    stream_property_impl!(VideoMode = 3, OniVideoMode);
+    stream_property_impl!([HorizontalFOV = 1, VerticalFOV = 2], Radians => c_float);
+    stream_property_impl!([MaxValue = 4, MinValue = 5, Stride = 6, NumberOfFrames = 8, Exposure = 102, Gain = 103], i32 => c_int);
+    stream_property_impl!([Mirroring = 7, AutoWhiteBalance = 100, AutoExposure = 101], bool => c_int, |b| b as c_int, |i| i != 0);
+
 }
 
 #[repr(C)]
@@ -273,15 +320,18 @@ impl VideoStream {
         }
     }
 
-    pub fn set(&self, prop: StreamProperty) -> Result<(),OniError> {
-        let converted_prop: (c_int, *const c_void, c_int) = prop.into();
-        status2result!(unsafe { oniStreamSetProperty(self.pvs, converted_prop.0, converted_prop.1, converted_prop.2) })
+    pub fn set<P: prop::Stream>(&self, data: P::Data) -> Result<(),OniError> {
+        status2result!(unsafe { oniStreamSetProperty(self.pvs, guilty!(P::ID), &P::to_c(data) as *const _ as *const c_void, mem::size_of::<P::CData>() as c_int) })
     }
 
-    pub fn get<X>(prop: &Fn(X) -> StreamProperty) -> Result<StreamProperty,OniError> {
-        // FIXME need to redesign the StreamProperty type
-        // so it can be used to construct the triples for set(), but also to get a number for get()
-        // probably a guilty trait
+    pub fn get<P: prop::Stream>(&self) -> Result<P::Data,OniError> {
+        unsafe {
+            let mut cdata: P::CData = mem::uninitialized();
+            let mut size : c_int    = mem::uninitialized();
+            try!(status2result!(oniStreamGetProperty(self.pvs, guilty!(P::ID), &mut cdata as *mut _ as *mut c_void, &mut size)));
+            assert_eq!(size as usize, mem::size_of::<P::CData>());
+            Ok(P::from_c(cdata))
+        }
     }
 
     pub fn stop(&self) {
