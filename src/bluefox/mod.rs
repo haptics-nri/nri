@@ -16,7 +16,7 @@ group_attr!{
     use std::sync::mpsc::Sender;
     use ::comms::{Controllable, CmdFrom, RestartableThread};
 
-type PngStuff = (usize, Vec<u8>, (usize, usize), ColorType);
+    type PngStuff = (usize, Vec<u8>, (usize, usize), ColorType);
 
     mod wrapper;
 

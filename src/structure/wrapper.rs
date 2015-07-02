@@ -3,6 +3,7 @@ use self::libc::{c_void, c_char, c_float, c_int};
 use std::ptr;
 use std::mem;
 use std::ffi::CString;
+use std::cell::Cell;
 use std::ops::Deref;
 use std::slice;
 
@@ -259,7 +260,8 @@ pub struct Device {
 #[allow(raw_pointer_derive)]
 #[derive(Debug)]
 pub struct VideoStream {
-    pvs: *mut c_void
+    pvs: *mut c_void,
+    running: Cell<bool>
 }
 
 #[allow(raw_pointer_derive)]
@@ -297,12 +299,23 @@ impl Device {
 
 impl VideoStream {
     pub fn new(dev: &Device, sensor_type: OniSensorType) -> Result<VideoStream,OniError> {
-        let mut vs = VideoStream { pvs: ptr::null_mut() };
+        let mut vs = VideoStream { pvs: ptr::null_mut(), running: Cell::new(false) };
         status2result!(unsafe { oniDeviceCreateStream(dev.pdev, sensor_type, &mut vs.pvs) }, vs)
     }
 
     pub fn start(&self) -> Result<(),OniError> {
-        status2result!(unsafe { oniStreamStart(self.pvs) })
+        try!(status2result!(unsafe { oniStreamStart(self.pvs) }));
+        self.running.set(true);
+        Ok(())
+    }
+
+    pub fn stop(&self) {
+        unsafe { oniStreamStop(self.pvs) };
+        self.running.set(false);
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.running.get()
     }
 
     pub fn read_frame(&self) -> Result<Frame,OniError> {
@@ -332,10 +345,6 @@ impl VideoStream {
             assert_eq!(size as usize, mem::size_of::<P::CData>());
             Ok(P::from_c(cdata))
         }
-    }
-
-    pub fn stop(&self) {
-        unsafe { oniStreamStop(self.pvs) }
     }
     
     pub fn destroy(&self) {
