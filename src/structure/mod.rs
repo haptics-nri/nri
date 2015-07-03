@@ -52,9 +52,9 @@ group_attr!{
                 println!("device = {:?}", device);
                 println!("depth = {:?}", depth);
                 println!("ir = {:?}", ir);
-                println!("{:?}", *ir.info().unwrap());
-                println!("{:?}", ir.get::<wrapper::prop::VideoMode>());
-                for mode in ir.info().unwrap().video_modes() { println!("{:?}", mode); }
+                println!("{:?}", *depth.info().unwrap());
+                println!("{:?}", depth.get::<wrapper::prop::VideoMode>());
+                for mode in depth.info().unwrap().video_modes() { println!("{:?}", mode); }
                 depth.set::<wrapper::prop::VideoMode>(
                         wrapper::OniVideoMode {
                             pixel_format: wrapper::OniPixelFormat::Depth100um,
@@ -70,7 +70,7 @@ group_attr!{
                             fps: 30
                         }).unwrap();
                 depth.start().unwrap();
-                ir.start().unwrap();
+                //ir.start().unwrap();
 
                 let start = time::now();
                 let i = 0;
@@ -80,7 +80,7 @@ group_attr!{
             fn step(&mut self, cmd: Option<String>) -> bool {
                 self.i += 1;
 
-                if false && self.depth.is_running() {
+                if self.depth.is_running() {
                     prof!("depth", {
                         let frame = prof!("readFrame", self.depth.read_frame().unwrap());
                         let data: &[u8] = prof!(frame.data());
