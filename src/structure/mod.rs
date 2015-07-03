@@ -64,7 +64,7 @@ group_attr!{
                         }).unwrap();
                 ir.set::<wrapper::prop::VideoMode>(
                         wrapper::OniVideoMode {
-                            pixel_format: wrapper::OniPixelFormat::Gray16,
+                            pixel_format: wrapper::OniPixelFormat::RGB888,
                             resolution_x: 1280,
                             resolution_y: 1024,
                             fps: 30
@@ -106,22 +106,20 @@ group_attr!{
                         let frame = prof!("readFrame", self.ir.read_frame().unwrap());
                         let data: &[u8] = prof!(frame.data());
 
-                        println!("{}x{} frame with len={}", frame.height, frame.width, data.len());
-
                         let mut encoded = Vec::with_capacity(data.len());
-                        let to_resize = prof!("imagebuffer", ImageBuffer::<image::Luma<u8>, Vec<u8>>::from_raw(frame.width as u32, frame.height as u32, data.into()).unwrap());
+                        let to_resize = prof!("imagebuffer", ImageBuffer::<image::Rgb<u8>, Vec<u8>>::from_raw(frame.width as u32, frame.height as u32, data.into()).unwrap());
                         let (ww, hh) = ((frame.width as u32)/4, (frame.height as u32)/4);
                         let resized = prof!("resize", imageops::resize(&to_resize, ww, hh, FilterType::Nearest));
-                        prof!("encode", PNGEncoder::new(&mut encoded).encode(&resized, ww as u32, hh as u32, ColorType::Gray(16)).unwrap());
+                        prof!("encode", PNGEncoder::new(&mut encoded).encode(&resized, ww as u32, hh as u32, ColorType::RGB(8)).unwrap());
 
                         if cmd == Some("kick".to_string()) {
                             let fname = format!("data/structure_ir{}.png", self.i);
                             let mut f = File::create(&fname).unwrap();
-                            prof!("write", PNGEncoder::new(&mut f).encode(data, frame.width as u32, frame.height as u32, ColorType::Gray(16)).unwrap());
+                            prof!("write", PNGEncoder::new(&mut f).encode(data, frame.width as u32, frame.height as u32, ColorType::RGB(8)).unwrap());
                             println!("wrote IR frame {}", self.i);
                         }
 
-                        prof!("send", self.tx.send(CmdFrom::Data(format!("structure {} data:image/png;base64,{}", self.i, resized.to_base64(base64::STANDARD)))).unwrap());
+                        prof!("send", self.tx.send(CmdFrom::Data(format!("structure {} data:image/png;base64,{}", self.i, encoded.to_base64(base64::STANDARD)))).unwrap());
                     });
                 }
 
