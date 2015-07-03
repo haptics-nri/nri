@@ -100,7 +100,6 @@ use std::cell::RefCell;
 
 thread_local!(static PROF: RefCell<Option<hprof::Profiler>> = RefCell::new(None));
 
-/*
 macro_rules! prof {
     ($b:expr) => { prof!(stringify!($b), $b) };
     ($n:expr, $b:expr) => {
@@ -115,10 +114,6 @@ macro_rules! prof {
             ret
         })
     }
-}*/
-macro_rules! prof {
-    ($b:expr) => ($b);
-    ($n:expr, $b:expr) => ($b);
 }
 
 #[macro_use] mod comms;
