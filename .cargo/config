@@ -1,2 +1,2 @@
-paths = ["overrides/websocket", "overrides/hprof"]
+paths = ["overrides/hprof"]
 

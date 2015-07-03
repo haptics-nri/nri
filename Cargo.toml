@@ -22,10 +22,13 @@ iron = "*"
 handlebars-iron = "*"
 staticfile = { version = "*", default-features = false }
 mount = "*"
-hyper = "0.5.2"
+hyper = "^0.5"
 router = "*"
 rustc-serialize = "*"
-websocket = "*"
+#websocket = "*"
+
+[dependencies.websocket] # take this out once reem bumps iron to hyper 0.6
+git = "git://github.com/haptics-nri/rust-websocket"
 
 [dependencies.guilt-by-association]
 git = "git://github.com/durka/guilt-by-association"
