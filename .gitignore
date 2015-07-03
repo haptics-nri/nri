@@ -6,3 +6,5 @@ Session.vim
 *.dat
 *.png
 *.csv
+cargo-doc-cmmand
+*.zip
