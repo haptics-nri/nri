@@ -142,7 +142,7 @@ pub mod prop {
     use super::{OniCropping, OniVideoMode};
     use super::libc::{c_int, c_float};
 
-    type Radians = f32;
+    pub type Radians = f32;
 
     stream_property_impl!(Cropping = 0, OniCropping);
     stream_property_impl!(VideoMode = 3, OniVideoMode);
