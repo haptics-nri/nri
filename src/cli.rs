@@ -48,6 +48,9 @@ guilty!{
                     "quit" => {
                         self.tx.send(CmdFrom::Quit).unwrap();
                     },
+                    "panic" => {
+                        self.tx.send(CmdFrom::Panic).unwrap();
+                    },
                     _ => println!("Unknown command!")
                 }
             }

@@ -127,6 +127,7 @@ use std::io::{Write, BufRead};
 use std::ascii::AsciiExt;
 use std::thread;
 use std::sync::mpsc::{channel, Sender};
+use std::collections::HashMap;
 use comms::{CmdTo, CmdFrom};
 use cli::CLI;
 use web::Web;
@@ -138,6 +139,9 @@ use optoforce::Optoforce;
 extern crate log;
 extern crate env_logger;
 extern crate hprof;
+extern crate chrono;
+
+use chrono::{UTC, Datelike};
 
 macro_rules! rxspawn {
     ($reply:expr; $($s:ty),*) => {
@@ -164,10 +168,14 @@ struct Service {
     tx: Sender<CmdTo>,
 }
 
+fn find(services: &[Service], s: String) -> Option<&Service> {
+    services.iter().position(|x| x.name == s).map(|i| &services[i])
+}
+
 fn send_to(services: &[Service], s: String, cmd: CmdTo) -> bool {
-    match services.iter().position(|x| x.name == s) {
-        Some(i) => {
-            services[i].tx.send(cmd).unwrap();
+    match find(services, s) {
+        Some(srv) => {
+            srv.tx.send(cmd).unwrap();
             true
         },
         None => false 
@@ -202,6 +210,7 @@ fn main() {
         let (reply_tx, reply_rx) = channel();
 
         let mut services = rxspawn!(reply_tx; CLI, Web, Structure, Bluefox, Optoforce);
+        let mut timers = HashMap::new();
 
         start(&services, "cli".to_string());
 
@@ -221,6 +230,25 @@ fn main() {
                         stop_all(&mut services[1..]);
                         println!("EXITING");
                         break;
+                    },
+                    CmdFrom::Panic        => {
+                        println!("KABOOM");
+                        panic!("Child thread initiated panic");
+                    },
+                    CmdFrom::Timeout(n, ms)  => {
+                        if find(&services, n.to_string()).is_some() {
+                            timers.insert(n, UTC::now());
+                        } else {
+                            panic!("Nonexistent service asked for timeout");
+                        }
+                    },
+                    CmdFrom::Timein(n)    => {
+                        if timers.contains_key(n) {
+                            println!("Service {} took {} ms", n, UTC::now() - *timers.get(n).unwrap());
+                            timers.remove(n);
+                        } else {
+                            panic!("Timein with no matching timeout");
+                        }
                     },
                     CmdFrom::Data(d)      => {
                         let mut words = d.split(' ');

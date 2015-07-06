@@ -36,7 +36,15 @@ pub enum CmdFrom {
     Data(String),
 
     /// Shut down everything
-    Quit
+    Quit,
+
+    /// Abort the main thread immediately (never do this)
+    Panic,
+
+    /// Schedule the sending thread to be killed in x ms
+    Timeout(&'static str, u32),
+    /// Cancel a killing scheduled with Timeout
+    Timein(&'static str),
 }
 
 /// A service that can be setup and torn down based on commands from a higher power.
@@ -142,7 +150,9 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
             }
         }
 
+        tx.send(CmdFrom::Timeout(guilty!(C::NAME), 1000));
         let mut c = C::setup(tx.clone(), data);
+        tx.send(CmdFrom::Timein(guilty!(C::NAME)));
         let mut should_block = false;
 
         super::PROF.with(|wrapped_prof| {

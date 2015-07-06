@@ -14,8 +14,10 @@ log = "*"
 env_logger = "*"
 libc = "*"
 time = "*"
+chrono = "*"
 image = "*"
 hprof = "*"
+#ioctl-rs = "*"
 
 # iron deps
 iron = "*"
@@ -29,6 +31,10 @@ rustc-serialize = "*"
 
 [dependencies.websocket] # take this out once reem bumps iron to hyper 0.6
 git = "git://github.com/haptics-nri/rust-websocket"
+
+[dependencies.ioctl-rs]
+git = "git://github.com/haptics-nri/ioctl-rs"
+branch = "usbdevfs"
 
 [dependencies.guilt-by-association]
 git = "git://github.com/durka/guilt-by-association"

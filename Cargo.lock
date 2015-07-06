@@ -2,12 +2,14 @@
 name = "nri"
 version = "0.1.0"
 dependencies = [
+ "chrono 0.2.15 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "guilt-by-association 0.1.0 (git+git://github.com/durka/guilt-by-association)",
  "handlebars-iron 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "hprof 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hyper 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "image 0.3.11 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ioctl-rs 0.1.1 (git+git://github.com/haptics-nri/ioctl-rs?branch=usbdevfs)",
  "iron 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -41,6 +43,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "byteorder"
 version = "0.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "chrono"
+version = "0.2.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "num 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
+ "time 0.1.30 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "clock_ticks"
@@ -220,6 +231,14 @@ dependencies = [
 name = "inotify"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "libc 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "ioctl-rs"
+version = "0.1.1"
+source = "git+git://github.com/haptics-nri/ioctl-rs?branch=usbdevfs#ba1675b9bdb471be1aad0222e90f16aa22cb82f2"
 dependencies = [
  "libc 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
