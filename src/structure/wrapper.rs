@@ -234,25 +234,6 @@ extern "C" {
     fn oniFrameRelease(pFrame: *mut OniFrame);
 }
 
-// TODO move this into a common wrapper module
-mod ioctl {
-    extern crate ioctl_rs as ll;
-    use std::io;
-    use std::fs::File;
-    use std::path::Path;
-    use std::os::unix::io::AsRawFd;
-
-    pub fn usbdevfs_reset<P: AsRef<Path>>(path: P) -> io::Result<()> {
-        let file = File::create(path).unwrap();
-        let fd = file.as_raw_fd();
-
-        match unsafe { ll::ioctl(fd, ll::USBDEVFS_RESET, 0) } {
-            0 => Ok(()),
-            _ => Err(io::Error::last_os_error())
-        }
-    }
-}
-
 macro_rules! status2result {
     ($code:expr) => { status2result!($code, ()) };
     ($code:expr, $ret:expr) => {
