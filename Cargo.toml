@@ -18,24 +18,22 @@ chrono = "*"
 image = "*"
 hprof = "*"
 #ioctl-rs = "*"
+guilt-by-association = "*"
 
 # iron deps
 iron = "*"
 handlebars-iron = "*"
 staticfile = { version = "*", default-features = false }
 mount = "*"
-hyper = "^0.5"
+hyper = "*"
 router = "*"
 rustc-serialize = "*"
-#websocket = "*"
+websocket = "*"
 
-[dependencies.websocket] # take this out once reem bumps iron to hyper 0.6
-git = "git://github.com/haptics-nri/rust-websocket"
+#[dependencies.websocket] # take this out once reem bumps iron to hyper 0.6
+#git = "git://github.com/haptics-nri/rust-websocket"
 
-[dependencies.ioctl-rs]
-git = "git://github.com/haptics-nri/ioctl-rs"
-branch = "usbdevfs"
-
-[dependencies.guilt-by-association]
-git = "git://github.com/durka/guilt-by-association"
+#[dependencies.ioctl-rs]
+#git = "git://github.com/haptics-nri/ioctl-rs"
+#branch = "usbdevfs"
 
