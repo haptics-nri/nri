@@ -8,6 +8,8 @@ use std::ffi::CString;
 #[repr(C)] #[derive(Clone, Copy)] pub struct HDMR(c_int);
 #[repr(C)] #[derive(Clone, Copy)] pub struct HDEV(c_int);
 #[repr(C)] #[derive(Clone, Copy)] pub struct HDRV(c_int);
+#[repr(C)] #[derive(Clone, Copy)] pub struct HOBJ(c_int);
+#[repr(C)] #[derive(Clone, Copy)] pub struct HLIST(c_int);
 
 #[repr(C)]
 #[derive(Debug)]
@@ -68,6 +70,55 @@ pub enum TDMR_ERROR {
 #[repr(C)]
 #[derive(Debug)]
 #[allow(dead_code)]
+pub enum TPROPHANDLING_ERROR {
+    PROPHANDLING_NO_ERROR = 0,
+    PROPHANDLING_NOT_A_LIST = -2000,
+    PROPHANDLING_NOT_A_PROPERTY = -2001,
+    PROPHANDLING_NOT_A_METHOD = -2002,
+    PROPHANDLING_NO_READ_RIGHTS = -2003,
+    PROPHANDLING_NO_WRITE_RIGHTS = -2004,
+    PROPHANDLING_NO_MODIFY_SIZE_RIGHTS = -2005,
+    PROPHANDLING_INCOMPATIBLE_COMPONENTS = -2006,
+    PROPHANDLING_NO_USER_ALLOCATED_MEMORY = -2007,
+    PROPHANDLING_UNSUPPORTED_PARAMETER = -2008,
+    PROPHANDLING_SIZE_MISMATCH = -2009,
+    PROPHANDLING_IMPLEMENTATION_MISSING = -2010,
+    PROPHANDLING_ACCESSTOKEN_CREATION_FAILED = -2011,
+    PROPHANDLING_INVALID_PROP_VALUE = -2012,
+    PROPHANDLING_PROP_TRANSLATION_TABLE_CORRUPTED = -2013,
+    PROPHANDLING_PROP_VAL_ID_OUT_OF_BOUNDS = -2014,
+    PROPHANDLING_PROP_TRANSLATION_TABLE_NOT_DEFINED = -2015,
+    PROPHANDLING_INVALID_PROP_VALUE_TYPE = -2016,
+    PROPHANDLING_PROP_VAL_TOO_LARGE = -2017,
+    PROPHANDLING_PROP_VAL_TOO_SMALL = -2018,
+    PROPHANDLING_COMPONENT_NOT_FOUND = -2019,
+    PROPHANDLING_LIST_ID_INVALID = -2020,
+    PROPHANDLING_COMPONENT_ID_INVALID = -2021,
+    PROPHANDLING_LIST_ENTRY_OCCUPIED = -2022,
+    PROPHANDLING_COMPONENT_HAS_OWNER_ALREADY = -2023,
+    PROPHANDLING_COMPONENT_ALREADY_REGISTERED = -2024,
+    PROPHANDLING_LIST_CANT_ACCESS_DATA = -2025,
+    PROPHANDLING_METHOD_PTR_INVALID = -2026,
+    PROPHANDLING_METHOD_INVALID_PARAM_LIST = -2027,
+    PROPHANDLING_SWIG_ERROR = -2028,
+    PROPHANDLING_INVALID_INPUT_PARAMETER = -2029,
+    PROPHANDLING_COMPONENT_NO_CALLBACK_REGISTERED = -2030,
+    PROPHANDLING_INPUT_BUFFER_TOO_SMALL = -2031,
+    PROPHANDLING_WRONG_PARAM_COUNT = -2032,
+    PROPHANDLING_UNSUPPORTED_OPERATION = -2033,
+    PROPHANDLING_CANT_SERIALIZE_DATA = -2034,
+    PROPHANDLING_INVALID_FILE_CONTENT = -2035,
+    PROPHANDLING_CANT_ALLOCATE_LIST = -2036,
+    PROPHANDLING_CANT_REGISTER_COMPONENT = -2037,
+    PROPHANDLING_PROP_VALIDATION_FAILED = -2038,
+    //PROPHANDLING_PSEUDO_LAST_ASSIGNED_ERROR_CODE,
+    //PROPHANDLING_LAST_ASSIGNED_ERROR_CODE = PROPHANDLING_PSEUDO_LAST_ASSIGNED_ERROR_CODE - 2,
+    PROPHANDLING_LAST_VALID_ERROR_CODE = -2099
+}
+
+#[repr(C)]
+#[derive(Debug)]
+#[allow(dead_code)]
 enum DeviceSearchMode {
     Serial     = 1,
     Family     = 2,
@@ -108,6 +159,35 @@ enum PixelFormat {
     YUV444_10Packed = 27,
     Mono12Packed_V1 = 28,
     Auto = -1
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+#[allow(dead_code)]
+enum ListType {
+    Undefined = -1,
+    Setting = 0,
+    Request = 1,
+    RequestCtrl = 2,
+    Info = 3,
+    Statistics = 4,
+    SystemSettings = 5,
+    IOSubSystem = 6,
+    RTCtr = 7,
+    CameraDescriptions = 8,
+    DeviceSpecificData = 9,
+    EventSubSystemSettings = 10,
+    EventSubSystemResults = 11,
+    ImageMemoryManager = 12
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+#[allow(dead_code)]
+enum SearchMode {
+    IgnoreLists      = 0x2,
+    IgnoreMethods    = 0x4,
+    IgnoreProperties = 0x8
 }
 
 #[repr(C, packed)]
@@ -151,13 +231,31 @@ extern "C" {
     fn DMR_ImageRequestWaitFor(hDrv: HDRV, timeout_ms: c_int, queueNr: c_int, pRequestNr: *mut c_int) -> TDMR_ERROR;
     fn DMR_ImageRequestUnlock(hDrv: HDRV, requestNr: c_int) -> TDMR_ERROR;
     fn DMR_GetImageRequestBuffer(hDrv: HDRV, requestNr: c_int, ppBuffer: *mut *mut ImageBuffer) -> TDMR_ERROR;
+
+    fn DMR_FindList(hDrv: HDRV, pName: *const c_char, typ: ListType, flags: c_uint, pHList: *mut HLIST) -> TDMR_ERROR;
+
+    fn OBJ_GetHandleEx(hList: HLIST, pObjName: *const c_char, phObj: *mut HOBJ, searchMode: c_uint, maxSearchDepth: c_int) -> TPROPHANDLING_ERROR;
+    fn OBJ_GetI(hProp: HOBJ, pVal: *mut c_int, index: c_int) -> TPROPHANDLING_ERROR;
+    fn OBJ_SetI(hProp: HOBJ, val: c_int, index: c_int) -> TPROPHANDLING_ERROR;
+    fn OBJ_GetI64(hProp: HOBJ, pVal: *mut i64, index: c_int) -> TPROPHANDLING_ERROR;
+    fn OBJ_SetI64(hProp: HOBJ, val: i64, index: c_int) -> TPROPHANDLING_ERROR;
 }
 
-macro_rules! status2result {
-    ($code:expr) => { status2result!($code, ()) };
+macro_rules! dmr_status2result {
+    ($code:expr) => { dmr_status2result!($code, ()) };
     ($code:expr, $ret:expr) => {
         match $code {
             TDMR_ERROR::DMR_NO_ERROR => Ok($ret),
+            other => Err(unsafe { mem::transmute(other) }) // TODO make this safe
+        }
+    }
+}
+
+macro_rules! prop_status2result {
+    ($code:expr) => { prop_status2result!($code, ()) };
+    ($code:expr, $ret:expr) => {
+        match $code {
+            TPROPHANDLING_ERROR::PROPHANDLING_NO_ERROR => Ok($ret),
             other => Err(unsafe { mem::transmute(other) }) // TODO make this safe
         }
     }
@@ -175,27 +273,93 @@ pub struct Device {
     drv: HDRV,
 }
 
+trait ObjProp {
+    unsafe fn GetT(hObj: HOBJ, pval: *mut Self, index: c_int) -> TPROPHANDLING_ERROR;
+    unsafe fn SetT(hObj: HOBJ, val: Self, index: c_int) -> TPROPHANDLING_ERROR;
+}
+
+macro_rules! obj_set_impl {
+    ($t:ty, $get:ident, $set:ident) => {
+        impl ObjProp for $t {
+            unsafe fn GetT(hObj: HOBJ, pval: *mut Self, index: c_int) -> TPROPHANDLING_ERROR { $get(hObj, pval, index) }
+            unsafe fn SetT(hObj: HOBJ, val: Self, index: c_int) -> TPROPHANDLING_ERROR { $set(hObj, val, index) }
+        }
+    }
+}
+
+obj_set_impl!(i32, OBJ_GetI, OBJ_SetI);
+obj_set_impl!(i64, OBJ_GetI64, OBJ_SetI64);
+
 impl Device {
     pub fn new() -> Result<Device,TDMR_ERROR> {
-        println!("bluefox::wrapper::ImageBuffer is aligned at {} (min {})", mem::align_of::<ImageBuffer>(), mem::min_align_of::<ImageBuffer>());
         let mut this = Device { dmr: HDMR(0), dev: HDEV(0), drv: HDRV(0) };
-        try!(status2result!(unsafe { DMR_Init(&mut this.dmr) }));
+        try!(dmr_status2result!(unsafe { DMR_Init(&mut this.dmr) }));
 
-        try!(status2result!(unsafe { DMR_GetDevice(&mut this.dev, DeviceSearchMode::Serial, c_str!("*"), 0, b'*' as c_char) }));
-        status2result!(unsafe { DMR_OpenDevice(this.dev, &mut this.drv) }, this)
+        try!(dmr_status2result!(unsafe { DMR_GetDevice(&mut this.dev, DeviceSearchMode::Serial, c_str!("*"), 0, b'*' as c_char) }));
+        dmr_status2result!(unsafe { DMR_OpenDevice(this.dev, &mut this.drv) }, this)
+    }
+
+    // TODO macroize
+
+    pub fn get_height(&self) -> Result<i64,TPROPHANDLING_ERROR> {
+        self.get_prop("Base", "Height", 0)
+    }
+
+    pub fn get_width(&self) -> Result<i64,TPROPHANDLING_ERROR> {
+        self.get_prop("Base", "Width", 0)
+    }
+
+    pub fn set_reverse_x(&self, reverse: bool) -> Result<(),TPROPHANDLING_ERROR> {
+        self.set_prop("Base", "ReverseX", if reverse { 1 } else { 0 }, 0)
+    }
+    
+    pub fn set_reverse_y(&self, reverse: bool) -> Result<(),TPROPHANDLING_ERROR> {
+        self.set_prop("Base", "ReverseY", if reverse { 1 } else { 0 }, 0)
+    }
+    
+    pub fn get_reverse_x(&self) -> Result<bool,TPROPHANDLING_ERROR> {
+        self.get_prop::<i32>("Base", "ReverseX", 0).map(|i| i == 1)
+    }
+    
+    pub fn get_reverse_y(&self) -> Result<bool,TPROPHANDLING_ERROR> {
+        self.get_prop::<i32>("Base", "ReverseY", 0).map(|i| i == 1)
+    }
+    
+    fn set_prop<T: ObjProp>(&self, setting: &str, prop: &str, value: T, index: c_int) -> Result<(),TPROPHANDLING_ERROR> {
+        prop_status2result!(unsafe { T::SetT(try!(self.get_setting_prop(setting, prop)), value, index) })
+    }
+
+    fn get_prop<T: ObjProp>(&self, setting: &str, prop: &str, index: c_int) -> Result<T,TPROPHANDLING_ERROR> {
+        let mut value: T = unsafe { mem::uninitialized() };
+        prop_status2result!(unsafe { T::GetT(try!(self.get_setting_prop(setting, prop)), &mut value, index) }, value)
+    }
+
+    fn get_setting_prop(&self, setting: &str, prop: &str) -> Result<HOBJ,TPROPHANDLING_ERROR> {
+        self.get_driver_property(prop, setting, ListType::Setting)
+    }
+
+    fn get_driver_property(&self, prop: &str, list: &str, typ: ListType) -> Result<HOBJ,TPROPHANDLING_ERROR> {
+        self.get_driver_feature(prop, "property", list, typ, SearchMode::IgnoreLists as u32 | SearchMode::IgnoreMethods as u32)
+    }
+
+    fn get_driver_feature(&self, feature_name: &str, feature_type: &str, list: &str, list_type: ListType, mode: u32) -> Result<HOBJ,TPROPHANDLING_ERROR> {
+        let mut base: HLIST = unsafe { mem::uninitialized() };
+        let mut obj: HOBJ = unsafe { mem::uninitialized() };
+        try!(dmr_status2result!(unsafe { DMR_FindList(self.drv, c_str!(list), list_type, 0, &mut base) }));
+        prop_status2result!(unsafe { OBJ_GetHandleEx(base, c_str!(feature_name), &mut obj, mode, c_int::max_value()) }, obj)
     }
 
     pub fn request(&self) -> Result<Image,TDMR_ERROR> {
-        try!(status2result!(unsafe { DMR_ImageRequestSingle(self.drv, 0, ptr::null_mut()) }));
+        try!(dmr_status2result!(unsafe { DMR_ImageRequestSingle(self.drv, 0, ptr::null_mut()) }));
         let mut reqnr: c_int = 0;
-        try!(status2result!(unsafe { DMR_ImageRequestWaitFor(self.drv, -1, 0, &mut reqnr) }));
+        try!(dmr_status2result!(unsafe { DMR_ImageRequestWaitFor(self.drv, -1, 0, &mut reqnr) }));
         let mut image_buf = ImageBuffer { bytes_per_pixel: 0, channel_count: 0, height: 0, size: 0, width: 0, channels: ptr::null_mut(), pixel_format: PixelFormat::Mono8, data: ptr::null_mut() };
-        status2result!(unsafe { DMR_GetImageRequestBuffer(self.drv, reqnr, &mut &mut image_buf as *mut &mut ImageBuffer as *mut *mut ImageBuffer) }, Image { buf: image_buf, reqnr: reqnr, parent: self })
+        dmr_status2result!(unsafe { DMR_GetImageRequestBuffer(self.drv, reqnr, &mut &mut image_buf as *mut &mut ImageBuffer as *mut *mut ImageBuffer) }, Image { buf: image_buf, reqnr: reqnr, parent: self })
     }
 
     pub fn close(&self) -> Result<(),TDMR_ERROR> {
-        try!(status2result!(unsafe { DMR_CloseDevice(self.drv, self.dev) }));
-        status2result!(unsafe { DMR_Close() })
+        try!(dmr_status2result!(unsafe { DMR_CloseDevice(self.drv, self.dev) }));
+        dmr_status2result!(unsafe { DMR_Close() })
     }
 }
 
