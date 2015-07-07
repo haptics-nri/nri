@@ -129,7 +129,7 @@ enum DeviceSearchMode {
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 #[allow(dead_code)]
-enum PixelFormat {
+pub enum PixelFormat {
     Raw = 0,
     Mono8 = 1,
     Mono16 = 2,
@@ -159,6 +159,74 @@ enum PixelFormat {
     YUV444_10Packed = 27,
     Mono12Packed_V1 = 28,
     Auto = -1
+}
+
+impl PixelFormat {
+    fn to_prop(px: PixelFormat) -> Result<i32,PixelFormat> {
+        match px {
+            PixelFormat::Auto => Ok(0),
+            PixelFormat::Raw => Ok(1),
+            PixelFormat::Mono8 => Ok(2),
+            PixelFormat::Mono10 => Ok(6),
+            PixelFormat::Mono12 => Ok(7),
+            PixelFormat::Mono12Packed_V1 => Ok(28),
+            PixelFormat::Mono12Packed_V2 => Ok(19),
+            PixelFormat::Mono14 => Ok(8),
+            PixelFormat::Mono16 => Ok(9),
+            PixelFormat::BGR888Packed => Ok(22),
+            PixelFormat::BGR101010Packed_V2 => Ok(23),
+            PixelFormat::RGB888Packed => Ok(10),
+            PixelFormat::RGB101010Packed => Ok(14),
+            PixelFormat::RGB121212Packed => Ok(15),
+            PixelFormat::RGB141414Packed => Ok(16),
+            PixelFormat::RGB161616Packed => Ok(17),
+            PixelFormat::RGBx888Packed => Ok(3),
+            PixelFormat::RGBx888Planar => Ok(5),
+            PixelFormat::YUV422Packed => Ok(4),
+            PixelFormat::YUV422_UYVYPacked => Ok(18),
+            PixelFormat::YUV422_10Packed => Ok(20),
+            PixelFormat::YUV422_UYVY_10Packed => Ok(21),
+            PixelFormat::YUV444_UYVPacked => Ok(24),
+            PixelFormat::YUV444_UYV_10Packed => Ok(25),
+            PixelFormat::YUV444Packed => Ok(26),
+            PixelFormat::YUV444_10Packed => Ok(27),
+            PixelFormat::YUV422Planar => Ok(13),
+            _ => Err(px)
+        }
+    }
+
+    fn from_prop(i: i32) -> Result<PixelFormat,i32> {
+        match i {
+            0 => Ok(PixelFormat::Auto),
+            1 => Ok(PixelFormat::Raw),
+            2 => Ok(PixelFormat::Mono8),
+            6 => Ok(PixelFormat::Mono10),
+            7 => Ok(PixelFormat::Mono12),
+            28 => Ok(PixelFormat::Mono12Packed_V1),
+            19 => Ok(PixelFormat::Mono12Packed_V2),
+            8 => Ok(PixelFormat::Mono14),
+            9 => Ok(PixelFormat::Mono16),
+            22 => Ok(PixelFormat::BGR888Packed),
+            23 => Ok(PixelFormat::BGR101010Packed_V2),
+            10 => Ok(PixelFormat::RGB888Packed),
+            14 => Ok(PixelFormat::RGB101010Packed),
+            15 => Ok(PixelFormat::RGB121212Packed),
+            16 => Ok(PixelFormat::RGB141414Packed),
+            17 => Ok(PixelFormat::RGB161616Packed),
+            3 => Ok(PixelFormat::RGBx888Packed),
+            5 => Ok(PixelFormat::RGBx888Planar),
+            4 => Ok(PixelFormat::YUV422Packed),
+            18 => Ok(PixelFormat::YUV422_UYVYPacked),
+            20 => Ok(PixelFormat::YUV422_10Packed),
+            21 => Ok(PixelFormat::YUV422_UYVY_10Packed),
+            24 => Ok(PixelFormat::YUV444_UYVPacked),
+            25 => Ok(PixelFormat::YUV444_UYV_10Packed),
+            26 => Ok(PixelFormat::YUV444Packed),
+            27 => Ok(PixelFormat::YUV444_10Packed),
+            13 => Ok(PixelFormat::YUV422Planar),
+            _ => Err(i)
+        }
+    }
 }
 
 #[repr(C)]
@@ -199,6 +267,7 @@ struct ChannelData {
 }
 
 #[repr(C, packed)]
+#[derive(Debug)]
 struct ImageBuffer {
     pub bytes_per_pixel: c_int,
     pub height: c_int,
@@ -211,7 +280,7 @@ struct ImageBuffer {
 }
 
 struct Image<'a> {
-    buf: ImageBuffer,
+    pub buf: ImageBuffer,
     reqnr: c_int,
     parent: &'a Device,
 }
@@ -290,6 +359,34 @@ macro_rules! obj_set_impl {
 obj_set_impl!(i32, OBJ_GetI, OBJ_SetI);
 obj_set_impl!(i64, OBJ_GetI64, OBJ_SetI64);
 
+macro_rules! getter {
+    ($name:ident, $prop:expr, $typ:ty) => {
+        pub fn $name(&self) -> Result<$typ,TPROPHANDLING_ERROR> {
+            self.get_prop::<$typ>("Base", $prop, 0)
+        }
+    };
+    ($name:ident, $prop:expr, $typ:ty, $conv_var:ident: $conv_typ:ty => $conv_body:expr) => {
+        pub fn $name(&self) -> Result<$typ,TPROPHANDLING_ERROR> {
+            match self.get_prop::<$conv_typ>("Base", $prop, 0) {
+                Ok($conv_var) => $conv_body,
+                Err(e) => Err(e)
+            }
+        }
+    }
+}
+macro_rules! setter {
+    ($name:ident, $prop:expr, $typ:ty) => {
+        pub fn $name(&self, val: $typ) -> Result<(),TPROPHANDLING_ERROR> {
+            self.set_prop::<$typ>("Base", $prop, val, 0)
+        }
+    };
+    ($name:ident, $prop:expr, $typ:ty, $conv_var:ident: $conv_typ:ty => $conv_body:expr) => {
+        pub fn $name(&self, $conv_var: $conv_typ) -> Result<(),TPROPHANDLING_ERROR> {
+            self.set_prop::<$typ>("Base", $prop, $conv_body, 0)
+        }
+    }
+}
+
 impl Device {
     pub fn new() -> Result<Device,TDMR_ERROR> {
         let mut this = Device { dmr: HDMR(0), dev: HDEV(0), drv: HDRV(0) };
@@ -299,32 +396,21 @@ impl Device {
         dmr_status2result!(unsafe { DMR_OpenDevice(this.dev, &mut this.drv) }, this)
     }
 
-    // TODO macroize
+    getter!(get_height, "Height", i64);
+    setter!(set_height, "Height", i64);
+    getter!(get_width, "Width", i64);
+    setter!(set_width, "Width", i64);
+    getter!(get_reverse_x, "ReverseX", bool, i: i32 => Ok(i == 1));
+    setter!(set_reverse_x, "ReverseX", i32, b: bool => if b { 1 } else { 0 });
+    getter!(get_reverse_y, "ReverseY", bool, i: i32 => Ok(i == 1));
+    setter!(set_reverse_y, "ReverseY", i32, b: bool => if b { 1 } else { 0 });
+    getter!(get_pixel_format, "PixelFormat", PixelFormat, i: i32 => match PixelFormat::from_prop(i) {
+                                                                        Ok(px) => Ok(px),
+                                                                        Err(i) => panic!("Could not convert {} to PixelFormat", i)});
+    setter!(set_pixel_format, "PixelFormat", i32, px: PixelFormat => match PixelFormat::to_prop(px) {
+                                                                        Ok(i) => i,
+                                                                        Err(px) => panic!("Could not convert {:?} to int", px)});
 
-    pub fn get_height(&self) -> Result<i64,TPROPHANDLING_ERROR> {
-        self.get_prop("Base", "Height", 0)
-    }
-
-    pub fn get_width(&self) -> Result<i64,TPROPHANDLING_ERROR> {
-        self.get_prop("Base", "Width", 0)
-    }
-
-    pub fn set_reverse_x(&self, reverse: bool) -> Result<(),TPROPHANDLING_ERROR> {
-        self.set_prop("Base", "ReverseX", if reverse { 1 } else { 0 }, 0)
-    }
-    
-    pub fn set_reverse_y(&self, reverse: bool) -> Result<(),TPROPHANDLING_ERROR> {
-        self.set_prop("Base", "ReverseY", if reverse { 1 } else { 0 }, 0)
-    }
-    
-    pub fn get_reverse_x(&self) -> Result<bool,TPROPHANDLING_ERROR> {
-        self.get_prop::<i32>("Base", "ReverseX", 0).map(|i| i == 1)
-    }
-    
-    pub fn get_reverse_y(&self) -> Result<bool,TPROPHANDLING_ERROR> {
-        self.get_prop::<i32>("Base", "ReverseY", 0).map(|i| i == 1)
-    }
-    
     fn set_prop<T: ObjProp>(&self, setting: &str, prop: &str, value: T, index: c_int) -> Result<(),TPROPHANDLING_ERROR> {
         prop_status2result!(unsafe { T::SetT(try!(self.get_setting_prop(setting, prop)), value, index) })
     }

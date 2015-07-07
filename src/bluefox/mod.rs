@@ -43,7 +43,8 @@ group_attr!{
                 let device = wrapper::Device::new().unwrap();
                 //device.request_reset();
                 
-                println!("height = {}\nwidth = {}", device.get_height().unwrap(), device.get_width().unwrap());
+                device.set_pixel_format(wrapper::PixelFormat::RGB888Packed);
+                //println!("height = {}\nwidth = {}\npixel format = {:?}", device.get_height().unwrap(), device.get_width().unwrap(), device.get_pixel_format().unwrap());
                 
                 let mtx = Mutex::new(tx);
                 Bluefox {
@@ -71,8 +72,9 @@ group_attr!{
                 prof!("write", f.write_all(image.data()).unwrap());
                 match data.as_ref().map(|s| s as &str) {
                     Some("kick") => {
-                        self.device.set_reverse_x(!self.device.get_reverse_x().unwrap());
-                        self.device.set_reverse_y(!self.device.get_reverse_y().unwrap());
+                        //self.device.set_reverse_x(!self.device.get_reverse_x().unwrap());
+                        //self.device.set_reverse_y(!self.device.get_reverse_y().unwrap());
+                        println!("buf = {:?}", image.buf);
                         prof!("send to thread", self.png.send((self.i, image.data().into(), image.size(), ColorType::RGB(8))).unwrap())
                     },
                     Some(_) | None => ()
