@@ -18,6 +18,8 @@ chrono = "*"
 image = "*"
 hprof = "*"
 #ioctl-rs = "*"
+num = "*"
+enum_primitive = "*"
 guilt-by-association = "*"
 
 # iron deps

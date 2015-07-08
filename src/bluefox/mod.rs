@@ -43,8 +43,7 @@ group_attr!{
                 let device = wrapper::Device::new().unwrap();
                 //device.request_reset();
                 
-                device.set_pixel_format(wrapper::PixelFormat::RGB888Packed);
-                //println!("height = {}\nwidth = {}\npixel format = {:?}", device.get_height().unwrap(), device.get_width().unwrap(), device.get_pixel_format().unwrap());
+                println!("height = {}\nwidth = {}\npixel format = {:?}", device.get_height().unwrap(), device.get_width().unwrap(), device.get_pixel_format().unwrap());
                 
                 let mtx = Mutex::new(tx);
                 Bluefox {

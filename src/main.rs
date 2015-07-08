@@ -68,12 +68,13 @@
 
 /// Just like println!, but prints to stderr
 macro_rules! errorln {
-    ($($arg:tt)*) => (
+    ($($arg:tt)*) => {{
+        use std::io::Write;
         match writeln!(&mut ::std::io::stderr(), $($arg)* ) {
             Ok(_) => {},
             Err(x) => panic!("Unable to write to stderr: {}", x),
         }
-    )
+    }}
 }
 
 macro_rules! group_attr {
@@ -135,8 +136,9 @@ use structure::Structure;
 use bluefox::Bluefox;
 use optoforce::Optoforce;
 
-#[macro_use]
-extern crate log;
+#[macro_use] extern crate log;
+#[macro_use] extern crate enum_primitive;
+extern crate num;
 extern crate env_logger;
 extern crate hprof;
 extern crate chrono;

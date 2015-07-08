@@ -1,15 +1,51 @@
 extern crate libc;
-use self::libc::{c_void, c_int, c_uint, c_char};
+use self::libc::{c_void, c_int, c_uint, c_char, size_t, c_double};
+use num::FromPrimitive;
 use std::slice;
 use std::mem;
 use std::ptr;
 use std::ffi::CString;
 
-#[repr(C)] #[derive(Clone, Copy)] pub struct HDMR(c_int);
-#[repr(C)] #[derive(Clone, Copy)] pub struct HDEV(c_int);
-#[repr(C)] #[derive(Clone, Copy)] pub struct HDRV(c_int);
-#[repr(C)] #[derive(Clone, Copy)] pub struct HOBJ(c_int);
-#[repr(C)] #[derive(Clone, Copy)] pub struct HLIST(c_int);
+macro_rules! dmr_status2result {
+    ($code:expr) => { dmr_status2result!($code, ()) };
+    ($code:expr, $ret:expr) => {
+        match $code {
+            TDMR_ERROR::DMR_NO_ERROR => Ok($ret),
+            other => Err(unsafe { mem::transmute(other) }) // TODO make this safe
+        }
+    }
+}
+
+macro_rules! prop_status2result {
+    ($code:expr) => { prop_status2result!($code, ()) };
+    ($code:expr, $ret:expr) => {
+        match $code {
+            TPROPHANDLING_ERROR::PROPHANDLING_NO_ERROR => Ok($ret),
+            other => Err(unsafe { mem::transmute(other) }) // TODO make this safe
+        }
+    }
+}
+
+macro_rules! c_str {
+    ($s:expr) => {
+        CString::new($s).unwrap().as_ptr()
+    }
+}
+
+#[repr(C)] #[derive(Clone, Copy, Debug)] pub struct HDMR(c_int);
+#[repr(C)] #[derive(Clone, Copy, Debug)] pub struct HDEV(c_int);
+#[repr(C)] #[derive(Clone, Copy, Debug)] pub struct HDRV(c_int);
+#[repr(C)] #[derive(Clone, Copy, Debug)] pub struct HOBJ(c_int);
+#[repr(C)] #[derive(Clone, Copy, Debug)] pub struct HLIST(c_int);
+
+impl HOBJ {
+    fn get_type(self) -> Result<ComponentType,TPROPHANDLING_ERROR> {
+        unsafe {
+            let mut t: ComponentType = mem::uninitialized();
+            prop_status2result!(OBJ_GetType(self, &mut t), t)
+        }
+    }
+}
 
 #[repr(C)]
 #[derive(Debug)]
@@ -158,75 +194,79 @@ pub enum PixelFormat {
     YUV444Packed = 26,
     YUV444_10Packed = 27,
     Mono12Packed_V1 = 28,
-    Auto = -1
+    Auto = -1,
+    Unknown = -2
 }
 
-impl PixelFormat {
-    fn to_prop(px: PixelFormat) -> Result<i32,PixelFormat> {
-        match px {
-            PixelFormat::Auto => Ok(0),
-            PixelFormat::Raw => Ok(1),
-            PixelFormat::Mono8 => Ok(2),
-            PixelFormat::Mono10 => Ok(6),
-            PixelFormat::Mono12 => Ok(7),
-            PixelFormat::Mono12Packed_V1 => Ok(28),
-            PixelFormat::Mono12Packed_V2 => Ok(19),
-            PixelFormat::Mono14 => Ok(8),
-            PixelFormat::Mono16 => Ok(9),
-            PixelFormat::BGR888Packed => Ok(22),
-            PixelFormat::BGR101010Packed_V2 => Ok(23),
-            PixelFormat::RGB888Packed => Ok(10),
-            PixelFormat::RGB101010Packed => Ok(14),
-            PixelFormat::RGB121212Packed => Ok(15),
-            PixelFormat::RGB141414Packed => Ok(16),
-            PixelFormat::RGB161616Packed => Ok(17),
-            PixelFormat::RGBx888Packed => Ok(3),
-            PixelFormat::RGBx888Planar => Ok(5),
-            PixelFormat::YUV422Packed => Ok(4),
-            PixelFormat::YUV422_UYVYPacked => Ok(18),
-            PixelFormat::YUV422_10Packed => Ok(20),
-            PixelFormat::YUV422_UYVY_10Packed => Ok(21),
-            PixelFormat::YUV444_UYVPacked => Ok(24),
-            PixelFormat::YUV444_UYV_10Packed => Ok(25),
-            PixelFormat::YUV444Packed => Ok(26),
-            PixelFormat::YUV444_10Packed => Ok(27),
-            PixelFormat::YUV422Planar => Ok(13),
-            _ => Err(px)
+pub mod settings {
+    enum_from_primitive! {
+        #[repr(C)]
+        #[derive(Copy, Clone, Debug)]
+        #[allow(dead_code)]
+        pub enum PixelFormat {
+            BayerGR8      = 17301512,
+            BayerGR10     = 17825804,
+            BayerGR12     = 17825808,
+            BayerGR16     = 17825838,
+            RGB8Packed    = 35127316,
+            BGR8Packed    = 35127317,
+            BGRA8Packed   = 35651607,
+            BGR10V2Packed = 35651613,
+            RGB8          = 0,
+            BGR8          = 1,
+            BGRa8         = 2,
+            RGB10p32      = 3,
         }
     }
 
-    fn from_prop(i: i32) -> Result<PixelFormat,i32> {
-        match i {
-            0 => Ok(PixelFormat::Auto),
-            1 => Ok(PixelFormat::Raw),
-            2 => Ok(PixelFormat::Mono8),
-            6 => Ok(PixelFormat::Mono10),
-            7 => Ok(PixelFormat::Mono12),
-            28 => Ok(PixelFormat::Mono12Packed_V1),
-            19 => Ok(PixelFormat::Mono12Packed_V2),
-            8 => Ok(PixelFormat::Mono14),
-            9 => Ok(PixelFormat::Mono16),
-            22 => Ok(PixelFormat::BGR888Packed),
-            23 => Ok(PixelFormat::BGR101010Packed_V2),
-            10 => Ok(PixelFormat::RGB888Packed),
-            14 => Ok(PixelFormat::RGB101010Packed),
-            15 => Ok(PixelFormat::RGB121212Packed),
-            16 => Ok(PixelFormat::RGB141414Packed),
-            17 => Ok(PixelFormat::RGB161616Packed),
-            3 => Ok(PixelFormat::RGBx888Packed),
-            5 => Ok(PixelFormat::RGBx888Planar),
-            4 => Ok(PixelFormat::YUV422Packed),
-            18 => Ok(PixelFormat::YUV422_UYVYPacked),
-            20 => Ok(PixelFormat::YUV422_10Packed),
-            21 => Ok(PixelFormat::YUV422_UYVY_10Packed),
-            24 => Ok(PixelFormat::YUV444_UYVPacked),
-            25 => Ok(PixelFormat::YUV444_UYV_10Packed),
-            26 => Ok(PixelFormat::YUV444Packed),
-            27 => Ok(PixelFormat::YUV444_10Packed),
-            13 => Ok(PixelFormat::YUV422Planar),
-            _ => Err(i)
+    enum_from_primitive! {
+        #[repr(C)]
+        #[derive(Copy, Clone, Debug)]
+        #[allow(dead_code)]
+        pub enum ColorProc {
+            Auto             = 0,
+            Raw              = 1,
+            ColorBayer       = 2,
+            ColorBayerToMono = 3,
+            RawToPlanes      = 4,
         }
     }
+
+    enum_from_primitive! {
+        #[repr(C)]
+        #[derive(Copy, Clone, Debug)]
+        #[allow(dead_code)]
+        pub enum InterpolationMode {
+            NearestNeighbor = 0,
+            Linear          = 1,
+            Cubic           = 2,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+#[allow(dead_code)]
+pub enum ValueType {
+    Int    = 0x1,
+    Float  = 0x2,
+    Ptr    = 0x3,
+    String = 0x4,
+    Int64  = 0x5
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+#[allow(dead_code)]
+pub enum ComponentType {
+    Prop       = 0x00010000,
+    List       = 0x00020000,
+    Meth       = 0x00040000,
+    PropInt    = ComponentType::Prop as isize | ValueType::Int as isize,
+    PropFloat  = ComponentType::Prop as isize | ValueType::Float as isize,
+    PropString = ComponentType::Prop as isize | ValueType::String as isize,
+    PropPtr    = ComponentType::Prop as isize | ValueType::Ptr as isize,
+    PropInt64  = ComponentType::Prop as isize | ValueType::Int64 as isize
 }
 
 #[repr(C)]
@@ -308,32 +348,9 @@ extern "C" {
     fn OBJ_SetI(hProp: HOBJ, val: c_int, index: c_int) -> TPROPHANDLING_ERROR;
     fn OBJ_GetI64(hProp: HOBJ, pVal: *mut i64, index: c_int) -> TPROPHANDLING_ERROR;
     fn OBJ_SetI64(hProp: HOBJ, val: i64, index: c_int) -> TPROPHANDLING_ERROR;
-}
-
-macro_rules! dmr_status2result {
-    ($code:expr) => { dmr_status2result!($code, ()) };
-    ($code:expr, $ret:expr) => {
-        match $code {
-            TDMR_ERROR::DMR_NO_ERROR => Ok($ret),
-            other => Err(unsafe { mem::transmute(other) }) // TODO make this safe
-        }
-    }
-}
-
-macro_rules! prop_status2result {
-    ($code:expr) => { prop_status2result!($code, ()) };
-    ($code:expr, $ret:expr) => {
-        match $code {
-            TPROPHANDLING_ERROR::PROPHANDLING_NO_ERROR => Ok($ret),
-            other => Err(unsafe { mem::transmute(other) }) // TODO make this safe
-        }
-    }
-}
-
-macro_rules! c_str {
-    ($s:expr) => {
-        CString::new($s).unwrap().as_ptr()
-    }
+    fn OBJ_GetF(hProp: HOBJ, pVal: *mut c_double, index: c_int) -> TPROPHANDLING_ERROR;
+    fn OBJ_SetF(hProp: HOBJ, val: c_double, index: c_int) -> TPROPHANDLING_ERROR;
+    fn OBJ_GetType(hObj: HOBJ, pType: *mut ComponentType) -> TPROPHANDLING_ERROR;
 }
 
 pub struct Device {
@@ -356,34 +373,45 @@ macro_rules! obj_set_impl {
     }
 }
 
-obj_set_impl!(i32, OBJ_GetI, OBJ_SetI);
+obj_set_impl!(i32, OBJ_GetI,   OBJ_SetI);
 obj_set_impl!(i64, OBJ_GetI64, OBJ_SetI64);
+obj_set_impl!(f64, OBJ_GetF,   OBJ_SetF);
 
 macro_rules! getter {
     ($name:ident, $prop:expr, $typ:ty) => {
         pub fn $name(&self) -> Result<$typ,TPROPHANDLING_ERROR> {
-            self.get_prop::<$typ>("Base", $prop, 0)
+            self.get_prop::<$typ>($prop, 0)
         }
     };
     ($name:ident, $prop:expr, $typ:ty, $conv_var:ident: $conv_typ:ty => $conv_body:expr) => {
         pub fn $name(&self) -> Result<$typ,TPROPHANDLING_ERROR> {
-            match self.get_prop::<$conv_typ>("Base", $prop, 0) {
-                Ok($conv_var) => $conv_body,
-                Err(e) => Err(e)
-            }
+            self.get_prop::<$conv_typ>($prop, 0).map(|$conv_var| $conv_body)
         }
     }
 }
 macro_rules! setter {
     ($name:ident, $prop:expr, $typ:ty) => {
         pub fn $name(&self, val: $typ) -> Result<(),TPROPHANDLING_ERROR> {
-            self.set_prop::<$typ>("Base", $prop, val, 0)
+            self.set_prop::<$typ>($prop, val, 0)
         }
     };
     ($name:ident, $prop:expr, $typ:ty, $conv_var:ident: $conv_typ:ty => $conv_body:expr) => {
         pub fn $name(&self, $conv_var: $conv_typ) -> Result<(),TPROPHANDLING_ERROR> {
-            self.set_prop::<$typ>("Base", $prop, $conv_body, 0)
+            self.set_prop::<$typ>($prop, $conv_body, 0)
         }
+    }
+}
+macro_rules! getset {
+    ($get:ident, $set:ident, $prop:expr, $typ:ty) => {
+        getter!($get, $prop, $typ);
+        setter!($set, $prop, $typ);
+    };
+    ($get:ident, $set:ident, $prop:expr, $rty:ty as $cty:ty as $from:ident) => {
+        getset!($get, $set, $prop, r: $rty => r as $cty, c: $cty => FromPrimitive::$from(c).unwrap());
+    };
+    ($get:ident, $set:ident, $prop:expr, $rvar:ident : $rty:ty => $r2c:expr, $cvar:ident : $cty:ty => $c2r:expr) => {
+        getter!($get, $prop, $rty, $cvar: $cty => $c2r);
+        setter!($set, $prop, $cty, $rvar: $rty => $r2c);
     }
 }
 
@@ -396,43 +424,34 @@ impl Device {
         dmr_status2result!(unsafe { DMR_OpenDevice(this.dev, &mut this.drv) }, this)
     }
 
-    getter!(get_height, "Height", i64);
-    setter!(set_height, "Height", i64);
-    getter!(get_width, "Width", i64);
-    setter!(set_width, "Width", i64);
-    getter!(get_reverse_x, "ReverseX", bool, i: i32 => Ok(i == 1));
-    setter!(set_reverse_x, "ReverseX", i32, b: bool => if b { 1 } else { 0 });
-    getter!(get_reverse_y, "ReverseY", bool, i: i32 => Ok(i == 1));
-    setter!(set_reverse_y, "ReverseY", i32, b: bool => if b { 1 } else { 0 });
-    getter!(get_pixel_format, "PixelFormat", PixelFormat, i: i32 => match PixelFormat::from_prop(i) {
-                                                                        Ok(px) => Ok(px),
-                                                                        Err(i) => panic!("Could not convert {} to PixelFormat", i)});
-    setter!(set_pixel_format, "PixelFormat", i32, px: PixelFormat => match PixelFormat::to_prop(px) {
-                                                                        Ok(i) => i,
-                                                                        Err(px) => panic!("Could not convert {:?} to int", px)});
+    getset!(get_width,         set_width,         HOBJ(0x840004), i64);
+    getset!(get_height,        set_height,        HOBJ(0x840005), i64);
+    getset!(get_offset_x,      set_offset_x,      HOBJ(0x840006), i64);
+    getset!(get_offset_y,      set_offset_y,      HOBJ(0x840007), i64);
+    getset!(get_reverse_x,     set_reverse_x,     HOBJ(0x84000E), b: bool => if b { 1 } else { 0 }, i: i32 => i == 1);
+    getset!(get_reverse_y,     set_reverse_y,     HOBJ(0x84000F), b: bool => if b { 1 } else { 0 }, i: i32 => i == 1);
+    getset!(get_bin_x,         set_bin_x,         HOBJ(0x84000A), i64);
+    getset!(get_bin_y,         set_bin_y,         HOBJ(0x84000B), i64);
+    getset!(get_decimate_x,    set_decimate_x,    HOBJ(0x84000C), i64);
+    getset!(get_decimate_y,    set_decimate_y,    HOBJ(0x84000D), i64);
+    getset!(get_pixel_format,  set_pixel_format,  HOBJ(0x840008), settings::PixelFormat       as i64 as from_i64);
+    getset!(get_afr_enabled,   set_afr_enabled,   HOBJ(0x850017), b: bool => if b { 1 } else { 0 }, i: i64 => i == 1);
+    getset!(get_afr,           set_afr,           HOBJ(0x850018), f64);
+    getset!(get_color_proc,    set_color_proc,    HOBJ(0x5e0008), settings::ColorProc         as i32 as from_i32);
+    getset!(get_scale_enabled, set_scale_enabled, HOBJ(0x800001), b: bool => if b { 1 } else { 0 }, i: i32 => i == 1);
+    getset!(get_scale_mode,    set_scale_mode,    HOBJ(0x800002), settings::InterpolationMode as i32 as from_i32);
+    getset!(get_scale_width,   set_scale_width,   HOBJ(0x800003), i32);
+    getset!(get_scale_height,  set_scale_height,  HOBJ(0x800004), i32);
 
-    fn set_prop<T: ObjProp>(&self, setting: &str, prop: &str, value: T, index: c_int) -> Result<(),TPROPHANDLING_ERROR> {
-        prop_status2result!(unsafe { T::SetT(try!(self.get_setting_prop(setting, prop)), value, index) })
+    fn set_prop<T: ObjProp>(&self, prop: HOBJ, value: T, index: c_int) -> Result<(),TPROPHANDLING_ERROR> {
+        prop_status2result!(unsafe { T::SetT(prop, value, index) })
     }
 
-    fn get_prop<T: ObjProp>(&self, setting: &str, prop: &str, index: c_int) -> Result<T,TPROPHANDLING_ERROR> {
-        let mut value: T = unsafe { mem::uninitialized() };
-        prop_status2result!(unsafe { T::GetT(try!(self.get_setting_prop(setting, prop)), &mut value, index) }, value)
-    }
-
-    fn get_setting_prop(&self, setting: &str, prop: &str) -> Result<HOBJ,TPROPHANDLING_ERROR> {
-        self.get_driver_property(prop, setting, ListType::Setting)
-    }
-
-    fn get_driver_property(&self, prop: &str, list: &str, typ: ListType) -> Result<HOBJ,TPROPHANDLING_ERROR> {
-        self.get_driver_feature(prop, "property", list, typ, SearchMode::IgnoreLists as u32 | SearchMode::IgnoreMethods as u32)
-    }
-
-    fn get_driver_feature(&self, feature_name: &str, feature_type: &str, list: &str, list_type: ListType, mode: u32) -> Result<HOBJ,TPROPHANDLING_ERROR> {
-        let mut base: HLIST = unsafe { mem::uninitialized() };
-        let mut obj: HOBJ = unsafe { mem::uninitialized() };
-        try!(dmr_status2result!(unsafe { DMR_FindList(self.drv, c_str!(list), list_type, 0, &mut base) }));
-        prop_status2result!(unsafe { OBJ_GetHandleEx(base, c_str!(feature_name), &mut obj, mode, c_int::max_value()) }, obj)
+    fn get_prop<T: ObjProp>(&self, prop: HOBJ, index: c_int) -> Result<T,TPROPHANDLING_ERROR> {
+        unsafe {
+            let mut value: T = mem::uninitialized();
+            prop_status2result!(T::GetT(prop, &mut value, index), value)
+        }
     }
 
     pub fn request(&self) -> Result<Image,TDMR_ERROR> {

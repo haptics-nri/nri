@@ -3,6 +3,7 @@ name = "nri"
 version = "0.1.0"
 dependencies = [
  "chrono 0.2.15 (registry+https://github.com/rust-lang/crates.io-index)",
+ "enum_primitive 0.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "guilt-by-association 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "handlebars-iron 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -13,6 +14,7 @@ dependencies = [
  "libc 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "mount 0.0.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "router 0.0.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-serialize 0.3.15 (registry+https://github.com/rust-lang/crates.io-index)",
  "staticfile 0.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -82,6 +84,14 @@ dependencies = [
 [[package]]
 name = "enum_primitive"
 version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "num 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "enum_primitive"
+version = "0.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "num 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
