@@ -49,12 +49,15 @@ group_attr!{
 
     use ::comms::{Controllable, CmdFrom};
     use std::sync::mpsc::Sender;
+    use std::default::Default;
+    use std::thread;
 
 
     mod wrapper;
 
     pub struct Optoforce {
-        device: wrapper::Device
+        device: wrapper::Device,
+        i: usize
     }
 
     guilty!{
@@ -62,11 +65,20 @@ group_attr!{
             const NAME: &'static str = "optoforce",
 
             fn setup(_: Sender<CmdFrom>, _: Option<String>) -> Optoforce {
-                Optoforce { device: wrapper::Device }
+                let dev = wrapper::Device::new(Default::default());
+                dev.connect("/dev/ttyACM0", -1);
+                Optoforce { device: dev, i: 0 }
             }
 
             fn step(&mut self, _: Option<String>) -> bool {
-                true
+                let xyz = self.device.read();
+                self.i += 1;
+                if (self.i % 100) == 0 {
+                    println!("Optoforce #{} {:?}", self.i, xyz);
+                }
+
+                thread::sleep_ms(3); // TODO get/set Hz
+                false
             }
 
             fn teardown(&mut self) {
