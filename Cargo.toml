@@ -20,6 +20,7 @@ hprof = "*"
 #ioctl-rs = "*"
 num = "*"
 enum_primitive = "*"
+serial = "*"
 guilt-by-association = "*"
 
 # iron deps

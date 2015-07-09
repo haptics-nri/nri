@@ -76,10 +76,11 @@ fn relpath(path: &str) -> String {
 /// Handler for the main page of the web interface
 fn index(req: &mut Request) -> IronResult<Response> {
     let mut data = BTreeMap::<String, Json>::new();
-    data.insert("services".to_string(), vec![ Service::new("Structure Sensor", "structure", "<img class=\"structure latest\" src=\"img/structure_latest.png\" /><div class=\"structure framenum\">NaN</div>"),
-                                              Service::new("mvBlueFOX3",       "bluefox"  , "<img class=\"bluefox latest\" src=\"img/bluefox_latest.png\" /><div class=\"bluefox framenum\">NaN</div>"),
-                                              Service::new("OptoForce",        "optoforce", ""),
-                                              Service::new("SynTouch BioTac",  "biotac"   , ""),
+    data.insert("services".to_string(), vec![ Service::new("Structure Sensor", "structure" , "<img class=\"structure latest\" src=\"img/structure_latest.png\" /><div class=\"structure framenum\">NaN</div>"),
+                                              Service::new("mvBlueFOX3"      , "bluefox"   , "<img class=\"bluefox latest\" src=\"img/bluefox_latest.png\" /><div class=\"bluefox framenum\">NaN</div>"),
+                                              Service::new("OptoForce"       ,  "optoforce", ""),
+                                              Service::new("SynTouch BioTac" ,  "biotac"   , ""),
+                                              Service::new("STB"             ,  "stb"      , ""),
                                             ].to_json());
     data.insert("server".to_string(), format!("{}:{}", req.url.host, WS_PORT).to_json());
 

@@ -123,6 +123,7 @@ mod web;
 mod structure;
 mod bluefox;
 mod optoforce;
+mod stb;
 
 use std::io::{Write, BufRead};
 use std::ascii::AsciiExt;
@@ -135,6 +136,7 @@ use web::Web;
 use structure::Structure;
 use bluefox::Bluefox;
 use optoforce::Optoforce;
+use stb::STB;
 
 #[macro_use] extern crate log;
 #[macro_use] extern crate enum_primitive;
@@ -211,7 +213,7 @@ fn main() {
 
         let (reply_tx, reply_rx) = channel();
 
-        let mut services = rxspawn!(reply_tx; CLI, Web, Structure, Bluefox, Optoforce);
+        let mut services = rxspawn!(reply_tx; CLI, Web, Structure, Bluefox, Optoforce, STB);
         let mut timers = HashMap::new();
 
         start(&services, "cli".to_string());

@@ -17,6 +17,7 @@ dependencies = [
  "num 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "router 0.0.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-serialize 0.3.15 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serial 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "staticfile 0.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "time 0.1.30 (registry+https://github.com/rust-lang/crates.io-index)",
  "websocket 0.12.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -250,6 +251,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ioctl-rs"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "libc 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "iron"
 version = "0.1.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -471,6 +480,17 @@ version = "0.0.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "serial"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "ioctl-rs 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libc 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "termios 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "time 0.1.30 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "solicit"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -497,6 +517,14 @@ version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "rand 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "termios"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "libc 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
