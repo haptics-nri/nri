@@ -12,7 +12,7 @@ group_attr!{
     #[cfg(target_os = "linux")]
 
     extern crate serial;
-    use ::comms::{Controllable, CmdFrom};
+    use ::comms::{Controllable, CmdFrom, Block};
     use std::io::{Read, Write};
     use std::fs::File;
     use std::sync::mpsc::Sender;
@@ -91,7 +91,7 @@ group_attr!{
                 STB { port: Box::new(port), file: File::create("data/stb.dat").unwrap() }
             }
 
-            fn step(&mut self, _: Option<String>) -> bool {
+            fn step(&mut self, _: Option<String>) -> Block {
                 let mut buf = [0; LEN];
                 match self.port.read(&mut buf) {
                     Ok(LEN) => {
@@ -105,7 +105,7 @@ group_attr!{
                     Err(e)  => errorln!("Error reading from STB: {:?}", e)
                 }
 
-                false
+                Block::Immediate
             }
 
             fn teardown(&mut self) {

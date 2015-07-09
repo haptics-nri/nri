@@ -1,6 +1,6 @@
 //! CLI interface to view and control running services
 
-use super::comms::{Controllable, CmdFrom};
+use super::comms::{Controllable, CmdFrom, Block};
 use std::io;
 use std::io::{BufRead, Write};
 use std::process::Command;
@@ -19,7 +19,7 @@ guilty!{
             CLI { tx: tx }
         }
 
-        fn step(&mut self, _: Option<String>) -> bool {
+        fn step(&mut self, _: Option<String>) -> Block {
             print!("> ");
             io::stdout().flush().unwrap();
 
@@ -55,7 +55,7 @@ guilty!{
                 }
             }
 
-            false
+            Block::Immediate
         }
 
         fn teardown(&mut self) {

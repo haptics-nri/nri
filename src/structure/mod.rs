@@ -14,7 +14,7 @@ group_attr!{
     use self::serialize::base64;
     use self::serialize::base64::ToBase64;
     use std::sync::mpsc::Sender;
-    use ::comms::{Controllable, CmdFrom};
+    use ::comms::{Controllable, CmdFrom, Block};
 
     mod wrapper;
 
@@ -77,7 +77,7 @@ group_attr!{
                 Structure { tx: tx, device: device, depth: depth, ir: ir, start: start, i: i}
             }
 
-            fn step(&mut self, cmd: Option<String>) -> bool {
+            fn step(&mut self, cmd: Option<String>) -> Block {
                 self.i += 1;
 
                 if self.depth.is_running() {
@@ -123,7 +123,7 @@ group_attr!{
                     });
                 }
 
-                false
+                Block::Immediate
             }
 
             fn teardown(&mut self) {

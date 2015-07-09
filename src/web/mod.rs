@@ -17,7 +17,7 @@ use std::sync::mpsc;
 use std::thread;
 use std::thread::JoinHandle;
 use std::collections::BTreeMap;
-use super::comms::{Controllable, CmdFrom};
+use super::comms::{Controllable, CmdFrom, Block};
 use self::iron::prelude::*;
 use self::iron::status;
 use self::iron::middleware::Handler;
@@ -219,12 +219,12 @@ guilty!{
             Web { listening: listening, websocket: thread, wstx: wstx }
         }
 
-        fn step(&mut self, data: Option<String>) -> bool {
+        fn step(&mut self, data: Option<String>) -> Block {
             if let Some(d) = data {
                 self.wstx.send(ws::Message::Text(d)).unwrap();
             }
 
-            true
+            Block::Infinite
         }
         
         fn teardown(&mut self) {

@@ -1,9 +1,14 @@
 //! Utilities for communication between the supervisor thread and services
 
+extern crate clock_ticks;
+extern crate libc;
+
 use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError, SendError};
 use std::thread;
-use std::mem;
+use std::{mem, ptr};
 use super::hprof;
+use self::clock_ticks::precise_time_ns;
+use self::libc::{nanosleep, timespec};
 
 /// Commands sent from the supervisor thread to services
 #[derive(Clone)]
@@ -47,6 +52,12 @@ pub enum CmdFrom {
     Timein(&'static str),
 }
 
+pub enum Block {
+    Infinite,
+    Immediate,
+    Period(u64)
+}
+
 /// A service that can be setup and torn down based on commands from a higher power.
 guilty!{
     pub trait Controllable {
@@ -65,7 +76,7 @@ guilty!{
         /// Return true if we should wait for a command from the supervisor thread before calling
         /// step() again. Return false to call step() again right away (unless there is a pending
         /// command).
-        fn step(&mut self, data: Option<String>) -> bool;
+        fn step(&mut self, data: Option<String>) -> Block;
 
         /// Tear down the service.
         ///
@@ -108,25 +119,69 @@ macro_rules! rpc {
 ///     - pub struct (named $t) and stub impl
 macro_rules! stub {
     ($t:ident) => {
-        use ::comms::Controllable;
-
         pub struct $t;
 
         guilty!{
-            impl Controllable for $t {
+            impl $crate::comms::Controllable for $t {
                 const NAME: &'static str = concat!("Stub ", stringify!($t)),
 
                 fn setup(_: ::std::sync::mpsc::Sender<$crate::comms::CmdFrom>, _: Option<String>) -> $t {
                     $t
                 }
 
-                fn step(&mut self, _: Option<String>) -> bool {
-                    true
+                fn step(&mut self, _: Option<String>) -> $crate::comms::Block {
+                    $crate::comms::Block::Infinite
                 }
 
                 fn teardown(&mut self) {
                 }
             }
+        }
+    }
+}
+
+enum Break { Running, Alive }
+
+macro_rules! as_expr { ($e:expr) => ($e) }
+
+macro_rules! maybe_break {
+    ($v:expr, $running:tt, $alive:tt) => (as_expr!({
+        match $v {
+            Some(Break::Running) => break $running,
+            Some(Break::Alive)   => break $alive,
+            None => ()
+        }
+    }))
+}
+
+fn handle_ok(cmd: &CmdFrom, c: &Controllable, data: &Option<CmdTo>) -> Option<Break> {
+    match cmd {
+        CmdTo::Start => {}, // already started
+        CmdTo::Stop => return Break::Running, // shutdown command
+        CmdTo::Quit => return handle_err(c), // real shutdown command
+        CmdTo::Data(d) => data = Some(d), // have data!
+    }
+    None
+}
+
+fn handle_err(c: &Controllable) -> Option<Break> {
+    c.teardown();
+    Some(Break::Alive)
+}
+
+fn handle(block: bool, c: &Controllable, rx: &Receiver<CmdTo>, data: &Option<CmdTo>) -> Option<Break> {
+    if block {
+        match rx.recv() {
+            Ok(cmd) => handle_ok(&cmd, c, data),
+            Err(_) => handle_err(c)
+        }
+    } else {
+        match rx.try_recv() {
+            Ok(cmd) => handle_ok(&cmd, c, data),
+            Err(e) => match e {
+                TryRecvError::Empty => None, // continue
+                TryRecvError::Disconnected => handle_err(c), // main thread exploded?
+            },
         }
     }
 }
@@ -153,7 +208,7 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
         tx.send(CmdFrom::Timeout(guilty!(C::NAME), 1000));
         let mut c = C::setup(tx.clone(), data);
         tx.send(CmdFrom::Timein(guilty!(C::NAME)));
-        let mut should_block = false;
+        let mut should_block = Block::Immediate;
 
         super::PROF.with(|wrapped_prof| {
             *wrapped_prof.borrow_mut() = Some(hprof::Profiler::new(guilty!(C::NAME)));
@@ -162,6 +217,29 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
         'running: loop {
             data = None;
 
+            let start = precise_time_ns();
+
+            match should_block {
+                Block::Immediate => {
+                    maybe_break!(handle(true, &c, &rx, &data), 'running, 'alive);
+                    should_block = prof!("step", c.step(data));
+                },
+                Block::Infinite  => {
+                    maybe_break!(handle(false, &c, &rx, &data), 'running, 'alive);
+                    should_block = prof!("step", c.step(data));
+                }
+                Block::Period(T) => {
+                    maybe_break!(handle(false, &c, &rx, &data), 'running, 'alive);
+                    should_block = prof!("step", c.step(data));
+                    let end = precise_time_ns();
+                    if end - start < T {
+                        unsafe { nanosleep(&timespec { tv_sec: 0, tv_nsec: (T - (end - start)) as i64 }, ptr::null_mut()); }
+                    }
+                }
+
+            }
+
+            /*
             // TODO remove this code duplication
             if should_block {
                 match rx.recv() {
@@ -189,6 +267,7 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
             }
 
             should_block = prof!("step", { c.step(data) });
+            */
         }
 
         c.teardown();

@@ -227,13 +227,10 @@ impl Settings {
     pub fn set_state(mut self, state: settings::State) -> Settings { self.state = state; self }
 
     fn encode(self) -> u8 {
-        let ret = (self.mode.to_device())
-            | (self.filter.to_device()  << 1)
-            | (self.speed.to_device() << 3)
-            | (self.state.to_device()   << 5)
-            ;
-        println!("encoded {:?} to {}", self, ret);
-        ret
+        (self.mode.to_device())
+            | (self.filter.to_device() << 1)
+            | (self.speed.to_device()  << 3)
+            | (self.state.to_device()  << 5)
     }
 
     fn decode(byte: u8) -> Option<Settings> {

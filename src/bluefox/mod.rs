@@ -14,7 +14,7 @@ group_attr!{
     use self::serialize::base64::ToBase64;
     use std::sync::Mutex;
     use std::sync::mpsc::Sender;
-    use ::comms::{Controllable, CmdFrom, RestartableThread};
+    use ::comms::{Controllable, CmdFrom, Block, RestartableThread};
 
     type PngStuff = (usize, Vec<u8>, (usize, usize), ColorType);
 
@@ -62,7 +62,7 @@ group_attr!{
                 }
             }
 
-            fn step(&mut self, data: Option<String>) -> bool {
+            fn step(&mut self, data: Option<String>) -> Block {
                 self.i += 1;
 
                 let image = self.device.request().unwrap();
@@ -80,7 +80,7 @@ group_attr!{
                 }
                 //PNGEncoder::new(&mut f).encode(image.data(), image.size().1 as u32, image.size().0 as u32, ColorType::RGB(8));
 
-                false
+                Block::Immediate
             }
 
             fn teardown(&mut self) {

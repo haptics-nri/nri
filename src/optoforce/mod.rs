@@ -47,13 +47,13 @@
 group_attr!{
     #[cfg(target_os = "linux")]
 
-    use ::comms::{Controllable, CmdFrom};
+    use ::comms::{Controllable, CmdFrom, Block};
     use std::sync::mpsc::Sender;
     use std::default::Default;
     use std::thread;
     use std::io::Write;
     use std::fs::File;
-    use std::{mem, slice};
+    use std::{mem, slice, ptr};
 
 
     mod wrapper;
@@ -79,7 +79,7 @@ group_attr!{
                 Optoforce { device: dev, i: 0, file: File::create("data/optoforce.dat").unwrap() }
             }
 
-            fn step(&mut self, _: Option<String>) -> bool {
+            fn step(&mut self, _: Option<String>) -> Block {
                 let xyz = self.device.read();
                 self.file.write_all(unsafe { slice::from_raw_parts(&xyz as *const _ as *const _, mem::size_of_val(&xyz)) });
                 self.i += 1;
@@ -87,8 +87,7 @@ group_attr!{
                     println!("Optoforce #{} {:?}", self.i, xyz);
                 }
 
-                thread::sleep_ms(1);
-                false
+                Block::Period(1000000)
             }
 
             fn teardown(&mut self) {
