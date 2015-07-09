@@ -42,6 +42,8 @@ typedef struct
     void lofa_sensor_disconnect(LOFA_SENSOR_HANDLE that, bool should_block);
     void lofa_free_sensor(LOFA_SENSOR_HANDLE that);
     lofa_xyz lofa_sensor_read(const LOFA_SENSOR_HANDLE that);
+    unsigned char lofa_sensor_get(LOFA_SENSOR_HANDLE that);
+    void lofa_sensor_set(LOFA_SENSOR_HANDLE that, unsigned char byte);
 
 #ifdef __cplusplus
     }

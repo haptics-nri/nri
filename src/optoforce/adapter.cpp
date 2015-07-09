@@ -42,3 +42,16 @@ lofa_xyz lofa_sensor_read(const LOFA_SENSOR_HANDLE that)
     return {.x = reading.getForceX(), .y = reading.getForceY(), .z = reading.getForceZ()};
 }
 
+unsigned char lofa_sensor_get(LOFA_SENSOR_HANDLE that)
+{
+    while (!that->hasPackages());
+    SensorPackage package = that->getPackage();
+    SensorConfig config = package.getConfig();
+    return config.toByte();
+}
+
+void lofa_sensor_set(LOFA_SENSOR_HANDLE that, unsigned char byte)
+{
+    that->configure(*((SensorConfig*)&byte));
+}
+

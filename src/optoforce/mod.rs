@@ -66,7 +66,12 @@ group_attr!{
 
             fn setup(_: Sender<CmdFrom>, _: Option<String>) -> Optoforce {
                 let dev = wrapper::Device::new(Default::default());
-                dev.connect("/dev/ttyOPTO", -1);
+                dev.connect(wrapper::ConnectOptions { path: "/dev/ttyOPTO", ..Default::default() });
+                thread::sleep_ms(100);
+                dev.set(wrapper::Settings::new()
+                        .set_speed(wrapper::settings::Speed::Hz1000)
+                       );
+                println!("Optoforce settings: {:?}", dev.get().unwrap());
                 Optoforce { device: dev, i: 0 }
             }
 
@@ -77,7 +82,7 @@ group_attr!{
                     println!("Optoforce #{} {:?}", self.i, xyz);
                 }
 
-                thread::sleep_ms(3); // TODO get/set Hz
+                thread::sleep_ms(1);
                 false
             }
 
