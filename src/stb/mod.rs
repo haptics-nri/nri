@@ -80,7 +80,7 @@ group_attr!{
             fn setup(_: Sender<CmdFrom>, _: Option<String>) -> STB {
                 assert_eq!(mem::size_of::<Packet>(), LEN);
 
-                let mut port = serial::open("/dev/ttyACM1").unwrap();
+                let mut port = serial::open("/dev/ttySTB").unwrap();
                 port.reconfigure(&|settings| {
                     try!(settings.set_baud_rate(serial::Baud115200));
                     Ok(())

@@ -66,7 +66,7 @@ group_attr!{
 
             fn setup(_: Sender<CmdFrom>, _: Option<String>) -> Optoforce {
                 let dev = wrapper::Device::new(Default::default());
-                dev.connect("/dev/ttyACM0", -1);
+                dev.connect("/dev/ttyOPTO", -1);
                 Optoforce { device: dev, i: 0 }
             }
 
