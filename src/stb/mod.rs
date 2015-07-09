@@ -1,5 +1,13 @@
 //! Service to read data from the STB and attached sensors
 
+macro_rules! swap {
+    ($a:expr, $b:expr) => {{
+        let tmp = $a;
+        $a = $b;
+        $b = tmp;
+    }}
+}
+
 group_attr!{
     #[cfg(target_os = "linux")]
 
@@ -9,6 +17,7 @@ group_attr!{
     use std::sync::mpsc::Sender;
     use std::mem;
     use std::fmt::{self, Display, Debug, Formatter};
+    use std::ops;
     use self::serial::prelude::*;
 
 
@@ -24,17 +33,20 @@ group_attr!{
     }
     #[repr(packed)]
     struct Packet {
-        accel: XYZ<u16>,
-        gyro:  XYZ<u16>,
-        mag:   XYZ<u16>,
+        accel: XYZ<i16>,
+        gyro:  XYZ<i16>,
+        mag:   XYZ<i16>,
         ft:    [u8; 30],
         count: u8
     }
     const LEN: usize = 49;
 
     impl Packet {
-        unsafe fn new(buf: &[u8; LEN]) -> Packet {
-            mem::transmute(*buf)
+        unsafe fn new(mut buf: [u8; LEN]) -> Packet {
+            for i in 0..6 {
+                swap!(buf[2*i], buf[2*i+1]);
+            }
+            mem::transmute(buf)
         }
     }
 
@@ -53,7 +65,8 @@ group_attr!{
             try!(write!(f, "\t"));
             try!(write!(f, "mag {:?}", self.mag));
             try!(write!(f, "\t"));
-            // skip F/T for now
+            try!(write!(f, "ft sum={}", self.ft.iter().fold(0, ops::Add::add)));
+            try!(write!(f, "\t"));
             try!(write!(f, "count={}", self.count));
             try!(write!(f, "\n"));
             Ok(())
@@ -81,7 +94,7 @@ group_attr!{
                 let mut buf = [0; LEN];
                 match self.port.read(&mut buf) {
                     Ok(LEN) => {
-                        let packet = unsafe { Packet::new(&buf) };
+                        let packet = unsafe { Packet::new(buf) };
                         if packet.count == 0 {
                             println!("Read full packet from STB: {:?}", packet);
                         }
