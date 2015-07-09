@@ -107,7 +107,7 @@ group_attr!{
             }
 
             fn teardown(&mut self) {
-                self.port.write(&[0]);
+                self.port.write(&[2]);
             }
         }
     }
