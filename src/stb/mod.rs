@@ -14,6 +14,7 @@ group_attr!{
     extern crate serial;
     use ::comms::{Controllable, CmdFrom};
     use std::io::{Read, Write};
+    use std::fs::File;
     use std::sync::mpsc::Sender;
     use std::mem;
     use std::fmt::{self, Display, Debug, Formatter};
@@ -22,7 +23,8 @@ group_attr!{
 
 
     pub struct STB {
-        port: Box<serial::SerialPort>
+        port: Box<serial::SerialPort>,
+        file: File
     }
 
     #[repr(packed)]
@@ -68,7 +70,6 @@ group_attr!{
             try!(write!(f, "ft sum={}", self.ft.iter().fold(0, ops::Add::add)));
             try!(write!(f, "\t"));
             try!(write!(f, "count={}", self.count));
-            try!(write!(f, "\n"));
             Ok(())
         }
     }
@@ -87,7 +88,7 @@ group_attr!{
                 }).unwrap();
                 port.write(&[1]);
 
-                STB { port: Box::new(port) }
+                STB { port: Box::new(port), file: File::create("data/stb.dat").unwrap() }
             }
 
             fn step(&mut self, _: Option<String>) -> bool {
@@ -95,6 +96,7 @@ group_attr!{
                 match self.port.read(&mut buf) {
                     Ok(LEN) => {
                         let packet = unsafe { Packet::new(buf) };
+                        self.file.write_all(&buf);
                         if packet.count == 0 {
                             println!("Read full packet from STB: {:?}", packet);
                         }

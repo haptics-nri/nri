@@ -51,13 +51,17 @@ group_attr!{
     use std::sync::mpsc::Sender;
     use std::default::Default;
     use std::thread;
+    use std::io::Write;
+    use std::fs::File;
+    use std::{mem, slice};
 
 
     mod wrapper;
 
     pub struct Optoforce {
         device: wrapper::Device,
-        i: usize
+        i: usize,
+        file: File
     }
 
     guilty!{
@@ -72,11 +76,12 @@ group_attr!{
                         .set_speed(wrapper::settings::Speed::Hz1000)
                        );
                 println!("Optoforce settings: {:?}", dev.get().unwrap());
-                Optoforce { device: dev, i: 0 }
+                Optoforce { device: dev, i: 0, file: File::create("data/optoforce.dat").unwrap() }
             }
 
             fn step(&mut self, _: Option<String>) -> bool {
                 let xyz = self.device.read();
+                self.file.write_all(unsafe { slice::from_raw_parts(&xyz as *const _ as *const _, mem::size_of_val(&xyz)) });
                 self.i += 1;
                 if (self.i % 100) == 0 {
                     println!("Optoforce #{} {:?}", self.i, xyz);
