@@ -8,3 +8,4 @@ Session.vim
 *.csv
 cargo-doc-cmmand
 *.zip
+screenlog.*
