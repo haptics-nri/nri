@@ -14,12 +14,13 @@ pub struct CLI {
 guilty!{
     impl Controllable for CLI {
         const NAME: &'static str = "cli",
+        const BLOCK: Block = Block::Immediate,
 
         fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> CLI {
             CLI { tx: tx }
         }
 
-        fn step(&mut self, _: Option<String>) -> Block {
+        fn step(&mut self, _: Option<String>) {
             print!("> ");
             io::stdout().flush().unwrap();
 
@@ -54,8 +55,6 @@ guilty!{
                     _ => println!("Unknown command!")
                 }
             }
-
-            Block::Immediate
         }
 
         fn teardown(&mut self) {

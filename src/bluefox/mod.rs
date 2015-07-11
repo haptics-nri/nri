@@ -38,6 +38,7 @@ group_attr!{
     guilty!{
         impl Controllable for Bluefox {
             const NAME: &'static str = "bluefox",
+            const BLOCK: Block = Block::Immediate,
 
             fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Bluefox {
                 let device = wrapper::Device::new().unwrap();
@@ -62,7 +63,7 @@ group_attr!{
                 }
             }
 
-            fn step(&mut self, data: Option<String>) -> Block {
+            fn step(&mut self, data: Option<String>) {
                 self.i += 1;
 
                 let image = self.device.request().unwrap();
@@ -79,8 +80,6 @@ group_attr!{
                     Some(_) | None => ()
                 }
                 //PNGEncoder::new(&mut f).encode(image.data(), image.size().1 as u32, image.size().0 as u32, ColorType::RGB(8));
-
-                Block::Immediate
             }
 
             fn teardown(&mut self) {

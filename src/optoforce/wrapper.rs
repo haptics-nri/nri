@@ -58,7 +58,6 @@ impl Deref for Double {
 }
 
 #[derive(Debug)]
-#[repr(C)]
 pub struct XYZ {
     x: Double,
     y: Double,

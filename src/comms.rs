@@ -1,13 +1,12 @@
 //! Utilities for communication between the supervisor thread and services
 
-extern crate clock_ticks;
+extern crate time;
 extern crate libc;
 
 use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError, SendError};
 use std::thread;
 use std::{mem, ptr};
 use super::hprof;
-use self::clock_ticks::precise_time_ns;
 use self::libc::{nanosleep, timespec};
 
 /// Commands sent from the supervisor thread to services
@@ -52,16 +51,18 @@ pub enum CmdFrom {
     Timein(&'static str),
 }
 
+#[derive(Debug, Copy, Clone)]
 pub enum Block {
     Infinite,
     Immediate,
-    Period(u64)
+    Period(i64)
 }
 
 /// A service that can be setup and torn down based on commands from a higher power.
 guilty!{
     pub trait Controllable {
         const NAME: &'static str,
+        const BLOCK: Block,
 
         /// Setup the service.
         ///
@@ -76,7 +77,7 @@ guilty!{
         /// Return true if we should wait for a command from the supervisor thread before calling
         /// step() again. Return false to call step() again right away (unless there is a pending
         /// command).
-        fn step(&mut self, data: Option<String>) -> Block;
+        fn step(&mut self, data: Option<String>);
 
         /// Tear down the service.
         ///
@@ -124,13 +125,13 @@ macro_rules! stub {
         guilty!{
             impl $crate::comms::Controllable for $t {
                 const NAME: &'static str = concat!("Stub ", stringify!($t)),
+                const BLOCK: $crate::comms::Block = $crate::comms::Block::Infinite,
 
                 fn setup(_: ::std::sync::mpsc::Sender<$crate::comms::CmdFrom>, _: Option<String>) -> $t {
                     $t
                 }
 
-                fn step(&mut self, _: Option<String>) -> $crate::comms::Block {
-                    $crate::comms::Block::Infinite
+                fn step(&mut self, _: Option<String>) {
                 }
 
                 fn teardown(&mut self) {
@@ -154,30 +155,30 @@ macro_rules! maybe_break {
     }))
 }
 
-fn handle_ok(cmd: &CmdFrom, c: &Controllable, data: &Option<CmdTo>) -> Option<Break> {
+fn handle_ok<C: Controllable>(cmd: CmdTo, c: &mut C, data: &mut Option<String>) -> Option<Break> {
     match cmd {
         CmdTo::Start => {}, // already started
-        CmdTo::Stop => return Break::Running, // shutdown command
+        CmdTo::Stop => return Some(Break::Running), // shutdown command
         CmdTo::Quit => return handle_err(c), // real shutdown command
-        CmdTo::Data(d) => data = Some(d), // have data!
+        CmdTo::Data(d) => *data = Some(d), // have data!
     }
     None
 }
 
-fn handle_err(c: &Controllable) -> Option<Break> {
+fn handle_err<C: Controllable>(c: &mut C) -> Option<Break> {
     c.teardown();
     Some(Break::Alive)
 }
 
-fn handle(block: bool, c: &Controllable, rx: &Receiver<CmdTo>, data: &Option<CmdTo>) -> Option<Break> {
+fn handle<C: Controllable>(block: bool, c: &mut C, rx: &Receiver<CmdTo>, data: &mut Option<String>) -> Option<Break> {
     if block {
         match rx.recv() {
-            Ok(cmd) => handle_ok(&cmd, c, data),
+            Ok(cmd) => handle_ok(cmd, c, data),
             Err(_) => handle_err(c)
         }
     } else {
         match rx.try_recv() {
-            Ok(cmd) => handle_ok(&cmd, c, data),
+            Ok(cmd) => handle_ok(cmd, c, data),
             Err(e) => match e {
                 TryRecvError::Empty => None, // continue
                 TryRecvError::Disconnected => handle_err(c), // main thread exploded?
@@ -208,32 +209,51 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
         tx.send(CmdFrom::Timeout(guilty!(C::NAME), 1000));
         let mut c = C::setup(tx.clone(), data);
         tx.send(CmdFrom::Timein(guilty!(C::NAME)));
-        let mut should_block = Block::Immediate;
+
+        let mut block = guilty!(C::BLOCK);
+        let period = match block {
+            Block::Immediate => 0,
+            Block::Infinite  => -1,
+            Block::Period(T) => T
+        };
 
         super::PROF.with(|wrapped_prof| {
             *wrapped_prof.borrow_mut() = Some(hprof::Profiler::new(guilty!(C::NAME)));
         });
 
+        let mut i = 0;
+        let mut life_start = time::now();
         'running: loop {
             data = None;
+            i += 1;
 
-            let start = precise_time_ns();
+            let start = time::now();
 
-            match should_block {
+            match block {
                 Block::Immediate => {
-                    maybe_break!(handle(true, &c, &rx, &data), 'running, 'alive);
-                    should_block = prof!("step", c.step(data));
+                    maybe_break!(handle(false, &mut c, &rx, &mut data), 'running, 'alive);
+                    prof!("step", c.step(data));
                 },
                 Block::Infinite  => {
-                    maybe_break!(handle(false, &c, &rx, &data), 'running, 'alive);
-                    should_block = prof!("step", c.step(data));
+                    maybe_break!(handle(true, &mut c, &rx, &mut data), 'running, 'alive);
+                    prof!("step", c.step(data));
                 }
                 Block::Period(T) => {
-                    maybe_break!(handle(false, &c, &rx, &data), 'running, 'alive);
-                    should_block = prof!("step", c.step(data));
-                    let end = precise_time_ns();
-                    if end - start < T {
-                        unsafe { nanosleep(&timespec { tv_sec: 0, tv_nsec: (T - (end - start)) as i64 }, ptr::null_mut()); }
+                    maybe_break!(handle(false, &mut c, &rx, &mut data), 'running, 'alive);
+                    prof!("step", c.step(data));
+                    if let Some(nanos) = (time::now() - start).num_nanoseconds() {
+                        if nanos < T {
+                            unsafe { nanosleep(&timespec { tv_sec: 0, tv_nsec: T - nanos }, ptr::null_mut()); }
+                        }
+                    }
+
+                    if i == 100 {
+                        if let Some(nanos) = (time::now() - life_start).num_nanoseconds() {
+                            let duration = nanos as f64 / i as f64;
+                            block = Block::Period(T + period - duration as i64);
+                        }
+                        i = 0;
+                        life_start = time::now();
                     }
                 }
 

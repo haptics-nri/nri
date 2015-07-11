@@ -77,6 +77,7 @@ group_attr!{
     guilty! {
         impl Controllable for STB {
             const NAME: &'static str = "stb",
+            const BLOCK: Block = Block::Immediate,
 
             fn setup(_: Sender<CmdFrom>, _: Option<String>) -> STB {
                 assert_eq!(mem::size_of::<Packet>(), LEN);
@@ -91,21 +92,19 @@ group_attr!{
                 STB { port: Box::new(port), file: File::create("data/stb.dat").unwrap() }
             }
 
-            fn step(&mut self, _: Option<String>) -> Block {
+            fn step(&mut self, _: Option<String>) {
                 let mut buf = [0; LEN];
                 match self.port.read(&mut buf) {
                     Ok(LEN) => {
                         let packet = unsafe { Packet::new(buf) };
                         self.file.write_all(&buf);
-                        if packet.count == 0 {
+                        /*if packet.count == 0 {
                             println!("Read full packet from STB: {:?}", packet);
-                        }
+                        }*/
                     },
                     Ok(_)   => println!("Read partial packet from STB?"),
                     Err(e)  => errorln!("Error reading from STB: {:?}", e)
                 }
-
-                Block::Immediate
             }
 
             fn teardown(&mut self) {

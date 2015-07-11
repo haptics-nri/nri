@@ -21,7 +21,6 @@ hprof = "*"
 num = "*"
 enum_primitive = "*"
 serial = "*"
-clock_ticks = "*"
 guilt-by-association = "*"
 
 # iron deps

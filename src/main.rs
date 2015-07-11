@@ -103,6 +103,7 @@ thread_local!(static PROF: RefCell<Option<hprof::Profiler>> = RefCell::new(None)
 
 macro_rules! prof {
     ($b:expr) => { prof!(stringify!($b), $b) };
+    //($n:expr, $b:expr) => ($b)
     ($n:expr, $b:expr) => {
         $crate::PROF.with(|wrapped_prof| {
             let appease_borrowck = wrapped_prof.borrow();

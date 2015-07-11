@@ -135,6 +135,7 @@ pub struct Web {
 guilty!{
     impl Controllable for Web {
         const NAME: &'static str = "web",
+        const BLOCK: Block = Block::Infinite,
 
         fn setup(tx: mpsc::Sender<CmdFrom>, _: Option<String>) -> Web {
             let mut mount = Mount::new();
@@ -219,12 +220,10 @@ guilty!{
             Web { listening: listening, websocket: thread, wstx: wstx }
         }
 
-        fn step(&mut self, data: Option<String>) -> Block {
+        fn step(&mut self, data: Option<String>) {
             if let Some(d) = data {
                 self.wstx.send(ws::Message::Text(d)).unwrap();
             }
-
-            Block::Infinite
         }
         
         fn teardown(&mut self) {

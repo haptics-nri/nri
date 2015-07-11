@@ -42,6 +42,7 @@ group_attr!{
     guilty!{
         impl Controllable for Structure {
             const NAME: &'static str = "structure",
+            const BLOCK: Block = Block::Immediate,
 
             fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Structure {
                 wrapper::initialize().unwrap();
@@ -77,7 +78,7 @@ group_attr!{
                 Structure { tx: tx, device: device, depth: depth, ir: ir, start: start, i: i}
             }
 
-            fn step(&mut self, cmd: Option<String>) -> Block {
+            fn step(&mut self, cmd: Option<String>) {
                 self.i += 1;
 
                 if self.depth.is_running() {
@@ -122,8 +123,6 @@ group_attr!{
                         prof!("send", self.tx.send(CmdFrom::Data(format!("structure {} data:image/png;base64,{}", self.i, encoded.to_base64(base64::STANDARD)))).unwrap());
                     });
                 }
-
-                Block::Immediate
             }
 
             fn teardown(&mut self) {

@@ -47,6 +47,8 @@
 group_attr!{
     #[cfg(target_os = "linux")]
 
+    extern crate time;
+
     use ::comms::{Controllable, CmdFrom, Block};
     use std::sync::mpsc::Sender;
     use std::default::Default;
@@ -61,12 +63,14 @@ group_attr!{
     pub struct Optoforce {
         device: wrapper::Device,
         i: usize,
-        file: File
+        file: File,
+        start: time::Tm
     }
 
     guilty!{
         impl Controllable for Optoforce {
             const NAME: &'static str = "optoforce",
+            const BLOCK: Block = Block::Period(1_000_000),
 
             fn setup(_: Sender<CmdFrom>, _: Option<String>) -> Optoforce {
                 let dev = wrapper::Device::new(Default::default());
@@ -76,21 +80,23 @@ group_attr!{
                         .set_speed(wrapper::settings::Speed::Hz1000)
                        );
                 println!("Optoforce settings: {:?}", dev.get().unwrap());
-                Optoforce { device: dev, i: 0, file: File::create("data/optoforce.dat").unwrap() }
+                Optoforce { device: dev, i: 0, file: File::create("data/optoforce.dat").unwrap(), start: time::now() }
             }
 
-            fn step(&mut self, _: Option<String>) -> Block {
+            fn step(&mut self, _: Option<String>) {
                 let xyz = self.device.read();
+                self.file.write_all(unsafe { slice::from_raw_parts(&time::get_time() as *const _ as *const _, mem::size_of::<time::Timespec>()) });
                 self.file.write_all(unsafe { slice::from_raw_parts(&xyz as *const _ as *const _, mem::size_of_val(&xyz)) });
                 self.i += 1;
                 if (self.i % 100) == 0 {
                     println!("Optoforce #{} {:?}", self.i, xyz);
                 }
-
-                Block::Period(1000000)
             }
 
             fn teardown(&mut self) {
+                let end = time::now();
+                let millis = (end - self.start).num_milliseconds() as f64;
+                println!("{} optoforce frames grabbed in {} s ({} FPS)!", self.i, millis/1000.0, 1000.0*(self.i as f64)/millis);
             }
         }
     }
