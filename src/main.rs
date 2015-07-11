@@ -218,6 +218,7 @@ fn main() {
         let mut timers = HashMap::new();
 
         start(&services, "cli".to_string());
+        start(&services, "web".to_string());
 
         loop {
             match reply_rx.recv() {
