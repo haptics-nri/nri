@@ -146,7 +146,7 @@ extern crate env_logger;
 extern crate hprof;
 extern crate chrono;
 
-use chrono::{UTC, Datelike};
+use chrono::UTC;
 
 macro_rules! rxspawn {
     ($reply:expr; $($s:ty),*) => {
@@ -242,6 +242,7 @@ fn main() {
                         panic!("Child thread initiated panic");
                     },
                     CmdFrom::Timeout(n, ms)  => {
+                        // TODO actually time the service and do something if it times out
                         if find(&services, n.to_string()).is_some() {
                             timers.insert(n, UTC::now());
                         } else {

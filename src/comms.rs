@@ -207,15 +207,15 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
             }
         }
 
-        tx.send(CmdFrom::Timeout(guilty!(C::NAME), 1000));
+        tx.send(CmdFrom::Timeout(guilty!(C::NAME), 1000)).unwrap();
         let mut c = C::setup(tx.clone(), data);
-        tx.send(CmdFrom::Timein(guilty!(C::NAME)));
+        tx.send(CmdFrom::Timein(guilty!(C::NAME))).unwrap();
 
         let mut block = guilty!(C::BLOCK);
-        let period = match block {
+        let actual_period = match block {
             Block::Immediate => 0,
             Block::Infinite  => -1,
-            Block::Period(T) => T
+            Block::Period(period) => period
         };
 
         super::PROF.with(|wrapped_prof| {
@@ -239,19 +239,19 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
                     maybe_break!(handle(true, &mut c, &rx, &mut data), 'running, 'alive);
                     prof!("step", c.step(data));
                 }
-                Block::Period(T) => {
+                Block::Period(desired_period) => {
                     maybe_break!(handle(false, &mut c, &rx, &mut data), 'running, 'alive);
                     prof!("step", c.step(data));
                     if let Some(nanos) = (time::now() - start).num_nanoseconds() {
-                        if nanos < T {
-                            unsafe { nanosleep(&timespec { tv_sec: 0, tv_nsec: T - nanos }, ptr::null_mut()); }
+                        if nanos < desired_period {
+                            unsafe { nanosleep(&timespec { tv_sec: 0, tv_nsec: desired_period - nanos }, ptr::null_mut()); }
                         }
                     }
 
                     if i == 100 {
                         if let Some(nanos) = (time::now() - life_start).num_nanoseconds() {
                             let duration = nanos as f64 / i as f64;
-                            block = Block::Period(T + period - duration as i64);
+                            block = Block::Period(desired_period + actual_period - duration as i64);
                         }
                         i = 0;
                         life_start = time::now();
@@ -259,36 +259,6 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
                 }
 
             }
-
-            /*
-            // TODO remove this code duplication
-            if should_block {
-                match rx.recv() {
-                    Ok(cmd) => match cmd {
-                        CmdTo::Start => {}, // already started
-                        CmdTo::Stop => break 'running, // shutdown command
-                        CmdTo::Quit => { c.teardown(); break 'alive; }, // real shutdown command
-                        CmdTo::Data(d) => data = Some(d), // have data!
-                    },
-                    Err(_) => { c.teardown(); break 'alive; }
-                }
-            } else {
-                match rx.try_recv() {
-                    Ok(cmd) => match cmd {
-                        CmdTo::Start => {}, // already started
-                        CmdTo::Stop => break 'running, // shutdown command
-                        CmdTo::Quit => { c.teardown(); break 'alive; }, // real shutdown command
-                        CmdTo::Data(d) => data = Some(d), // have data!
-                    },
-                    Err(e) => match e {
-                        TryRecvError::Empty => {}, // continue
-                        TryRecvError::Disconnected => { c.teardown(); break 'alive; }, // main thread exploded?
-                    },
-                }
-            }
-
-            should_block = prof!("step", { c.step(data) });
-            */
         }
 
         c.teardown();
