@@ -21,7 +21,7 @@ hprof = "*"
 num = "*"
 enum_primitive = "*"
 serial = "*"
-guilt-by-association = "*"
+#guilt-by-association = "*"
 
 # iron deps
 iron = "*"
@@ -32,6 +32,9 @@ hyper = "*"
 router = "*"
 rustc-serialize = "*"
 websocket = "*"
+
+[dependencies.guilt-by-association]
+path = "/Users/alex/Programming/rust/guilt-by-association"
 
 #[dependencies.websocket] # take this out once reem bumps iron to hyper 0.6
 #git = "git://github.com/haptics-nri/rust-websocket"
