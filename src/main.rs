@@ -67,6 +67,7 @@
 #![cfg_attr(not(target_os = "linux"), allow(dead_code))]
 
 /// Just like println!, but prints to stderr
+#[macro_export]
 macro_rules! errorln {
     ($($arg:tt)*) => {{
         use std::io::Write;
@@ -77,6 +78,7 @@ macro_rules! errorln {
     }}
 }
 
+#[macro_export]
 macro_rules! group_attr {
     (#[cfg($attr:meta)] $($yes:item)*) => { group_attr!{internal #[cfg($attr)] $($yes)* } };
 
@@ -99,8 +101,12 @@ macro_rules! group_attr {
 // TODO move this profiling stuff to a mod
 use std::cell::RefCell;
 
-thread_local!(static PROF: RefCell<Option<hprof::Profiler>> = RefCell::new(None));
+thread_local! {
+    // Thread-local profiler object (FIXME no doc comments on thread locals)
+    static PROF: RefCell<Option<hprof::Profiler>> = RefCell::new(None)
+}
 
+#[macro_export]
 macro_rules! prof {
     ($b:expr) => { prof!(stringify!($b), $b) };
     //($n:expr, $b:expr) => ($b)
@@ -148,6 +154,7 @@ extern crate chrono;
 
 use chrono::UTC;
 
+#[macro_export]
 macro_rules! rxspawn {
     ($reply:expr; $($s:ty),*) => {
         vec![

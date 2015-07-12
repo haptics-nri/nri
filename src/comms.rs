@@ -51,17 +51,33 @@ pub enum CmdFrom {
     Timein(&'static str),
 }
 
+/// Desired blocking mode for a service
+///
+/// Defines what the go() function does in between calls to Controllable::step()
 #[derive(Debug, Copy, Clone)]
 pub enum Block {
+    /// Do not call step() again until there is a command from on high. Used by services that do
+    /// all the work in background threads or have nothing to do.
     Infinite,
+    
+    /// No delay -- call step() again immediately. Used by IO-bound or CPU-bound services.
     Immediate,
+
+    /// Request a period N (in nanoseconds) managed by go(). Used by services that are not IO-bound
+    /// or CPU-bound.  Assuming each call to step() completes in less than N ns, step() will be
+    /// called approximately every N ns. A simple proportional controller is used to adjust the
+    /// sleep time, to account for unmeasured delays and get as close as possible to the desired
+    /// period.
     Period(i64)
 }
 
-/// A service that can be setup and torn down based on commands from a higher power.
 guilty!{
+    /// A service that can be setup and torn down based on commands from a higher power.
     pub trait Controllable {
+        // FIXME no docs allowed yet on guilty consts
+        // Human-readable name of the service
         const NAME: &'static str,
+        // Desired blocking mode (see documentation for the Block enum)
         const BLOCK: Block,
 
         /// Setup the service.
@@ -118,6 +134,7 @@ macro_rules! rpc {
 ///     - t = name of the Controllable
 /// * Items created:
 ///     - pub struct (named $t) and stub impl
+#[macro_export]
 macro_rules! stub {
     ($t:ident) => {
         pub struct $t;
@@ -142,10 +159,18 @@ macro_rules! stub {
     }
 }
 
+/// Represents the two loops in go(), used in conjunction with maybe_break!
 enum Break { Running, Alive }
 
+// TODO move into utility macros mod
+/// Pass-through macro for re-interpreting a token tree as an expression
+#[macro_export]
 macro_rules! as_expr { ($e:expr) => ($e) }
 
+/// Helper macro for go()
+///
+/// Breaks out of the run loop, the life loop, or does nothing based on return value from handle()
+#[macro_export]
 macro_rules! maybe_break {
     ($v:expr, $running:tt, $alive:tt) => (as_expr!({
         match $v {
@@ -156,6 +181,9 @@ macro_rules! maybe_break {
     }))
 }
 
+/// Helper function for handle()
+///
+/// Called in the case of a command from the main thread when the service is already running
 fn handle_ok<C: Controllable>(cmd: CmdTo, c: &mut C, data: &mut Option<String>) -> Option<Break> {
     match cmd {
         CmdTo::Start => {}, // already started
@@ -166,11 +194,17 @@ fn handle_ok<C: Controllable>(cmd: CmdTo, c: &mut C, data: &mut Option<String>) 
     None
 }
 
+/// Helper function for handle()
+///
+/// Called in the case of a communication error or shutdown command from the main thread
 fn handle_err<C: Controllable>(c: &mut C) -> Option<Break> {
-    c.teardown();
+    c.teardown(); // FIXME is this necessary or should I just impl Drop
     Some(Break::Alive)
 }
 
+/// Helper function for go()
+///
+/// Handles communications from the main thread
 fn handle<C: Controllable>(block: bool, c: &mut C, rx: &Receiver<CmdTo>, data: &mut Option<String>) -> Option<Break> {
     if block {
         match rx.recv() {
@@ -276,10 +310,12 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
 /// stopped and restarted.
 pub struct RestartableThread<Data: Send + 'static> {
     /// Sending end of a channel used to send inputs to the thread.
+    ///
     /// Wrapped in a Option so it can be dropped without moving self.
     tx: Option<Sender<Data>>,
 
     /// Handle to the running thread
+    ///
     /// Wrapped in an option so it can be joined without moving self.
     thread: Option<thread::JoinHandle<()>>
 }
