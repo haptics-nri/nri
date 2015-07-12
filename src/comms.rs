@@ -122,12 +122,13 @@ macro_rules! stub {
     ($t:ident) => {
         pub struct $t;
 
+        use super::comms::{Controllable, Block, CmdFrom};
         guilty!{
-            impl $crate::comms::Controllable for $t {
+            impl Controllable for $t {
                 const NAME: &'static str = concat!("Stub ", stringify!($t)),
-                const BLOCK: $crate::comms::Block = $crate::comms::Block::Infinite,
+                const BLOCK: Block = Block::Infinite,
 
-                fn setup(_: ::std::sync::mpsc::Sender<$crate::comms::CmdFrom>, _: Option<String>) -> $t {
+                fn setup(_: ::std::sync::mpsc::Sender<CmdFrom>, _: Option<String>) -> $t {
                     $t
                 }
 
