@@ -5,7 +5,7 @@ dependencies = [
  "chrono 0.2.15 (registry+https://github.com/rust-lang/crates.io-index)",
  "enum_primitive 0.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "guilt-by-association 0.1.0",
+ "guilt-by-association 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "handlebars-iron 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hprof 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hyper 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -160,7 +160,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "guilt-by-association"
-version = "0.1.0"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "handlebars"
