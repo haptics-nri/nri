@@ -28,6 +28,7 @@ use self::mount::Mount;
 use self::router::Router;
 use self::hyper::server::Listening;
 use self::ws::Sender as WebsocketSender;
+use self::ws::Receiver as WebsocketReceiver;
 
 static HTTP_PORT: u16 = 3000;
 static WS_PORT: u16   = 3001;
@@ -160,9 +161,29 @@ guilty!{
             let listening = Iron::new(chain).http(("0.0.0.0", HTTP_PORT)).unwrap();
 
             let (wstx, wsrx) = mpsc::channel();
+            let cwstx = wstx.clone();
             let thread = thread::spawn(move || {
 
                 let ws = ws::Server::bind(("0.0.0.0", WS_PORT)).unwrap();
+
+                let ws_senders = Arc::new(Mutex::new(Vec::<ws::server::sender::Sender<_>>::new())); // FIXME why is the typechecker so confused here
+                let ws_senders_clone = ws_senders.clone();
+                let mut ws_relays = Vec::new();
+
+                let marshal = thread::spawn(move || {
+                    // relay messages from above to all WS threads
+                    while let Ok(msg) = wsrx.recv() {
+                        ws_senders_clone.lock().unwrap().iter_mut().map(|ref mut s| {
+                            s.send_message(ws::Message::clone(&msg)).unwrap(); // FIXME why is the typechecker so confused here
+                        }).count();
+                    }
+
+                    println!("web: shutting down websocket servers");
+                    // kill all WS threads now
+                    ws_senders_clone.lock().unwrap().iter_mut().map(|ref mut s| {
+                        s.send_message(ws::Message::Close(None)).unwrap();
+                    }).count();
+                });
 
                 for connection in ws {
                     let request = connection.unwrap().read_request().unwrap(); // Get the request
@@ -191,29 +212,22 @@ guilty!{
                     let message = ws::Message::Text("Hello".to_string());
                     client.send_message(message).unwrap();
                     
-                    let (mut sender, mut receiver) = client.split();
-                    // TODO multiplex the receiver with the mpsc Receiver somehow
-                    
-                    /*for message in receiver.incoming_messages() {
-                        let message = message.unwrap();
-                        
-                        match message {
-                            ws::Message::Close(_) => {
-                                let message = ws::Message::Close(None);
-                                sender.send_message(message).unwrap();
-                                println!("Websocket client {} disconnected", ip);
-                                return;
+                    let (sender, mut receiver) = client.split();
+                    ws_senders.lock().unwrap().push(sender);
+                    let ccwstx = cwstx.clone();
+                    ws_relays.push(thread::spawn(move || {
+                        for message in receiver.incoming_messages() {
+                            let message = message.unwrap();
+
+                            match message {
+                                ws::Message::Close(_) => {
+                                    println!("Websocket client {} disconnected", ip);
+                                    return;
+                                }
+                                _ => ccwstx.send(message).unwrap()
                             }
-                            ws::Message::Ping(data) => {
-                                let message = ws::Message::Pong(data);
-                                sender.send_message(message).unwrap();
-                            }
-                            _ => sender.send_message(message).unwrap(),
                         }
-                    }*/
-                    while let Ok(msg) = wsrx.recv() {
-                        sender.send_message(msg).unwrap();
-                    }
+                    }));
                 }
             });
 
