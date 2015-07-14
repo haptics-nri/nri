@@ -52,6 +52,9 @@ guilty!{
                     "panic" => {
                         self.tx.send(CmdFrom::Panic).unwrap();
                     },
+                    "websend" => {
+                        self.tx.send(CmdFrom::Data("send test".to_string())).unwrap();
+                    },
                     _ => println!("Unknown command!")
                 }
             }

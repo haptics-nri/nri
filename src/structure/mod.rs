@@ -120,7 +120,7 @@ group_attr!{
                             println!("wrote IR frame {}", self.i);
                         }
 
-                        prof!("send", self.tx.send(CmdFrom::Data(format!("structure {} data:image/png;base64,{}", self.i, encoded.to_base64(base64::STANDARD)))).unwrap());
+                        prof!("send", self.tx.send(CmdFrom::Data(format!("send kick structure {} data:image/png;base64,{}", self.i, encoded.to_base64(base64::STANDARD)))).unwrap());
                     });
                 }
             }

@@ -58,7 +58,7 @@ group_attr!{
                         let (ww, hh) = ((w as u32)/4, (h as u32)/4);
                         let resized = prof!("resize", imageops::resize(&to_resize, ww, hh, FilterType::Nearest));
                         prof!("encode", PNGEncoder::new(&mut encoded).encode(&resized, ww, hh, bd).unwrap());
-                        prof!("send", mtx.lock().unwrap().send(CmdFrom::Data(format!("bluefox {} data:image/png;base64,{}", i, prof!("base64", encoded.to_base64(base64::STANDARD))))).unwrap());
+                        prof!("send", mtx.lock().unwrap().send(CmdFrom::Data(format!("send kick bluefox {} data:image/png;base64,{}", i, prof!("base64", encoded.to_base64(base64::STANDARD))))).unwrap());
                     })
                 }
             }

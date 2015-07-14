@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 use super::comms::{Controllable, CmdFrom, Block};
 use self::iron::prelude::*;
 use self::iron::status;
-use self::iron::middleware::Handler;
+use self::iron::middleware::{Handler, AfterMiddleware};
 use self::hbs::{Template, HandlebarsEngine, Watchable};
 use self::serialize::json::{ToJson, Json};
 use self::staticfile::Static;
@@ -133,6 +133,21 @@ pub struct Web {
     wstx: mpsc::Sender<ws::Message>,
 }
 
+struct Catchall;
+
+impl Catchall {
+    fn new() -> Catchall { Catchall }
+}
+
+impl AfterMiddleware for Catchall {
+    fn catch(&self, req: &mut Request, err: IronError) -> IronResult<Response> {
+        match err.response.status {
+            Some(status::NotFound) => Ok(Response::with(status::NotFound)),
+            _ => Err(err)
+        }
+    }
+}
+
 guilty!{
     impl Controllable for Web {
         const NAME: &'static str = "web",
@@ -157,6 +172,7 @@ guilty!{
             watcher.watch();
 
             chain.link_after(watcher);
+            chain.link_after(Catchall::new());
 
             let listening = Iron::new(chain).http(("0.0.0.0", HTTP_PORT)).unwrap();
 

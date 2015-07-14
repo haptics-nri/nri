@@ -267,9 +267,9 @@ fn main() {
                     CmdFrom::Data(d)      => {
                         let mut words = d.split(' ');
                         match &*words.next().unwrap() {
-                            "structure" | "bluefox" => { send_to(&services, "web".to_string(), CmdTo::Data(d.to_owned())); },
-                            "kick"                  => { send_to(&services, words.next().unwrap().to_string(), CmdTo::Data("kick".to_string())); },
-                            _                       => { errorln!("Strange message {} received from a service", d); }
+                            "send" => { send_to(&services, "web".to_string(), CmdTo::Data(d[5..].to_owned())); },
+                            "kick" => { send_to(&services, words.next().unwrap().to_string(), CmdTo::Data("kick".to_string())); },
+                            _      => { errorln!("Strange message {} received from a service", d); }
                         }
                     }
                 },

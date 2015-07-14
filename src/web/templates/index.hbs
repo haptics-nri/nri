@@ -17,8 +17,11 @@
             socket.onmessage = function (event) {
                 console.log(event.data);
                 words = event.data.split(' ');
-                $("." + words[0] + ".framenum").each(function () { this.innerHTML = words[1]; });
-                $("." + words[0] + ".latest")  .each(function () { this.src       = words[2]; });
+                switch (words[0]) {
+                    case "kick":
+                        $("." + words[1] + ".framenum").each(function () { this.innerHTML = words[1]; });
+                        $("." + words[1] + ".latest")  .each(function () { this.src       = words[3]; });
+                }
             };
         </script>
 
