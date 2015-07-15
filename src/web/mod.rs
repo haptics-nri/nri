@@ -162,7 +162,7 @@ guilty!{
 
             let mut router = Router::new();
             router.get("/", index);
-            router.post("/control/:service/:action", control(tx));
+            router.post("/control/:service/:action", control(tx.clone()));
 
             mount.mount("/", router);
 
@@ -177,7 +177,7 @@ guilty!{
             let listening = Iron::new(chain).http(("0.0.0.0", HTTP_PORT)).unwrap();
 
             let (wstx, wsrx) = mpsc::channel();
-            let cwstx = wstx.clone();
+            let ctx = tx.clone();
             let thread = thread::spawn(move || {
 
                 let ws = ws::Server::bind(("0.0.0.0", WS_PORT)).unwrap();
@@ -230,7 +230,7 @@ guilty!{
                     
                     let (sender, mut receiver) = client.split();
                     ws_senders.lock().unwrap().push(sender);
-                    let ccwstx = cwstx.clone();
+                    let cctx = ctx.clone();
                     ws_relays.push(thread::spawn(move || {
                         for message in receiver.incoming_messages() {
                             let message = message.unwrap();
@@ -239,8 +239,11 @@ guilty!{
                                 ws::Message::Close(_) => {
                                     println!("Websocket client {} disconnected", ip);
                                     return;
-                                }
-                                _ => ccwstx.send(message).unwrap()
+                                },
+                                ws::Message::Text(text) => {
+                                    cctx.send(CmdFrom::Data(text)).unwrap();
+                                },
+                                _ => ()
                             }
                         }
                     }));

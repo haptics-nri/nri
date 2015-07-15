@@ -13,15 +13,24 @@
         <script src="/js/jquery.min.js"></script>
         <script src="/js/bootstrap.min.js"></script>
         <script type="text/javascript">
-            var socket = new WebSocket("ws://{{server}}", "rust-websocket");
-            socket.onmessage = function (event) {
+            window.socket = new WebSocket("ws://{{server}}", "rust-websocket");
+            window.socket.onmessage = function (event) {
                 console.log(event.data);
                 words = event.data.split(' ');
                 switch (words[0]) {
                     case "kick":
-                        $("." + words[1] + ".framenum").each(function () { this.innerHTML = words[1]; });
+                        $("." + words[1] + ".framenum").each(function () { this.innerHTML = words[2]; });
                         $("." + words[1] + ".latest")  .each(function () { this.src       = words[3]; });
                 }
+            };
+            window.socket.onopen = function (event) {
+                console.log("Server connection ready!");
+            };
+            window.socket.onclose = function (event) {
+                console.log("Server connection lost!");
+            };
+            window.socket.onerror = function (event) {
+                console.log("Server connection error!");
             };
         </script>
 

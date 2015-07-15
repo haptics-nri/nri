@@ -142,7 +142,7 @@ macro_rules! stub {
         use super::comms::{Controllable, Block, CmdFrom};
         guilty!{
             impl Controllable for $t {
-                const NAME: &'static str = concat!("Stub ", stringify!($t)),
+                const NAME: &'static str = stringify!($t),
                 const BLOCK: Block = Block::Infinite,
 
                 fn setup(_: ::std::sync::mpsc::Sender<CmdFrom>, _: Option<String>) -> $t {

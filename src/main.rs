@@ -163,7 +163,7 @@ macro_rules! rxspawn {
                     let (thread_tx, thread_rx) = channel();
                     let master_tx = $reply.clone();
                     Service {
-                        name: stringify!($s).to_ascii_lowercase(),
+                        name: <$s as comms::Controllable>::NAME().to_ascii_lowercase().to_string(), // FIXME can't use macro here because of UFCS
                         thread: Some(thread::spawn(move || comms::go::<$s>(thread_rx, master_tx))),
                         tx: thread_tx
                     }
@@ -181,6 +181,7 @@ struct Service {
 }
 
 fn find(services: &[Service], s: String) -> Option<&Service> {
+    let s = s.chars().flat_map(char::to_lowercase).collect::<String>();
     services.iter().position(|x| x.name == s).map(|i| &services[i])
 }
 
