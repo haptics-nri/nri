@@ -3,6 +3,59 @@ use std::io::{Read, Write};
 use std::fs::File;
 use std::fmt::Debug;
 
+/// Semiautomatically-indenting `println!` replacement
+///
+/// ¡Achtung! Requres `#[macro_use] extern crate lazy_static;` at the crate root!
+///
+/// Example:
+/// 
+/// ```
+/// indentln!("outer"); // no indentation
+/// for i in 0..10 {
+///     indentln!(> "inner"); // no indentation
+///     indentln!("{}", i*i); // indented one level
+///     // scope ends, indentation automatically restored here
+/// }
+/// ```
+#[macro_use] pub mod indent {
+    use std::sync::Mutex;
+    lazy_static! {
+        pub static ref _INDENT: Mutex<usize> = Mutex::new(0);
+    }
+
+    #[doc(hidden)]
+    #[allow(dead_code)]
+    pub struct IndentGuard { prev: usize }
+    #[allow(dead_code)]
+    impl IndentGuard {
+        pub fn new() -> IndentGuard {
+            IndentGuard { prev: *_INDENT.lock().unwrap() }
+        }
+    }
+    impl Drop for IndentGuard {
+        fn drop(&mut self) {
+            *_INDENT.lock().unwrap() = self.prev;
+        }
+    }
+
+    /// Indenting replacement for println!
+    /// 
+    /// Two syntaxes:
+    ///     1. exactly the same as println!: prepends the current indentation and prints the stuff
+    ///     2. like (1), but with '>' prepended: prints the stuff, then increases the indentation
+    ///        level. The indentation will revert at the end of the scope.
+    #[macro_export] macro_rules! indentln {
+        (> $($arg:expr),*) => {
+            indentln!($($arg),*);
+            let _indent_guard = $crate::common::indent::IndentGuard::new();
+            *$crate::common::indent::_INDENT.lock().unwrap() += 1;
+        };
+        ($($arg:expr),*)   => {
+            println!("{s: <#w$}{a}", s = "", w = 4 * *$crate::common::indent::_INDENT.lock().unwrap(), a = format!($($arg),*));
+        }
+    }
+}
+
 /// Just like println!, but prints to stderr
 macro_rules! errorln {
     ($($arg:tt)*) => {{
@@ -27,19 +80,36 @@ macro_rules! attempt {
     }
 }
 
-pub fn read_binary<Data: Debug>(header: &str) {
-    let mut args = env::args();
-    let (inname, outname) = 
-        if args.len() != 3 {
-            errorln!("Failed to parse command line arguments.");
-            errorln!("Usage: {} [binary input file] [csv output file]", args.next().unwrap());
-            process::exit(1)
-        } else {
-            let _ = args.next().unwrap();
-            (args.next().unwrap(), args.next().unwrap())
-        };
-    println!("in = {}, out = {}", inname, outname);
-    println!("packet size {}", mem::size_of::<Data>());
+pub fn parse_inout_args<I>(args: &mut I) -> (String, String)
+        where I: ExactSizeIterator<Item=String>
+{
+    if args.len() != 3 {
+        errorln!("Failed to parse command line arguments.");
+        errorln!("Usage: {} [binary input file] [csv output file]", args.next().unwrap());
+        process::exit(1);
+    }
+    else {
+        args.next().unwrap();
+    }
+    let (inname, outname) = (parse_in_arg(args), parse_out_arg(args));
+    indentln!("in = {}, out = {}", inname, outname);
+    (inname, outname)
+}
+
+pub fn parse_in_arg<I>(args: &mut I) -> String
+        where I: Iterator<Item=String>
+{
+    args.next().unwrap()
+}
+
+pub fn parse_out_arg<I>(args: &mut I) -> String
+        where I: Iterator<Item=String>
+{
+    args.next().unwrap()
+}
+
+pub fn do_binary<Data: Debug>(header: &str, (inname, outname): (String, String)) {
+    indentln!("packet size {}", mem::size_of::<Data>());
 
     // open files
     let mut infile = attempt!(File::open(inname));
@@ -51,17 +121,22 @@ pub fn read_binary<Data: Debug>(header: &str) {
     // read file
     let mut vec = vec![0u8; 0];
     attempt!(infile.read_to_end(&mut vec));
+    indentln!("file size = {} ({} packets)", vec.len(), vec.len() as f64 / mem::size_of::<Data>() as f64);
 
     let mut data: Data = unsafe { mem::uninitialized() };
     let mut i = 0;
-    for chunk in vec.chunks(mem::size_of_val(&data)) {
+    for chunk in vec.chunks(mem::size_of::<Data>()) {
         i += 1;
         unsafe {
             ptr::copy(chunk.as_ptr(), &mut data as *mut _ as *mut _, mem::size_of_val(&data));
         }
         attempt!(writeln!(outfile, "{:?}", data));
     }
-    println!("translated {} packets", i);
+    indentln!("translated {} packets", i);
+}
+
+pub fn read_binary<Data: Debug>(header: &str) {
+    do_binary::<Data>(header, parse_inout_args(&mut env::args()));
 }
 
 

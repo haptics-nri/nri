@@ -1,3 +1,4 @@
+#[macro_use] extern crate lazy_static;
 extern crate time;
 
 #[macro_use] mod common;
@@ -15,8 +16,8 @@ struct Packet {
     accel: XYZ<i16>,
     gyro:  XYZ<i16>,
     mag:   XYZ<i16>,
-    ft:    [u8; 30],
-    count: u8
+    _ft:    [u8; 30],
+    _count: u8
 }
 
 impl fmt::Debug for Packet {
