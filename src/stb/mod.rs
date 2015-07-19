@@ -8,6 +8,20 @@ macro_rules! swap {
     }}
 }
 
+/// Which end effector is in use (i.e. not parked)
+pub enum ParkState {
+    /// All end effectors parked
+    None = 0,
+    /// The Biotac is out
+    BioTac = 1,
+    /// The Optoforce is out
+    OptoForce = 2,
+    /// The rigid stick is out
+    Stick = 4,
+    /// Multiple end effectors unparked! The sky is falling!
+    Multiple = -1
+}
+
 group_attr!{
     #[cfg(target_os = "linux")]
 

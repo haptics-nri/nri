@@ -18,6 +18,7 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::collections::BTreeMap;
 use super::comms::{Controllable, CmdFrom, Block};
+use super::stb::ParkState;
 use self::iron::prelude::*;
 use self::iron::status;
 use self::iron::middleware::{Handler, AfterMiddleware};
@@ -52,6 +53,70 @@ impl Service {
     }
 }
 
+/// Descriptor of a data collection flow
+struct Flow {
+    /// Name of the flow
+    name: &'static str,
+    /// States in the flow
+    states: Vec<FlowState>,
+    /// Is this the active flow?
+    active: bool,
+}
+
+/// One state in a data collection flow
+struct FlowState {
+    /// Name of the flow state
+    name: &'static str,
+    /// State of parking lot that allows this state (if applicable)
+    park: Option<ParkState>,
+    /// Commands to run for this state
+    script: Vec<FlowCmd>,
+    /// Has this state been completed?
+    done: bool,
+}
+
+/// Different actions that a flow can perform at each state
+enum FlowCmd {
+    Message(&'static str),
+    Str { prompt: &'static str, data: Option<String> },
+    Int { prompt: &'static str, limits: (i32, i32), data: Option<i32> },
+    Start(&'static str),
+    Stop(&'static str),
+    Send(&'static str),
+    StopSensors,
+}
+
+impl Flow {
+    fn new(name: &'static str, states: Vec<FlowState>) -> Flow {
+        Flow {
+            name: name,
+            states: states,
+            active: false,
+        }
+    }
+}
+
+impl FlowState {
+    fn new(name: &'static str, park: Option<ParkState>, script: Vec<FlowCmd>) -> FlowState {
+        FlowState {
+            name: name,
+            park: park,
+            script: script,
+            done: false,
+        }
+    }
+}
+
+impl FlowCmd {
+    fn str(prompt: &'static str) -> FlowCmd {
+        FlowCmd::Str { prompt: prompt, data: None}
+    }
+
+    fn int(prompt: &'static str, limits: (i32, i32)) -> FlowCmd {
+        FlowCmd::Int { prompt: prompt, limits: limits, data: None}
+    }
+}
+
 macro_rules! jsonize {
     ($map:ident, $selph:ident, $var:ident) => {{
         $map.insert(stringify!($var).to_string(), $selph.$var.to_json())
@@ -69,6 +134,14 @@ impl ToJson for Service {
     }
 }
 
+impl ToJson for Flow {
+    fn to_json(&self) -> Json {
+        let mut m: BTreeMap<String, Json> = BTreeMap::new();
+        jsonize!(m, self; name);
+        m.to_json()
+    }
+}
+
 /// Make a path relative to the current file's directory
 fn relpath(path: &str) -> String {
     String::from(Path::new(file!()).parent().unwrap().join(path).to_str().unwrap())
@@ -79,10 +152,77 @@ fn index(req: &mut Request) -> IronResult<Response> {
     let mut data = BTreeMap::<String, Json>::new();
     data.insert("services".to_string(), vec![ Service::new("Structure Sensor", "structure" , "<img class=\"structure latest\" src=\"img/structure_latest.png\" /><div class=\"structure framenum\">NaN</div>"),
                                               Service::new("mvBlueFOX3"      , "bluefox"   , "<img class=\"bluefox latest\" src=\"img/bluefox_latest.png\" /><div class=\"bluefox framenum\">NaN</div>"),
-                                              Service::new("OptoForce"       ,  "optoforce", ""),
-                                              Service::new("SynTouch BioTac" ,  "biotac"   , ""),
-                                              Service::new("STB"             ,  "stb"      , ""),
+                                              Service::new("OptoForce"       , "optoforce" , ""),
+                                              Service::new("SynTouch BioTac" , "biotac"    , ""),
+                                              Service::new("STB"             , "stb"       , ""),
                                             ].to_json());
+    data.insert("flows".to_string(), vec! {
+        Flow::new("Episode",
+                  vec! {
+                      FlowState::new("Begin", None, vec! {
+                          FlowCmd::StopSensors,
+                          FlowCmd::Message("Starting new episode!"),
+                      }),
+
+                      FlowState::new("Camera aiming", Some(ParkState::None), vec! {
+                          FlowCmd::StopSensors,
+                          FlowCmd::Start("bluefox"), FlowCmd::Start("structure"),
+                          FlowCmd::Message("Use the Refresh button to get the cameras aimed well"),
+                      }),
+                      FlowState::new("Camera capture", None, vec! {
+                          FlowCmd::Send("bluefox disk start"),
+                          FlowCmd::Send("structure disk start"),
+                          FlowCmd::Message("Now recording! Pan the rig around to get images from various angles"),
+                      }),
+                      FlowState::new("Camera finish", None, vec! {
+                          FlowCmd::Send("bluefox disk stop"),
+                          FlowCmd::Send("structure disk stop"),
+                          FlowCmd::Message("Writing to disk, please wait..."),
+                          FlowCmd::Stop("bluefox"), FlowCmd::Stop("structure"),
+                          FlowCmd::Message("Done!"),
+                      }),
+
+                      FlowState::new("BioTac capture", Some(ParkState::BioTac), vec! {
+                          FlowCmd::Start("biotac"), FlowCmd::Start("stb"),
+                          FlowCmd::Message("Recording from BioTac!"),
+                      }),
+                      FlowState::new("BioTac finish", None, vec! {
+                          FlowCmd::Message("Writing to disk, please wait..."),
+                          FlowCmd::Stop("biotac"), FlowCmd::Stop("stb"),
+                          FlowCmd::Message("Done!"),
+                      }),
+
+                      FlowState::new("OptoForce capture", Some(ParkState::OptoForce), vec! {
+                          FlowCmd::Start("optoforce"), FlowCmd::Start("stb"),
+                          FlowCmd::Message("Recording from OptoForce!"),
+                      }),
+                      FlowState::new("OptoForce finish", None, vec! {
+                          FlowCmd::Message("Writing to disk, please wait..."),
+                          FlowCmd::Stop("optoforce"), FlowCmd::Stop("stb"),
+                          FlowCmd::Message("Done!"),
+                      }),
+
+                      FlowState::new("Rigid stick capture", Some(ParkState::Stick), vec! {
+                          FlowCmd::Start("stb"),
+                          FlowCmd::Message("Recording from rigid stick!"),
+                      }),
+                      FlowState::new("Rigid stick finish", None, vec! {
+                          FlowCmd::Message("Writing to disk, please wait..."),
+                          FlowCmd::Stop("stb"),
+                          FlowCmd::Message("Done!"),
+                      }),
+
+                      FlowState::new("Wrap up", Some(ParkState::None), vec! {
+                          FlowCmd::str("episode name"),
+                          FlowCmd::int("hardness",     (1, 5)),
+                          FlowCmd::int("roughness",    (1, 5)),
+                          FlowCmd::int("slipperiness", (1, 5)),
+                          FlowCmd::int("warmness",     (1, 5)),
+                          FlowCmd::int("moldability",  (1, 5)),
+                          FlowCmd::Message("Done!"),
+                      }),
+                  }),
+    }.to_json());
     data.insert("server".to_string(), format!("{}:{}", req.url.host, WS_PORT).to_json());
 
     let mut resp = Response::new();

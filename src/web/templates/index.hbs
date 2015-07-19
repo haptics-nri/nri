@@ -40,6 +40,17 @@
             </div>
 
             <div class="page-header">
+                <h2>Flows</h2>
+                    {{#each flows}}
+                        <div class="container">
+                            {{#if active}}<b>{{/if}}
+                                {{name}}
+                            {{#if active}}</b>{{/if}}
+                        </div>
+                    {{/each}}
+            </div>
+
+            <div class="page-header">
                 <h2>All Services</h2>
                 <form method="POST" target="response">
                     {{#each services}}
