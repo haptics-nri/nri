@@ -23,7 +23,7 @@ use self::iron::prelude::*;
 use self::iron::status;
 use self::iron::middleware::{Handler, AfterMiddleware};
 use self::hbs::{Template, HandlebarsEngine};
-#[cfg(features = "watch")] use self::hbs::Watchable;
+#[cfg(feature = "watch")] use self::hbs::Watchable;
 use self::serialize::json::{ToJson, Json};
 use self::staticfile::Static;
 use self::mount::Mount;
@@ -304,7 +304,9 @@ fn maybe_watch(chain: &mut Chain) {
     chain.link_after(watcher);
 }
 #[cfg(not(feature = "watch"))]
-fn maybe_watch(_: &mut Chain) { }
+fn maybe_watch(chain: &mut Chain) {
+    chain.link_after(HandlebarsEngine::new(&relpath("templates"), ".hbs"));
+}
 
 guilty!{
     impl Controllable for Web {
