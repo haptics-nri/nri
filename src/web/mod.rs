@@ -138,7 +138,15 @@ impl ToJson for Service {
 impl ToJson for Flow {
     fn to_json(&self) -> Json {
         let mut m: BTreeMap<String, Json> = BTreeMap::new();
-        jsonize!(m, self; name);
+        jsonize!(m, self; name, states);
+        m.to_json()
+    }
+}
+
+impl ToJson for FlowState {
+    fn to_json(&self) -> Json {
+        let mut m: BTreeMap<String, Json> = BTreeMap::new();
+        jsonize!(m, self; name, done);
         m.to_json()
     }
 }

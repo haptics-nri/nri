@@ -41,13 +41,29 @@
 
             <div class="page-header">
                 <h2>Flows</h2>
+                <form method="POST" target="response">
                     {{#each flows}}
                         <div class="container">
-                            {{#if active}}<b>{{/if}}
+                            {{#if active}}
+                                <b>name</b>
+                                <ol>
+                                    {{#each states}}
+                                        {{#if done}}
+                                            <li><i>{{name}}</i></li>
+                                        {{else}
+                                            <li>{{name}}</li>
+                                        {{/if}}
+                                    {{/each}}
+                                </ol>
+                            {{else}}
                                 {{name}}
-                            {{#if active}}</b>{{/if}}
+                                <button formaction="/flow/{{name}}/start"
+                                        type="submit"
+                                        class="btn btn-success">Start</button>
+                            {{/if}}
                         </div>
                     {{/each}}
+                </form>
             </div>
 
             <div class="page-header">
