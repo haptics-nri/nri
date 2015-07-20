@@ -22,7 +22,8 @@ use super::stb::ParkState;
 use self::iron::prelude::*;
 use self::iron::status;
 use self::iron::middleware::{Handler, AfterMiddleware};
-use self::hbs::{Template, HandlebarsEngine, Watchable};
+use self::hbs::{Template, HandlebarsEngine};
+#[cfg(features = "watch")] use self::hbs::Watchable;
 use self::serialize::json::{ToJson, Json};
 use self::staticfile::Static;
 use self::mount::Mount;
@@ -288,6 +289,15 @@ impl AfterMiddleware for Catchall {
     }
 }
 
+#[cfg(feature = "watch")]
+fn maybe_watch(chain: &mut Chain) {
+    let watcher = Arc::new(HandlebarsEngine::new(&relpath("templates"), ".hbs"));
+    watcher.watch();
+    chain.link_after(watcher);
+}
+#[cfg(not(feature = "watch"))]
+fn maybe_watch(_: &mut Chain) { }
+
 guilty!{
     impl Controllable for Web {
         const NAME: &'static str = "web",
@@ -307,11 +317,7 @@ guilty!{
             mount.mount("/", router);
 
             let mut chain = Chain::new(mount);
-
-            let watcher = Arc::new(HandlebarsEngine::new(&relpath("templates"), ".hbs"));
-            watcher.watch();
-
-            chain.link_after(watcher);
+            maybe_watch(&mut chain);
             chain.link_after(Catchall::new());
 
             let listening = Iron::new(chain).http(("0.0.0.0", HTTP_PORT)).unwrap();
