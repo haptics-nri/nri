@@ -108,35 +108,42 @@ pub fn parse_out_arg<I>(args: &mut I) -> String
     args.next().unwrap()
 }
 
-pub fn do_binary<Data: Debug>(header: &str, (inname, outname): (String, String)) {
+pub fn do_binary<Data: Debug>(header: &str, (inname, outname): (String, Option<String>)) -> Vec<Data> {
     indentln!("packet size {}", mem::size_of::<Data>());
 
     // open files
     let mut infile = attempt!(File::open(inname));
-    let mut outfile = attempt!(File::create(outname));
+    let mut outfile = outname.map(|n| attempt!(File::create(n)));
 
     // write CSV header
-    attempt!(writeln!(outfile, "{}", header));
+    outfile.as_mut().map(|ref mut f| attempt!(writeln!(f, "{}", header)));
 
     // read file
     let mut vec = vec![0u8; 0];
     attempt!(infile.read_to_end(&mut vec));
     indentln!("file size = {} ({} packets)", vec.len(), vec.len() as f64 / mem::size_of::<Data>() as f64);
 
-    let mut data: Data = unsafe { mem::uninitialized() };
     let mut i = 0;
-    for chunk in vec.chunks(mem::size_of::<Data>()) {
-        i += 1;
-        unsafe {
-            ptr::copy(chunk.as_ptr(), &mut data as *mut _ as *mut _, mem::size_of_val(&data));
-        }
-        attempt!(writeln!(outfile, "{:?}", data));
-    }
+    let datums = vec
+        .chunks(mem::size_of::<Data>())
+        .map(|chunk: &[u8]| {
+            i += 1;
+            let mut data: Data = unsafe { mem::uninitialized() };
+            unsafe {
+                ptr::copy(chunk.as_ptr(), &mut data as *mut _ as *mut _, mem::size_of_val(&data));
+            }
+            outfile.as_mut().map(|ref mut f| attempt!(writeln!(f, "{:?}", data)));
+            data
+        })
+        .collect();
+
     indentln!("translated {} packets", i);
+    datums
 }
 
-pub fn read_binary<Data: Debug>(header: &str) {
-    do_binary::<Data>(header, parse_inout_args(&mut env::args()));
+pub fn read_binary<Data: Debug>(header: &str) -> Vec<Data> {
+    let (inname, outname) = parse_inout_args(&mut env::args());
+    do_binary::<Data>(header, (inname, Some(outname)))
 }
 
 

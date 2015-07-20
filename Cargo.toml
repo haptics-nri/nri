@@ -9,6 +9,9 @@ exclude = ["src/web/templates/*", "src/web/bootstrap/*"] # TODO take this out be
 opt-level = 3
 debug = true
 
+[features]
+watch = ["handlebars-iron/watch"]
+
 [dependencies]
 log = "*"
 env_logger = "*"
@@ -44,4 +47,8 @@ websocket = "*"
 #[dependencies.ioctl-rs]
 #git = "git://github.com/haptics-nri/ioctl-rs"
 #branch = "usbdevfs"
+
+[dependencies.lodepng] # waiting for merge of my PR
+git = "git://github.com/durka/lodepng-rust"
+branch = "stabilize"
 
