@@ -26,6 +26,7 @@ group_attr!{
     #[cfg(target_os = "linux")]
 
     extern crate serial;
+    extern crate time;
     use ::comms::{Controllable, CmdFrom, Block};
     use std::io::{Read, Write};
     use std::fs::File;
@@ -112,6 +113,7 @@ group_attr!{
                 match self.port.read(&mut buf) {
                     Ok(LEN) => {
                         let packet = unsafe { Packet::new(buf) };
+                        self.file.write_all(unsafe { slice::from_raw_parts(&time::get_time() as *const _ as *const _, mem::size_of::<time::Timespec>()) });
                         self.file.write_all(&buf);
                         /*if packet.count == 0 {
                             println!("Read full packet from STB: {:?}", packet);
