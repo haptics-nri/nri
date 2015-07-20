@@ -13,6 +13,7 @@ struct XYZ<T> {
 }
 #[repr(packed)]
 struct Packet {
+    stamp:  time::Timespec,
     accel:  XYZ<i16>,
     gyro:   XYZ<i16>,
     mag:    XYZ<i16>,
@@ -32,7 +33,8 @@ impl fmt::Debug for Packet {
             }
         }
 
-        try!(write!(f, "{}, {}, {}, {}, {}, {}, {}, {}, {}",
+        try!(write!(f, "{:.9}, {}, {}, {}, {}, {}, {}, {}, {}, {}",
+                    self.stamp.sec as f64 + self.stamp.nsec as f64 / 1_000_000_000f64,
                     self.accel.x, self.accel.y, self.accel.z,
                     self.gyro.x, self.gyro.y, self.gyro.z,
                     self.mag.x.to_be(), self.mag.y.to_be(), self.mag.z.to_be()));
@@ -41,7 +43,7 @@ impl fmt::Debug for Packet {
 }
 
 fn main() {
-    common::read_binary::<Packet>("AccX, AccY, AccZ, GyroX, GyroY, GyroZ, MagX, MagY, MagZ");
+    common::read_binary::<Packet>("Timestamp, AccX, AccY, AccZ, GyroX, GyroY, GyroZ, MagX, MagY, MagZ");
 }
 
 
