@@ -1,13 +1,5 @@
 //! Service to read data from the STB and attached sensors
 
-macro_rules! swap {
-    ($a:expr, $b:expr) => {{
-        let tmp = $a;
-        $a = $b;
-        $b = tmp;
-    }}
-}
-
 /// Which end effector is in use (i.e. not parked)
 pub enum ParkState {
     /// All end effectors parked
@@ -61,9 +53,6 @@ group_attr!{
 
     impl Packet {
         unsafe fn new(mut buf: [u8; LEN]) -> Packet {
-            for i in 0..6 {
-                swap!(buf[2*i], buf[2*i+1]);
-            }
             mem::transmute(buf)
         }
     }
