@@ -53,9 +53,10 @@ group_attr!{
         gyro:  XYZ<i16>,
         mag:   XYZ<i16>,
         ft:    [u8; 30],
-        count: u8
+        count: u8,
+        zero:  u8,
     }
-    const LEN: usize = 49;
+    const LEN: usize = 50;
 
     impl Packet {
         unsafe fn new(mut buf: [u8; LEN]) -> Packet {
@@ -101,7 +102,7 @@ group_attr!{
                     try!(settings.set_baud_rate(serial::Baud115200));
                     Ok(())
                 }).unwrap();
-                port.write(&[1]);
+                port.write(&['1' as u8]);
 
                 STB { port: Box::new(port), file: File::create("data/stb.dat").unwrap() }
             }
@@ -122,7 +123,7 @@ group_attr!{
             }
 
             fn teardown(&mut self) {
-                self.port.write(&[2]);
+                self.port.write(&['2' as u8]);
             }
         }
     }
