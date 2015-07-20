@@ -23,9 +23,8 @@ group_attr!{
     use std::io::{Read, Write};
     use std::fs::File;
     use std::sync::mpsc::Sender;
-    use std::mem;
+    use std::{mem, slice, ops};
     use std::fmt::{self, Display, Debug, Formatter};
-    use std::ops;
     use self::serial::prelude::*;
 
 
