@@ -13,19 +13,29 @@ struct XYZ<T> {
 }
 #[repr(packed)]
 struct Packet {
-    accel: XYZ<i16>,
-    gyro:  XYZ<i16>,
-    mag:   XYZ<i16>,
+    accel:  XYZ<i16>,
+    gyro:   XYZ<i16>,
+    mag:    XYZ<i16>,
     _ft:    [u8; 30],
-    _count: u8
+    _count: u8,
+    _zero:  u8,
 }
 
 impl fmt::Debug for Packet {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        fn fix(v: i16) -> i16 {
+            unsafe {
+                use std::mem;
+                let bytes: [u8; 2] = mem::transmute(v);
+                let swapped_bytes = [bytes[1], bytes[0]];
+                mem::transmute(swapped_bytes)
+            }
+        }
+
         try!(write!(f, "{}, {}, {}, {}, {}, {}, {}, {}, {}",
                     self.accel.x, self.accel.y, self.accel.z,
                     self.gyro.x, self.gyro.y, self.gyro.z,
-                    self.mag.x, self.mag.y, self.mag.z));
+                    self.mag.x.to_be(), self.mag.y.to_be(), self.mag.z.to_be()));
         Ok(())
     }
 }
