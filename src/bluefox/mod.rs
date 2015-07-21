@@ -59,7 +59,7 @@ group_attr!{
                         let resized = prof!("resize", imageops::resize(&to_resize, ww, hh, FilterType::Nearest));
                         prof!("encode", PNGEncoder::new(&mut encoded).encode(&resized, ww, hh, bd).unwrap());
                         prof!("send", mtx.lock().unwrap().send(CmdFrom::Data(format!("send kick bluefox {} data:image/png;base64,{}", i, prof!("base64", encoded.to_base64(base64::STANDARD))))).unwrap());
-                    })
+                    }),
                 }
             }
 

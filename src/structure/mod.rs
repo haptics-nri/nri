@@ -14,7 +14,9 @@ group_attr!{
     use self::serialize::base64;
     use self::serialize::base64::ToBase64;
     use std::sync::mpsc::Sender;
-    use ::comms::{Controllable, CmdFrom, Block};
+    use ::comms::{Controllable, CmdFrom, Block, RestartableThread};
+
+    type PngStuff = (usize, Vec<u8>, bool, (usize, usize), ColorType);
 
     mod wrapper;
 
@@ -35,8 +37,8 @@ group_attr!{
         /// Number of frames captured since setup() was last called (used for calculating frame rates)
         i: usize,
 
-        /// For sending stuff back up to the supervisor
-        tx: Sender<CmdFrom>,
+        /// PNG writer/sender
+        png: RestartableThread,
     }
 
     guilty!{
@@ -73,9 +75,27 @@ group_attr!{
                 depth.start().unwrap();
                 //ir.start().unwrap();
 
-                let start = time::now();
-                let i = 0;
-                Structure { tx: tx, device: device, depth: depth, ir: ir, start: start, i: i}
+                let mtx = Mutex::new(tx);
+                Structure {
+                    device: device,
+                    depth: depth,
+                    ir: ir,
+                    start: time::now(),
+                    i: 0,
+
+                    png: RestartableThread::new("Structure PNG thread", move |(i, unencoded, do_resize, (h, w), bd)| {
+                        let mut encoded = Vec::with_capacity(w*h);
+                        let to_resize = prof!("imagebuffer", ImageBuffer::<image::Rgb<u8>, _>::from_raw(w as u32, h as u32, unencoded).unwrap());
+                        let (resized, ww, hh) = if do_resize {
+                            let (ww, hh) = ((w as u32)/4, (h as u32)/4);
+                            (prof!("resize", imageops::resize(&to_resize, ww, hh, FilterType::Nearest)), ww, hh)
+                        } else {
+                            (to_resize, w as u32, h as u32)
+                        };
+                        prof!("encode", PNGEncoder::new(&mut encoded).encode(&resized, ww, hh, bd).unwrap());
+                        prof!("send", mtx.send(CmdFrom::Data(format!("send kick structure {} data:image/png;base64,{}", self.i, encoded.to_base64(base64::STANDARD)))).unwrap());
+                    }),
+                }
             }
 
             fn step(&mut self, cmd: Option<String>) {
@@ -86,20 +106,14 @@ group_attr!{
                         let frame = prof!("readFrame", self.depth.read_frame().unwrap());
                         let data: &[u8] = prof!(frame.data());
 
-                        let fname = format!("data/structure{}.dat", self.i);
-                        let mut f = File::create(&fname).unwrap();
-                        let mut encoded = Vec::with_capacity(data.len());
-                        prof!("PNGEncoder", PNGEncoder::new(&mut encoded).encode(data, frame.width as u32, frame.height as u32, ColorType::Gray(16)).unwrap());
-                        /*let wide_data : &[u16] = unsafe { mem::transmute(data) };
-                        for w in 0..frame.width {
-                            for h in 0..frame.height {
-                                f.write(format!("{}, ", wide_data[(h*frame.width + w) as usize]).as_bytes()).unwrap();
-                            }
-                            f.write("\n".as_bytes()).unwrap();
-                        }*/
-                        f.write_all(data).unwrap();
-
-                        prof!("tx.send", self.tx.send(CmdFrom::Data(format!("send kick structure {} data:image/png;base64,{}", self.i, encoded.to_base64(base64::STANDARD)))).unwrap());
+                        let mut f = File::create(format!("data/structure{}.dat", self.i)).unwrap();
+                        prof!("write", f.write_all(data).unwrap());
+                        match data.as_ref().map(|s| s as &str) {
+                            Some("kick") => {
+                                prof!("send to thread", self.png.send((i, data.into(), false, (frame.height, frame.width), ColorType::Gray(16))).unwrap());
+                            },
+                            Some(_) | None => ()
+                        }
                     });
                 }
 
@@ -108,20 +122,14 @@ group_attr!{
                         let frame = prof!("readFrame", self.ir.read_frame().unwrap());
                         let data: &[u8] = prof!(frame.data());
 
-                        let mut encoded = Vec::with_capacity(data.len());
-                        let to_resize = prof!("imagebuffer", ImageBuffer::<image::Rgb<u8>, Vec<u8>>::from_raw(frame.width as u32, frame.height as u32, data.into()).unwrap());
-                        let (ww, hh) = ((frame.width as u32)/4, (frame.height as u32)/4);
-                        let resized = prof!("resize", imageops::resize(&to_resize, ww, hh, FilterType::Nearest));
-                        prof!("encode", PNGEncoder::new(&mut encoded).encode(&resized, ww as u32, hh as u32, ColorType::RGB(8)).unwrap());
-
-                        if cmd == Some("kick".to_string()) {
-                            let fname = format!("data/structure_ir{}.png", self.i);
-                            let mut f = File::create(&fname).unwrap();
-                            prof!("write", PNGEncoder::new(&mut f).encode(data, frame.width as u32, frame.height as u32, ColorType::RGB(8)).unwrap());
-                            println!("wrote IR frame {}", self.i);
+                        let mut f = File::create(format!("data/structure_ir{}.png", self.i)).unwrap();
+                        prof!("write", f.write_all(data).unwrap());
+                        match data.as_ref().map(|s| s as &str) {
+                            Some("kick") => {
+                                prof!("send to thread", self.png.send((i, data.into(), true, (frame.height, frame.width), ColorType::RGB(8))).unwrap());
+                            },
+                            Some(_) | None => ()
                         }
-
-                        prof!("send", self.tx.send(CmdFrom::Data(format!("send kick structure {} data:image/png;base64,{}", self.i, encoded.to_base64(base64::STANDARD)))).unwrap());
                     });
                 }
             }

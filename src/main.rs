@@ -127,10 +127,10 @@ macro_rules! prof {
 #[macro_use] mod comms;
 mod cli;
 mod web;
+mod stb;
+mod optoforce;
 mod structure;
 mod bluefox;
-mod optoforce;
-mod stb;
 
 use std::io::{Write, BufRead};
 use std::ascii::AsciiExt;
