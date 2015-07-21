@@ -1,0 +1,5 @@
+cargo doc
+touch src/main.rs
+cargo doc -v | grep rustdoc | awk "-FRunning " '{print substr($NF, 2, length($NF)-2)}' | sed 's/main.rs/main.rs --no-defaults --passes "collapse-docs" --passes "unindent-comments"/' > cargo-doc-command
+cargo doc --open
+
