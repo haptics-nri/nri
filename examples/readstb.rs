@@ -24,15 +24,6 @@ struct Packet {
 
 impl fmt::Debug for Packet {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        fn fix(v: i16) -> i16 {
-            unsafe {
-                use std::mem;
-                let bytes: [u8; 2] = mem::transmute(v);
-                let swapped_bytes = [bytes[1], bytes[0]];
-                mem::transmute(swapped_bytes)
-            }
-        }
-
         try!(write!(f, "{:.9}, {}, {}, {}, {}, {}, {}, {}, {}, {}",
                     self.stamp.sec as f64 + self.stamp.nsec as f64 / 1_000_000_000f64,
                     self.accel.x, self.accel.y, self.accel.z,

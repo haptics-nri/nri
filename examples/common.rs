@@ -20,6 +20,7 @@ use std::fmt::Debug;
 #[macro_use] pub mod indent {
     use std::sync::Mutex;
     lazy_static! {
+        /// Tracks the current indent level
         pub static ref _INDENT: Mutex<usize> = Mutex::new(0);
     }
 
