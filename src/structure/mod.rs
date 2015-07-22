@@ -9,6 +9,7 @@ group_attr!{
     use std::mem;
     use std::fs::File;
     use std::io::Write;
+    use std::sync::Mutex;
     use self::image::{imageops, ImageBuffer, ColorType, FilterType};
     use self::image::png::PNGEncoder;
     use self::serialize::base64;
@@ -16,7 +17,7 @@ group_attr!{
     use std::sync::mpsc::Sender;
     use ::comms::{Controllable, CmdFrom, Block, RestartableThread};
 
-    type PngStuff = (usize, Vec<u8>, bool, (usize, usize), ColorType);
+    type PngStuff = (usize, Vec<u8>, bool, (i32, i32), ColorType);
 
     mod wrapper;
 
@@ -38,7 +39,7 @@ group_attr!{
         i: usize,
 
         /// PNG writer/sender
-        png: RestartableThread,
+        png: RestartableThread<PngStuff>,
     }
 
     guilty!{
@@ -84,7 +85,7 @@ group_attr!{
                     i: 0,
 
                     png: RestartableThread::new("Structure PNG thread", move |(i, unencoded, do_resize, (h, w), bd)| {
-                        let mut encoded = Vec::with_capacity(w*h);
+                        let mut encoded = Vec::with_capacity((w*h) as usize);
                         let to_resize = prof!("imagebuffer", ImageBuffer::<image::Rgb<u8>, _>::from_raw(w as u32, h as u32, unencoded).unwrap());
                         let (resized, ww, hh) = if do_resize {
                             let (ww, hh) = ((w as u32)/4, (h as u32)/4);
@@ -93,7 +94,7 @@ group_attr!{
                             (to_resize, w as u32, h as u32)
                         };
                         prof!("encode", PNGEncoder::new(&mut encoded).encode(&resized, ww, hh, bd).unwrap());
-                        prof!("send", mtx.send(CmdFrom::Data(format!("send kick structure {} data:image/png;base64,{}", self.i, encoded.to_base64(base64::STANDARD)))).unwrap());
+                        prof!("send", mtx.lock().unwrap().send(CmdFrom::Data(format!("send kick structure {} data:image/png;base64,{}", i, encoded.to_base64(base64::STANDARD)))).unwrap());
                     }),
                 }
             }
@@ -108,9 +109,9 @@ group_attr!{
 
                         let mut f = File::create(format!("data/structure{}.dat", self.i)).unwrap();
                         prof!("write", f.write_all(data).unwrap());
-                        match data.as_ref().map(|s| s as &str) {
+                        match cmd.as_ref().map(|s| s as &str) {
                             Some("kick") => {
-                                prof!("send to thread", self.png.send((i, data.into(), false, (frame.height, frame.width), ColorType::Gray(16))).unwrap());
+                                prof!("send to thread", self.png.send((self.i, data.into(), false, (frame.height, frame.width), ColorType::Gray(16))).unwrap());
                             },
                             Some(_) | None => ()
                         }
@@ -124,9 +125,9 @@ group_attr!{
 
                         let mut f = File::create(format!("data/structure_ir{}.png", self.i)).unwrap();
                         prof!("write", f.write_all(data).unwrap());
-                        match data.as_ref().map(|s| s as &str) {
+                        match cmd.as_ref().map(|s| s as &str) {
                             Some("kick") => {
-                                prof!("send to thread", self.png.send((i, data.into(), true, (frame.height, frame.width), ColorType::RGB(8))).unwrap());
+                                prof!("send to thread", self.png.send((self.i, data.into(), true, (frame.height, frame.width), ColorType::RGB(8))).unwrap());
                             },
                             Some(_) | None => ()
                         }
