@@ -184,6 +184,7 @@ group_attr!{
 
             fn teardown(&mut self) {
                 self.port.write(&['2' as u8]);
+                println!("Collected {} STB packets!", self.i);
             }
         }
     }
