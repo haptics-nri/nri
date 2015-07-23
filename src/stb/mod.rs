@@ -31,7 +31,8 @@ group_attr!{
 
     pub struct STB {
         port: Box<serial::SerialPort>,
-        file: File
+        file: File,
+        i: usize,
     }
 
     #[repr(packed)]
@@ -141,10 +142,12 @@ group_attr!{
                 }).unwrap();
                 port.write(&['1' as u8]);
 
-                STB { port: Box::new(port), file: File::create("data/stb.dat").unwrap() }
+                STB { port: Box::new(port), file: File::create("data/stb.dat").unwrap(), i: 0 }
             }
 
             fn step(&mut self, _: Option<String>) {
+                self.i += 1;
+
                 let mut size_buf = [0u8; 4];
                 let packet_size = match self.port.read(&mut size_buf) {
                     Ok(l) if l == size_buf.len() => {
