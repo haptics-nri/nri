@@ -48,7 +48,7 @@ group_attr!{
         count  : u8,
         n_acc  : u8,
         n_gyro : u8,
-        imu    : [XYZ<i16>; 37] // pad out struct to 255 bytes
+        imu    : [XYZ<i16>]
     }
 
     impl Packet {
@@ -64,12 +64,12 @@ group_attr!{
             unsafe fn only_stb(buf: &[u8]) -> Packet {
                 let mut p: Packet = Packet {
                     ft     : mem::zeroed(),
-                    count  : buf[30],
+                    count  : buf[0],
                     n_acc  : 0,
                     n_gyro : 0,
-                    imu    : mem::zeroed()
+                    imu    : []
                 };
-                ptr::copy::<u8>(buf[1..30].as_ptr(), p.ft.as_mut_ptr(), 30);
+                for i in 0..30 { p.ft[i] = buf[1 + i]; }
                 p
             }
 
@@ -77,13 +77,13 @@ group_attr!{
                 let s = 2 + 6*(a + g + 1);
                 let mut p: Packet = Packet {
                     ft     : mem::zeroed(),
-                    count  : buf[s+29],
+                    count  : buf[s],
                     n_acc  : a as u8,
                     n_gyro : g as u8,
-                    imu    : mem::zeroed()
+                    imu    : mem::zeroed::<[XYZ<i16>; a+g+1]>()
                 };
-                ptr::copy::<u8>(buf[s..s+29].as_ptr(), p.ft.as_mut_ptr(), 30);
-                ptr::copy::<XYZ<i16>>(buf[..s].as_ptr() as *const XYZ<i16>, p.imu.as_mut_ptr(), (a+g+1) as usize);
+                for i in 0..30 { p.ft[i] = buf[s+1 + i]; }
+                ptr::copy::<XYZ<i16>>(buf[2..s].as_ptr() as *const XYZ<i16>, p.imu.as_mut_ptr(), (a+g+1) as usize);
                 p
             }
 
