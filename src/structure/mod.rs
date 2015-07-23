@@ -6,7 +6,7 @@ group_attr!{
     extern crate time;
     extern crate image;
     extern crate rustc_serialize as serialize;
-    use std::mem;
+    use std::{mem, slice};
     use std::fs::File;
     use std::io::Write;
     use std::sync::Mutex;
@@ -113,16 +113,27 @@ group_attr!{
                 if self.depth.is_running() {
                     prof!("depth", {
                         let frame = prof!("readFrame", self.depth.read_frame().unwrap());
-                        let data: &[u8] = prof!(frame.data());
+                        let narrow_data: &[u8] = prof!(frame.data());
+                        let data: Vec<u8> = prof!("endianness", {
+                            unsafe { // flip bytes
+                                let wide_data: &[u16] = slice::from_raw_parts(narrow_data as *const _ as *const u16, narrow_data.len()/2);
+                                let mut wide_data_flipped: Vec<u16> = wide_data.into_iter().map(|&word| u16::from_be(word)).collect();
+                                let (ptr, len, cap): (*mut u16, usize, usize) = (wide_data_flipped.as_mut_ptr(),
+                                                                                 wide_data_flipped.len()       ,
+                                                                                 wide_data_flipped.capacity()  );
+                                mem::forget(wide_data_flipped);
+                                Vec::<u8>::from_raw_parts(ptr as *mut u8, len*2, cap*2)
+                            }
+                        });
 
                         let fname = format!("structure{}.dat", self.i);
                         let mut f = File::create(format!("data/{}", fname)).unwrap();
-                        prof!("write", f.write_all(data).unwrap());
+                        prof!("write", f.write_all(&data).unwrap());
                         let stamp = time::get_time();
                         writeln!(self.stampfile, "{},{},{:.9}", self.i, fname, stamp.sec as f64 + stamp.nsec as f64 / 1_000_000_000f64);
                         match cmd.as_ref().map(|s| s as &str) {
                             Some("kick") => {
-                                prof!("send to thread", self.png.send((self.i, data.into(), false, (frame.height, frame.width), ColorType::Gray(16))).unwrap());
+                                prof!("send to thread", self.png.send((self.i, data, false, (frame.height, frame.width), ColorType::Gray(16))).unwrap());
                             },
                             Some(_) | None => ()
                         }
