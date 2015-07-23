@@ -93,8 +93,8 @@ group_attr!{
                     Ok(only_stb(buf))
                 },
                 x => {
-                    let a = buf[1] as usize;
-                    let g = buf[2] as usize;
+                    let a = buf[0] as usize;
+                    let g = buf[1] as usize;
                     match x {
                         t if t == 31 + 2 + 6*(a + g + 1) => Ok(imu_and_stb(buf, a, g)),
                         t if t == 31 + 2 + 6*(a + g + 1) + 1 => {
