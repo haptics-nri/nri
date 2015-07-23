@@ -30,10 +30,11 @@ fn main() {
     let mut i = 0;
     for row in csvrdr.decode() {
         indentln!(> "reading frame {}...", i);
-        let (num, stamp): (usize, f64) = row.ok().expect(&format!("failed to parse row {} of {}", i, inname));
+        let (num, fname, stamp): (usize, String, f64) = row.ok().expect(&format!("failed to parse row {} of {}", i, inname));
         i += 1;
-        let dat = Path::new(&inname).with_file_name(format!("structure{}.dat", i)).to_str().unwrap().to_string();
-        let png = Path::new(&inname).with_file_name(format!("structure{}.png", i)).to_str().unwrap().to_string();
+        let dat_path = Path::new(&inname).with_file_name(fname);
+        let dat = dat_path.to_str().unwrap().to_string();
+        let png = dat_path.with_extension("png").to_str().unwrap().to_string();
         indentln!("parsing {} into {}", dat, png);
         let rows = common::do_binary::<Row>("", (dat, None));
         indentln!("have {} rows", rows.len());
