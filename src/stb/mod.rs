@@ -23,7 +23,8 @@ group_attr!{
     use std::io::{Read, Write};
     use std::fs::File;
     use std::sync::mpsc::Sender;
-    use std::{mem, slice, ops};
+    use std::{u8, ptr, mem, slice, ops};
+    use std::ops::DerefMut;
     use std::fmt::{self, Display, Debug, Formatter};
     use self::serial::prelude::*;
 
@@ -49,55 +50,58 @@ group_attr!{
     }
 
     impl Packet {
-        unsafe fn new(buf: &[u8]) -> Result<Packet, &str> {
-            fn checksum(buf: &[u8]) -> Result<(), &str> {
-                let sum: u8 = buf[..buf.len()-1].into_iter().fold(0, u8::wrapping_add);
-                match sum {
-                    buf[buf.len()-1] => Ok(()),
-                    s => Err(&format!("Received STB packet with wrong checksum (it says {}, I calculate {})!", s, sum)),
+        unsafe fn new(buf: &[u8]) -> Result<Packet, String> {
+            unsafe fn checksum(buf: &[u8]) -> Result<(), String> {
+                let sum: u8 = buf[..buf.len()-1].into_iter().fold(0, |a: u8, b: &u8| -> u8 { u8::wrapping_add(a, *b) });
+                match buf[buf.len()-1] {
+                    s if s == sum => Ok(()),
+                    s => Err(format!("Received STB packet with wrong checksum (it says {}, I calculate {})!", s, sum)),
                 }
             }
 
-            fn only_stb(buf: &[u8]) -> Packet {
-                Packet {
-                    ft     : buf[1..30],
+            unsafe fn only_stb(buf: &[u8]) -> Packet {
+                let mut p: Packet = Packet {
+                    ft     : mem::zeroed(),
                     count  : buf[30],
                     n_acc  : 0,
                     n_gyro : 0,
                     imu    : mem::zeroed()
-                },
+                };
+                ptr::copy::<u8>(buf[1..30].as_ptr(), p.ft.as_mut_ptr(), 30);
+                p
             }
 
-            fn imu_and_stb(buf: &[u8], a: u8, g: u8) -> Packet {
-                let s: usize = 2 + 6*(a + g + 1);
-                let p = Packet {
-                    ft     : buf[s..s+29],
+            unsafe fn imu_and_stb(buf: &[u8], a: usize, g: usize) -> Packet {
+                let s = 2 + 6*(a + g + 1);
+                let mut p: Packet = Packet {
+                    ft     : mem::zeroed(),
                     count  : buf[s+29],
-                    n_acc  : a,
-                    n_gyro : g,
+                    n_acc  : a as u8,
+                    n_gyro : g as u8,
                     imu    : mem::zeroed()
                 };
-                p.imu[..a+g+1] = slice::<XYZ<i16>>::from_raw_parts(&buf[..s], a+g+1);
+                ptr::copy::<u8>(buf[s..s+29].as_ptr(), p.ft.as_mut_ptr(), 30);
+                ptr::copy::<XYZ<i16>>(buf[..s].as_ptr() as *const XYZ<i16>, p.imu.as_mut_ptr(), (a+g+1) as usize);
                 p
             }
 
             match buf.len() {
-                x if x < 31 => Err(&format!("Implausibly small packet ({}) from STB!", x)),
-                31 => Some(only_stb(buf)),
+                x if x < 31 => Err(format!("Implausibly small packet ({}) from STB!", x)),
+                31 => Ok(only_stb(buf)),
                 32 => {
                     try!(checksum(buf));
-                    Some(only_stb(buf))
+                    Ok(only_stb(buf))
                 },
                 x => {
-                    let a = buf[1];
-                    let g = buf[2];
+                    let a = buf[1] as usize;
+                    let g = buf[2] as usize;
                     match x {
-                        31 + 2 + 6*(a + g + 1) => Some(imu_and_stb(buf, a, g)),
-                        31 + 2 + 6*(a + g + 1) + 1 => {
+                        t if t == 31 + 2 + 6*(a + g + 1) => Ok(imu_and_stb(buf, a, g)),
+                        t if t == 31 + 2 + 6*(a + g + 1) + 1 => {
                             try!(checksum(buf));
-                            Some(imu_and_stb(buf, a, g))
+                            Ok(imu_and_stb(buf, a, g))
                         },
-                        _ => Err(&format("Impossible packet size ({}) from STB!", x)),
+                        _ => Err(format!("Impossible packet size ({}) from STB!", x)),
                     }
                 },
             }
@@ -113,11 +117,7 @@ group_attr!{
 
     impl Debug for Packet {
         fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-            try!(write!(f, "accel {:?}", self.accel));
-            try!(write!(f, "\t"));
-            try!(write!(f, "gyro {:?}", self.gyro));
-            try!(write!(f, "\t"));
-            try!(write!(f, "mag {:?}", self.mag));
+            try!(write!(f, "IMU ({} acc, {} gyro, {} mag)", self.n_acc, self.n_gyro, self.n_acc + self.n_gyro > 0));
             try!(write!(f, "\t"));
             try!(write!(f, "ft sum={}", self.ft.iter().fold(0, ops::Add::add)));
             try!(write!(f, "\t"));
@@ -132,7 +132,7 @@ group_attr!{
             const BLOCK: Block = Block::Immediate,
 
             fn setup(_: Sender<CmdFrom>, _: Option<String>) -> STB {
-                assert_eq!(mem::size_of::<Packet>(), LEN);
+                assert_eq!(mem::size_of::<Packet>(), u8::MAX as usize);
 
                 let mut port = serial::open("/dev/ttySTB").unwrap();
                 port.reconfigure(&|settings| {
@@ -145,10 +145,10 @@ group_attr!{
             }
 
             fn step(&mut self, _: Option<String>) {
-                let mut size_buf = [u8; 4];
+                let mut size_buf = [0u8; 4];
                 let packet_size = match self.port.read(&mut size_buf) {
-                    Ok(size_buf.len()) => {
-                        if size_buf[..3] == "aaa" {
+                    Ok(l) if l == size_buf.len() => {
+                        if &size_buf[..3] == b"aaa" {
                             size_buf[3] as usize
                         } else {
                             errorln!("The STB did not sent the expected packet size prefix!");
@@ -163,11 +163,11 @@ group_attr!{
                         errorln!("Error reading packet size from the STB: {:?}", e);
                         return;
                     }
-                }
-                let mut buf = Vec<u8>::with_capacity(packet_size);
-                match self.port.by_ref().take(packet_size).read_to_end(&mut buf) {
-                    Ok(packet_size) => {
-                        let packet = match unsafe { Packet::new(&buf, n_acc, n_gyro) } {
+                };
+                let mut buf = Vec::<u8>::with_capacity(packet_size);
+                match self.port.deref_mut().take(packet_size as u64).read_to_end(&mut buf) {
+                    Ok(n) if n == packet_size => {
+                        let packet = match unsafe { Packet::new(&buf) } {
                             Ok(p) => p,
                             Err(s) => {
                                 errorln!("{}", s);
@@ -175,7 +175,7 @@ group_attr!{
                             },
                         };
                         self.file.write_all(unsafe { slice::from_raw_parts(&time::get_time() as *const _ as *const _, mem::size_of::<time::Timespec>()) });
-                        self.file.write_all(&packet);
+                        self.file.write_all(unsafe { slice::from_raw_parts(&packet as *const _ as *const _, mem::size_of_val(&packet)) });
                     },
                     Ok(_)   => errorln!("Read partial packet from STB?"),
                     Err(e)  => errorln!("Error reading packet from STB: {:?}", e)
