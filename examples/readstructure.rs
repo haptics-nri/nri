@@ -41,7 +41,7 @@ fn main() {
         let mut pixels = Vec::with_capacity(640*rows.len());
         for i in 0..rows.len() {
             for j in 0..640 {
-                pixels.push(((rows[i].pixels[j] & 0xFF00) >> 8) | ((rows[i].pixels[j] & 0x00FF) << 8));
+                pixels.push(rows[i].pixels[j]);
             }
         }
         println!("{} pixels!", pixels.len());
