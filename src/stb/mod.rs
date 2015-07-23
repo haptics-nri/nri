@@ -48,13 +48,13 @@ group_attr!{
         count  : u8,
         n_acc  : u8,
         n_gyro : u8,
-        imu    : [XYZ<i16>]
+        imu    : [XYZ<i16>; 37]
     }
 
     impl Packet {
         unsafe fn new(buf: &[u8]) -> Result<Packet, String> {
-            unsafe fn checksum(buf: &[u8]) -> Result<(), String> {
-                let sum: u8 = buf[..buf.len()-1].into_iter().fold(0, |a: u8, b: &u8| -> u8 { u8::wrapping_add(a, *b) });
+            fn checksum(buf: &[u8]) -> Result<(), String> {
+                let sum = buf[..buf.len()-1].into_iter().fold(0, |a, b| { u8::wrapping_add(a, *b) });
                 match buf[buf.len()-1] {
                     s if s == sum => Ok(()),
                     s => Err(format!("Received STB packet with wrong checksum (it says {}, I calculate {})!", s, sum)),
@@ -63,11 +63,11 @@ group_attr!{
 
             unsafe fn only_stb(buf: &[u8]) -> Packet {
                 let mut p: Packet = Packet {
-                    ft     : mem::zeroed(),
+                    ft     : mem::zeroed::<[u8; 30]>(),
                     count  : buf[0],
                     n_acc  : 0,
                     n_gyro : 0,
-                    imu    : []
+                    imu    : mem::zeroed::<[XYZ<i16>; 37]>(),
                 };
                 for i in 0..30 { p.ft[i] = buf[1 + i]; }
                 p
@@ -76,11 +76,11 @@ group_attr!{
             unsafe fn imu_and_stb(buf: &[u8], a: usize, g: usize) -> Packet {
                 let s = 2 + 6*(a + g + 1);
                 let mut p: Packet = Packet {
-                    ft     : mem::zeroed(),
+                    ft     : mem::zeroed::<[u8; 30]>(),
                     count  : buf[s],
                     n_acc  : a as u8,
                     n_gyro : g as u8,
-                    imu    : mem::zeroed::<[XYZ<i16>; a+g+1]>()
+                    imu    : mem::zeroed::<[XYZ<i16>; 37]>()
                 };
                 for i in 0..30 { p.ft[i] = buf[s+1 + i]; }
                 ptr::copy::<XYZ<i16>>(buf[2..s].as_ptr() as *const XYZ<i16>, p.imu.as_mut_ptr(), (a+g+1) as usize);
