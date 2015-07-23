@@ -86,14 +86,17 @@ group_attr!{
 
                     png: RestartableThread::new("Structure PNG thread", move |(i, unencoded, do_resize, (h, w), bd)| {
                         let mut encoded = Vec::with_capacity((w*h) as usize);
-                        let to_resize = prof!("imagebuffer", ImageBuffer::<image::Rgb<u8>, _>::from_raw(w as u32, h as u32, unencoded).unwrap());
-                        let (resized, ww, hh) = if do_resize {
+
+                        if do_resize {
+                            let to_resize = prof!("imagebuffer", ImageBuffer::<image::Rgb<u8>, _>::from_raw(w as u32, h as u32, unencoded).unwrap());
                             let (ww, hh) = ((w as u32)/4, (h as u32)/4);
-                            (prof!("resize", imageops::resize(&to_resize, ww, hh, FilterType::Nearest)), ww, hh)
+                            let resized = prof!("resize", imageops::resize(&to_resize, ww, hh, FilterType::Nearest));
+                            prof!("encode", PNGEncoder::new(&mut encoded).encode(&resized, ww, hh, bd).unwrap());
                         } else {
-                            (to_resize, w as u32, h as u32)
-                        };
-                        prof!("encode", PNGEncoder::new(&mut encoded).encode(&resized, ww, hh, bd).unwrap());
+                            let (ww, hh) = (w as u32, h as u32);
+                            prof!("encode", PNGEncoder::new(&mut encoded).encode(&unencoded as &[u8], ww, hh, bd).unwrap());
+                        }
+
                         prof!("send", mtx.lock().unwrap().send(CmdFrom::Data(format!("send kick structure {} data:image/png;base64,{}", i, encoded.to_base64(base64::STANDARD)))).unwrap());
                     }),
                 }
