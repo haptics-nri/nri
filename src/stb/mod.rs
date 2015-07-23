@@ -41,18 +41,66 @@ group_attr!{
     }
     #[repr(packed)]
     struct Packet {
-        accel: XYZ<i16>,
-        gyro:  XYZ<i16>,
-        mag:   XYZ<i16>,
-        ft:    [u8; 30],
-        count: u8,
-        zero:  u8,
+        ft     : [u8; 30],
+        count  : u8,
+        n_acc  : u8,
+        n_gyro : u8,
+        imu    : [XYZ<i16>; 37] // pad out struct to 255 bytes
     }
-    const LEN: usize = 50;
 
     impl Packet {
-        unsafe fn new(mut buf: [u8; LEN]) -> Packet {
-            mem::transmute(buf)
+        unsafe fn new(buf: &[u8]) -> Result<Packet, &str> {
+            fn checksum(buf: &[u8]) -> Result<(), &str> {
+                let sum: u8 = buf[..buf.len()-1].into_iter().fold(0, u8::wrapping_add);
+                match sum {
+                    buf[buf.len()-1] => Ok(()),
+                    s => Err(&format!("Received STB packet with wrong checksum (it says {}, I calculate {})!", s, sum)),
+                }
+            }
+
+            fn only_stb(buf: &[u8]) -> Packet {
+                Packet {
+                    ft     : buf[1..30],
+                    count  : buf[30],
+                    n_acc  : 0,
+                    n_gyro : 0,
+                    imu    : mem::zeroed()
+                },
+            }
+
+            fn imu_and_stb(buf: &[u8], a: u8, g: u8) -> Packet {
+                let s: usize = 2 + 6*(a + g + 1);
+                let p = Packet {
+                    ft     : buf[s..s+29],
+                    count  : buf[s+29],
+                    n_acc  : a,
+                    n_gyro : g,
+                    imu    : mem::zeroed()
+                };
+                p.imu[..a+g+1] = slice::<XYZ<i16>>::from_raw_parts(&buf[..s], a+g+1);
+                p
+            }
+
+            match buf.len() {
+                x if x < 31 => Err(&format!("Implausibly small packet ({}) from STB!", x)),
+                31 => Some(only_stb(buf)),
+                32 => {
+                    try!(checksum(buf));
+                    Some(only_stb(buf))
+                },
+                x => {
+                    let a = buf[1];
+                    let g = buf[2];
+                    match x {
+                        31 + 2 + 6*(a + g + 1) => Some(imu_and_stb(buf, a, g)),
+                        31 + 2 + 6*(a + g + 1) + 1 => {
+                            try!(checksum(buf));
+                            Some(imu_and_stb(buf, a, g))
+                        },
+                        _ => Err(&format("Impossible packet size ({}) from STB!", x)),
+                    }
+                },
+            }
         }
     }
 
@@ -97,18 +145,40 @@ group_attr!{
             }
 
             fn step(&mut self, _: Option<String>) {
-                let mut buf = [0; LEN];
-                match self.port.read(&mut buf) {
-                    Ok(LEN) => {
-                        let packet = unsafe { Packet::new(buf) };
-                        self.file.write_all(unsafe { slice::from_raw_parts(&time::get_time() as *const _ as *const _, mem::size_of::<time::Timespec>()) });
-                        self.file.write_all(&buf);
-                        /*if packet.count == 0 {
-                            println!("Read full packet from STB: {:?}", packet);
-                        }*/
+                let mut size_buf = [u8; 4];
+                let packet_size = match self.port.read(&mut size_buf) {
+                    Ok(size_buf.len()) => {
+                        if size_buf[..3] == "aaa" {
+                            size_buf[3] as usize
+                        } else {
+                            errorln!("The STB did not sent the expected packet size prefix!");
+                            return;
+                        }
                     },
-                    Ok(_)   => println!("Read partial packet from STB?"),
-                    Err(e)  => errorln!("Error reading from STB: {:?}", e)
+                    Ok(_) => {
+                        errorln!("Something went wrong reading the packet size from the STB!");
+                        return;
+                    },
+                    Err(e) => {
+                        errorln!("Error reading packet size from the STB: {:?}", e);
+                        return;
+                    }
+                }
+                let mut buf = Vec<u8>::with_capacity(packet_size);
+                match self.port.by_ref().take(packet_size).read_to_end(&mut buf) {
+                    Ok(packet_size) => {
+                        let packet = match unsafe { Packet::new(&buf, n_acc, n_gyro) } {
+                            Ok(p) => p,
+                            Err(s) => {
+                                errorln!("{}", s);
+                                return;
+                            },
+                        };
+                        self.file.write_all(unsafe { slice::from_raw_parts(&time::get_time() as *const _ as *const _, mem::size_of::<time::Timespec>()) });
+                        self.file.write_all(&packet);
+                    },
+                    Ok(_)   => errorln!("Read partial packet from STB?"),
+                    Err(e)  => errorln!("Error reading packet from STB: {:?}", e)
                 }
             }
 
