@@ -33,6 +33,7 @@ group_attr!{
         port: Box<serial::SerialPort>,
         file: File,
         i: usize,
+        start: time::Tm,
     }
 
     #[repr(packed)]
@@ -142,7 +143,7 @@ group_attr!{
                 }).unwrap();
                 port.write(&['1' as u8]);
 
-                STB { port: Box::new(port), file: File::create("data/stb.dat").unwrap(), i: 0 }
+                STB { port: Box::new(port), file: File::create("data/stb.dat").unwrap(), i: 0, start: time::now() }
             }
 
             fn step(&mut self, _: Option<String>) {
@@ -187,7 +188,9 @@ group_attr!{
 
             fn teardown(&mut self) {
                 self.port.write(&['2' as u8]);
-                println!("Collected {} STB packets!", self.i);
+                let end = time::now();
+                let millis = (end - self.start).num_milliseconds() as f64;
+                println!("{} STB packets grabbed in {} s ({} FPS)!", self.i, millis/1000.0, 1000.0*(self.i as f64)/millis);
             }
         }
     }
