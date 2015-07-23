@@ -40,6 +40,9 @@ group_attr!{
 
         /// PNG writer/sender
         png: RestartableThread<PngStuff>,
+
+        /// Timestamp file handle
+        stampfile: File,
     }
 
     guilty!{
@@ -99,6 +102,8 @@ group_attr!{
 
                         prof!("send", mtx.lock().unwrap().send(CmdFrom::Data(format!("send kick structure {} data:image/png;base64,{}", i, encoded.to_base64(base64::STANDARD)))).unwrap());
                     }),
+
+                    stampfile: File::create("data/structure_times.csv").unwrap(),
                 }
             }
 
@@ -110,8 +115,11 @@ group_attr!{
                         let frame = prof!("readFrame", self.depth.read_frame().unwrap());
                         let data: &[u8] = prof!(frame.data());
 
-                        let mut f = File::create(format!("data/structure{}.dat", self.i)).unwrap();
+                        let fname = format!("structure{}.dat", self.i);
+                        let mut f = File::create(format!("data/{}", fname)).unwrap();
                         prof!("write", f.write_all(data).unwrap());
+                        let stamp = time::get_time();
+                        writeln!(self.stampfile, "{},{},{:.9}", self.i, fname, stamp.sec as f64 + stamp.nsec as f64 / 1_000_000_000f64);
                         match cmd.as_ref().map(|s| s as &str) {
                             Some("kick") => {
                                 prof!("send to thread", self.png.send((self.i, data.into(), false, (frame.height, frame.width), ColorType::Gray(16))).unwrap());
@@ -126,8 +134,11 @@ group_attr!{
                         let frame = prof!("readFrame", self.ir.read_frame().unwrap());
                         let data: &[u8] = prof!(frame.data());
 
-                        let mut f = File::create(format!("data/structure_ir{}.png", self.i)).unwrap();
+                        let fname = format!("structure_ir{}.png", self.i);
+                        let mut f = File::create(format!("data/{}", fname)).unwrap();
                         prof!("write", f.write_all(data).unwrap());
+                        let stamp = time::get_time();
+                        writeln!(self.stampfile, "{},{},{:.9}", self.i, fname, stamp.sec as f64 + stamp.nsec as f64 / 1_000_000_000f64);
                         match cmd.as_ref().map(|s| s as &str) {
                             Some("kick") => {
                                 prof!("send to thread", self.png.send((self.i, data.into(), true, (frame.height, frame.width), ColorType::RGB(8))).unwrap());
