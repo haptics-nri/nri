@@ -10,6 +10,8 @@ extern crate router;
 extern crate hyper;
 extern crate rustc_serialize as serialize;
 extern crate websocket as ws;
+extern crate uuid;
+extern crate time;
 
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -31,6 +33,7 @@ use self::router::Router;
 use self::hyper::server::Listening;
 use self::ws::Sender as WebsocketSender;
 use self::ws::Receiver as WebsocketReceiver;
+use self::uuid::Uuid;
 
 static HTTP_PORT: u16 = 3000;
 static WS_PORT: u16   = 3001;
@@ -62,6 +65,9 @@ struct Flow {
     states: Vec<FlowState>,
     /// Is this the active flow?
     active: bool,
+
+    stamp: Option<time::Timespec>,
+    id: Option<uuid::Uuid>,
 }
 
 /// One state in a data collection flow
@@ -93,7 +99,28 @@ impl Flow {
             name: name,
             states: states,
             active: false,
+
+            stamp: None,
+            id: None,
         }
+    }
+
+    fn run(&mut self, park: ParkState, tx: &mpsc::Sender<CmdFrom>, wstx: &mpsc::Sender<String>, wsrx: &mpsc::Receiver<String>) {
+        // are we just starting the flow now?
+        if !self.active {
+            println!("Beginning flow {}!", self.name);
+
+            // need a timestamp and ID
+            self.stamp = Some(time::get_time());
+            self.id = Some(uuid::Uuid::new_v4());
+            self.active = true;
+        }
+
+        // find the next eligible state
+        let state = self.states.iter_mut().find(|s| !s.done && s.park.as_ref().map_or(true, |p| *p == park)).unwrap();
+        println!("Executing state {}", state.name);
+        state.run(tx, wstx, wsrx);
+        println!("Finished executing state {}", state.name);
     }
 }
 
@@ -106,6 +133,12 @@ impl FlowState {
             done: false,
         }
     }
+    
+    fn run(&mut self, tx: &mpsc::Sender<CmdFrom>, wstx: &mpsc::Sender<String>, wsrx: &mpsc::Receiver<String>) {
+        assert!(!self.done);
+        self.script.iter_mut().map(|c| c.run(tx, wstx, wsrx)).count();
+        self.done = true;
+    }
 }
 
 impl FlowCmd {
@@ -115,6 +148,57 @@ impl FlowCmd {
 
     fn int(prompt: &'static str, limits: (i32, i32)) -> FlowCmd {
         FlowCmd::Int { prompt: prompt, limits: limits, data: None}
+    }
+
+    fn run(&mut self, tx: &mpsc::Sender<CmdFrom>, wstx: &mpsc::Sender<String>, wsrx: &mpsc::Receiver<String>) {
+        match *self {
+            FlowCmd::Message(msg) => wstx.send(format!("{}", msg)).unwrap(),
+            FlowCmd::Str { prompt, ref mut data } => {
+                assert!(data.is_none());
+                wstx.send(format!("Please enter {}: <form><input type=\"text\" name=\"{}\"/></form>", prompt, prompt)).unwrap();
+                let mut answer = wsrx.recv().unwrap();
+                while answer.is_empty() {
+                    wstx.send(format!("That's an empty string! Please enter {}: <form><input type=\"text\" name=\"{}\"/></form>", prompt, prompt)).unwrap();
+                    answer = wsrx.recv().unwrap();
+                }
+                *data = Some(answer);
+            },
+            FlowCmd::Int { prompt, limits: (low, high), ref mut data } => {
+                assert!(data.is_none());
+                wstx.send(format!("Please select {} ({}-{} scale): <form><input type=\"text\" name=\"{}\"/></form>", prompt, low, high, prompt)).unwrap();
+                let mut answer = wsrx.recv().unwrap();
+                loop {
+                    match answer.parse() {
+                        Ok(i) if i >= low && i <= high => {
+                            *data = Some(i);
+                            break;
+                        },
+                        Ok(_) => {
+                            wstx.send(format!("Out of range! Please select {} ({}-{} scale): <form><input type=\"text\" name=\"{}\"/></form>", prompt, low, high, prompt)).unwrap();
+                            answer = wsrx.recv().unwrap();
+                        },
+                        Err(_) => {
+                            wstx.send(format!("Not an integer! Please select {} ({}-{} scale): <form><input type=\"text\" name=\"{}\"/></form>", prompt, low, high, prompt)).unwrap();
+                            answer = wsrx.recv().unwrap();
+                        },
+                    }
+                }
+            },
+            FlowCmd::Start(service) => {
+                assert!(rpc!(tx, CmdFrom::Start, service.to_string()).unwrap());
+            },
+            FlowCmd::Stop(service) => {
+                assert!(rpc!(tx, CmdFrom::Stop, service.to_string()).unwrap());
+            },
+            FlowCmd::Send(string) => {
+                tx.send(CmdFrom::Data(string.to_string())).unwrap();
+            },
+            FlowCmd::StopSensors => {
+                for svc in ["bluefox", "structure", "biotac", "optoforce", "stb"].into_iter() {
+                    assert!(rpc!(tx, CmdFrom::Start, svc.to_string()).unwrap());
+                }
+            }
+        }
     }
 }
 
@@ -166,12 +250,20 @@ fn index(req: &mut Request) -> IronResult<Response> {
                                               Service::new("STB"             , "stb"       , ""),
                                             ].to_json());
     data.insert("flows".to_string(), vec! {
+        Flow::new("Test flow",
+                  vec! {
+                      FlowState::new("One", None, vec! {
+                          FlowCmd::Message("Please insert Tab A into Slot B"),
+                      }),
+                  }),
         Flow::new("Episode",
                   vec! {
+                      // TODO shutdown button
                       FlowState::new("Begin", None, vec! {
                           FlowCmd::StopSensors,
                           FlowCmd::Message("Starting new episode!"),
                       }),
+                      // TODO generate unique ID and overall timestamp (+ timestamp for each step)
 
                       FlowState::new("Camera aiming", Some(ParkState::None), vec! {
                           FlowCmd::StopSensors,
@@ -223,11 +315,11 @@ fn index(req: &mut Request) -> IronResult<Response> {
 
                       FlowState::new("Wrap up", Some(ParkState::None), vec! {
                           FlowCmd::str("episode name"),
+                          // TODO more questions here?
                           FlowCmd::int("hardness",     (1, 5)),
                           FlowCmd::int("roughness",    (1, 5)),
                           FlowCmd::int("slipperiness", (1, 5)),
                           FlowCmd::int("warmness",     (1, 5)),
-                          FlowCmd::int("moldability",  (1, 5)),
                           FlowCmd::Message("Done!"),
                       }),
                   }),
