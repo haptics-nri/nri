@@ -135,9 +135,10 @@ mod bluefox;
 use std::io::{Write, BufRead};
 use std::ascii::AsciiExt;
 use std::thread;
+use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{channel, Sender};
 use std::collections::HashMap;
-use comms::{CmdTo, CmdFrom};
+use comms::{Controllable, CmdTo, CmdFrom};
 use cli::CLI;
 use web::Web;
 use structure::Structure;
@@ -154,41 +155,90 @@ extern crate chrono;
 
 use chrono::UTC;
 
+fn rxspawn<T: Controllable>(reply: &Sender<CmdFrom>) -> Service {
+    let (thread_tx, thread_rx) = channel::<CmdTo>();
+    let master_tx = reply.clone();
+    let cloned_master_tx = master_tx.clone();
+    let name = <T as Controllable>::NAME(); // FIXME can't use macro here because of UFCS
+    Service {
+        name: name,
+        thread: None,
+        tx: Arc::new(Mutex::new(None))
+    }.start::<T>(reply)
+}
+
 #[macro_export]
 macro_rules! rxspawn {
     ($reply:expr; $($s:ty),*) => {
-        vec![
-            $(
-                {
-                    let (thread_tx, thread_rx) = channel();
-                    let master_tx = $reply.clone();
-                    Service {
-                        name: <$s as comms::Controllable>::NAME().to_ascii_lowercase().to_string(), // FIXME can't use macro here because of UFCS
-                        thread: Some(thread::spawn(move || comms::go::<$s>(thread_rx, master_tx))),
-                        tx: thread_tx
-                    }
-                }
-            ),*
-        ]
+        vec![ $( rxspawn::<$s>(&$reply)),* ]
     };
+}
+
+#[macro_export]
+macro_rules! downcast {
+    ($any:ident { _ => $code:expr, $($($ts:ty),+ => $codes:expr),* }) => {
+        $(
+            $(
+                if let Some($any) = $any.downcast_ref::<$ts>() {
+                    $codes
+                }
+            )else+
+        )else*
+        else { $code }
+    }
 }
 
 /// Service descriptor
 struct Service {
-    name: String,
+    name: &'static str,
     thread: Option<thread::JoinHandle<()>>,
-    tx: Sender<CmdTo>,
+    tx: Arc<Mutex<Option<Sender<CmdTo>>>>,
+}
+
+impl Service {
+    fn start<T: Controllable>(mut self, reply: &Sender<CmdFrom>) -> Service {
+        let master_tx = reply.clone();
+
+        let name = self.name; // screw you, borrowck
+        let rx_ref = self.tx.clone();
+        self.thread = Some(thread::Builder::new()
+                           .name(format!("{} middle-manager", name))
+                           .spawn(move || {
+                               let mut i = 0;
+                               loop {
+                                   i += 1;
+                                   let (thread_tx, thread_rx) = channel::<CmdTo>();
+                                   let cloned_master_tx = master_tx.clone();
+                                   *rx_ref.lock().unwrap() = Some(thread_tx);
+                                   match thread::Builder::new()
+                                       .name(format!("{} service (incarnation #{})", name, i))
+                                       .spawn(move || {
+                                           comms::go::<T>(thread_rx, cloned_master_tx)
+                                       }).unwrap().join() {
+                                           Ok(_) => return,
+                                           Err(y) => master_tx.send(CmdFrom::Panicked {
+                                               thread: name,
+                                               panic_reason: downcast!(y {
+                                                                            _ => format!("{:?}", y),
+                                                                            String, &str => format!("{}", y)
+                                                                      })
+                                           }).unwrap()
+                                       };
+                               }
+                           }).unwrap());
+        self
+    }
 }
 
 fn find(services: &[Service], s: String) -> Option<&Service> {
-    let s = s.chars().flat_map(char::to_lowercase).collect::<String>();
-    services.iter().position(|x| x.name == s).map(|i| &services[i])
+    let s = s.to_lowercase();
+    services.iter().position(|x| x.name.to_lowercase() == s).map(|i| &services[i])
 }
 
 fn send_to(services: &[Service], s: String, cmd: CmdTo) -> bool {
     match find(services, s) {
         Some(srv) => {
-            srv.tx.send(cmd).unwrap();
+            srv.tx.lock().unwrap().as_ref().map(|s| s.send(cmd).unwrap());
             true
         },
         None => false 
@@ -205,7 +255,7 @@ fn stop(services: &[Service], s: String) -> bool {
 
 fn stop_all(services: &mut [Service]) {
     for s in services {
-        s.tx.send(CmdTo::Quit).unwrap();
+        s.tx.lock().unwrap().as_ref().map(|s| s.send(CmdTo::Quit).unwrap());
         s.thread.take().map(|t| t.join().unwrap_or_else(|e| errorln!("Failed to join {} thread: {:?}", s.name, e)));
     }
 }
@@ -249,18 +299,18 @@ fn main() {
                         println!("KABOOM");
                         panic!("Child thread initiated panic");
                     },
-                    CmdFrom::Timeout(n, ms)  => {
+                    CmdFrom::Timeout { thread: who, ms }  => {
                         // TODO actually time the service and do something if it times out
-                        if find(&services, n.to_string()).is_some() {
-                            timers.insert(n, UTC::now());
+                        if find(&services, who.to_string()).is_some() {
+                            timers.insert(who, UTC::now());
                         } else {
                             panic!("Nonexistent service asked for timeout");
                         }
                     },
-                    CmdFrom::Timein(n)    => {
-                        if timers.contains_key(n) {
-                            println!("Service {} took {} ms", n, UTC::now() - *timers.get(n).unwrap());
-                            timers.remove(n);
+                    CmdFrom::Timein { thread: who }    => {
+                        if timers.contains_key(who) {
+                            println!("Service {} took {} ms", who, UTC::now() - *timers.get(who).unwrap());
+                            timers.remove(who);
                         } else {
                             panic!("Timein with no matching timeout");
                         }
@@ -272,7 +322,11 @@ fn main() {
                             "kick" => { send_to(&services, words.next().unwrap().to_string(), CmdTo::Data("kick".to_string())); },
                             _      => { errorln!("Strange message {} received from a service", d); }
                         }
-                    }
+                    },
+                    CmdFrom::Panicked { thread: who, panic_reason: why } => {
+                        errorln!("Service {} panicked! (reason: {})", who, why);
+                        send_to(&services, "web".to_string(), CmdTo::Data(format!("panic {} {}", who, why)));
+                    },
                 },
                 Err(_) => { stop_all(&mut services[1..]); break; }
             }
