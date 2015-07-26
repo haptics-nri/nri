@@ -1,6 +1,7 @@
 //! Service to read data from the STB and attached sensors
 
 /// Which end effector is in use (i.e. not parked)
+#[derive(Eq, PartialEq)]
 pub enum ParkState {
     /// All end effectors parked
     None = 0,
