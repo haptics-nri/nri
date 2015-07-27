@@ -44,8 +44,7 @@ group_attr!{
     }
     #[repr(packed)]
     struct Packet {
-        ft     : [u8; 30],
-        count  : u8,
+        ft     : [u8; 31],
         n_acc  : u8,
         n_gyro : u8,
         imu    : [XYZ<i16>; 37]
@@ -63,26 +62,24 @@ group_attr!{
 
             unsafe fn only_stb(buf: &[u8]) -> Packet {
                 let mut p: Packet = Packet {
-                    ft     : mem::zeroed::<[u8; 30]>(),
-                    count  : buf[0],
+                    ft     : mem::zeroed::<[u8; 31]>(),
                     n_acc  : 0,
                     n_gyro : 0,
                     imu    : mem::zeroed::<[XYZ<i16>; 37]>(),
                 };
-                for i in 0..30 { p.ft[i] = buf[1 + i]; }
+                for i in 0..31 { p.ft[i] = buf[i]; }
                 p
             }
 
             unsafe fn imu_and_stb(buf: &[u8], a: usize, g: usize) -> Packet {
                 let s = 2 + 6*(a + g + 1);
                 let mut p: Packet = Packet {
-                    ft     : mem::zeroed::<[u8; 30]>(),
-                    count  : buf[s],
+                    ft     : mem::zeroed::<[u8; 31]>(),
                     n_acc  : a as u8,
                     n_gyro : g as u8,
                     imu    : mem::zeroed::<[XYZ<i16>; 37]>()
                 };
-                for i in 0..30 { p.ft[i] = buf[s+1 + i]; }
+                for i in 0..31 { p.ft[i] = buf[s + i]; }
                 ptr::copy::<XYZ<i16>>(buf[2..s].as_ptr() as *const XYZ<i16>, p.imu.as_mut_ptr(), (a+g+1) as usize);
                 p
             }
@@ -122,8 +119,6 @@ group_attr!{
             try!(write!(f, "IMU ({} acc, {} gyro, {} mag)", self.n_acc, self.n_gyro, self.n_acc + self.n_gyro > 0));
             try!(write!(f, "\t"));
             try!(write!(f, "ft sum={}", self.ft.iter().fold(0, ops::Add::add)));
-            try!(write!(f, "\t"));
-            try!(write!(f, "count={}", self.count));
             Ok(())
         }
     }
