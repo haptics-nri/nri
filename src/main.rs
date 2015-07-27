@@ -133,7 +133,6 @@ mod structure;
 mod bluefox;
 
 use std::io::{Write, BufRead};
-use std::ascii::AsciiExt;
 use std::thread;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{channel, Sender};
@@ -155,18 +154,16 @@ extern crate chrono;
 
 use chrono::UTC;
 
+/// Helper function for rxspawn! macro
 fn rxspawn<T: Controllable>(reply: &Sender<CmdFrom>) -> Service {
-    let (thread_tx, thread_rx) = channel::<CmdTo>();
-    let master_tx = reply.clone();
-    let cloned_master_tx = master_tx.clone();
-    let name = <T as Controllable>::NAME(); // FIXME can't use macro here because of UFCS
     Service {
-        name: name,
+        name: <T as Controllable>::NAME(), // FIXME can't use macro here because of UFCS
         thread: None,
         tx: Arc::new(Mutex::new(None))
     }.start::<T>(reply)
 }
 
+/// Spawn a bunch of service threads
 #[macro_export]
 macro_rules! rxspawn {
     ($reply:expr; $($s:ty),*) => {
@@ -174,6 +171,11 @@ macro_rules! rxspawn {
     };
 }
 
+/// Try downcasting an Any to several types, performing the same or different actions if one of the
+/// types matches, otherwise do a fallback
+///
+/// Syntax is similar to `match`, except the types are separated by commas and the _ case comes
+/// first (TODO fix this)
 #[macro_export]
 macro_rules! downcast {
     ($any:ident { _ => $code:expr, $($($ts:ty),+ => $codes:expr),* }) => {
@@ -190,32 +192,62 @@ macro_rules! downcast {
 
 /// Service descriptor
 struct Service {
+    /// short identifier
     name: &'static str,
+    /// handle to running thread (actually the middle manager, see Service::start)
     thread: Option<thread::JoinHandle<()>>,
+    /// synchronized Sender for commands from the master thread
+    /// (should always be Some after Service::start runs)
     tx: Arc<Mutex<Option<Sender<CmdTo>>>>,
 }
 
 impl Service {
+    /** Here we start two threads: the service itself and a "middle manager".
+     *
+     *  The middle manager's job is to watch the service and restart it if it panics.
+     *  (If the service thread terminates quietly, the middle manager does the same.)
+     *
+     *  In case of panic, the middle manager performs three tasks:
+     *
+     *   - notifies the master thread using CmdFrom::Panicked
+     *   - creates a new channel and replaces self.tx so the master thread doesn't notice
+     *   - starts a new service thread (but does not send CmdTo::Start)
+     *   
+     *  This modification from within the middle manager thread is the reason self.tx is such a
+     *  monstrosity of containers.
+     * 
+     *  NB: for this scheme to work, the middle manager thread must never panic!
+     */
     fn start<T: Controllable>(mut self, reply: &Sender<CmdFrom>) -> Service {
         let master_tx = reply.clone();
 
         let name = self.name; // screw you, borrowck
-        let rx_ref = self.tx.clone();
+        let rx_ref = self.tx.clone(); // for concurrent modification from within the middle manager thread
         self.thread = Some(thread::Builder::new()
                            .name(format!("{} middle-manager", name))
                            .spawn(move || {
-                               let mut i = 0;
+                               let mut i = 0; // just for cosmetics: count service thread restarts
                                loop {
                                    i += 1;
+
+                                   // create master => service channel
+                                   //   (give receiving end to service thread, swap sending end
+                                   //   into self.tx)
                                    let (thread_tx, thread_rx) = channel::<CmdTo>();
+                                   // clone sending end of service => master channel
                                    let cloned_master_tx = master_tx.clone();
+                                   // perform the self.tx swap
                                    *rx_ref.lock().unwrap() = Some(thread_tx);
+
+                                   // start service thread!
                                    match thread::Builder::new()
                                        .name(format!("{} service (incarnation #{})", name, i))
                                        .spawn(move || {
                                            comms::go::<T>(thread_rx, cloned_master_tx)
                                        }).unwrap().join() {
+                                           // service thread died quietly: do the same
                                            Ok(_) => return,
+                                           // service thread panicked: notify master and restart
                                            Err(y) => master_tx.send(CmdFrom::Panicked {
                                                thread: name,
                                                panic_reason: downcast!(y {

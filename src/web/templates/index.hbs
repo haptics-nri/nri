@@ -21,6 +21,10 @@
                     case "kick":
                         $("." + words[1] + ".framenum").each(function () { this.innerHTML = words[2]; });
                         $("." + words[1] + ".latest")  .each(function () { this.src       = words[3]; });
+                        break;
+                    case "panic":
+                        alert("The " + words[1] + " thread crashed! (" + words.slice(2).join(" ") + ")\n\nIf it was running, you may want to click Start again.");
+                        break;
                 }
             };
             window.socket.onopen = function (event) {

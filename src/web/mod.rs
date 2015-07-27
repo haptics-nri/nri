@@ -356,7 +356,7 @@ guilty!{
                             Static::new(Path::new(&relpath("bootstrap")).join(p)));
             }
 
-            let mut flows = vec! {
+            let flows = vec! {
                 Flow::new("Test flow",
                           vec! {
                               FlowState::new("One", None, vec! {
