@@ -27,6 +27,9 @@ num = "*"
 enum_primitive = "*"
 serial = "*"
 csv = "*"
+uuid = "*"
+
+# stuff that I wrote
 guilt-by-association = "*"
 
 # iron deps

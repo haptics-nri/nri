@@ -10,9 +10,11 @@ extern crate router;
 extern crate hyper;
 extern crate rustc_serialize as serialize;
 extern crate websocket as ws;
+extern crate uuid;
+extern crate time;
 
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::sync::mpsc;
 use std::thread;
 use std::thread::JoinHandle;
@@ -31,6 +33,7 @@ use self::router::Router;
 use self::hyper::server::Listening;
 use self::ws::Sender as WebsocketSender;
 use self::ws::Receiver as WebsocketReceiver;
+use self::uuid::Uuid;
 
 static HTTP_PORT: u16 = 3000;
 static WS_PORT: u16   = 3001;
@@ -62,6 +65,9 @@ struct Flow {
     states: Vec<FlowState>,
     /// Is this the active flow?
     active: bool,
+
+    stamp: Option<time::Timespec>,
+    id: Option<uuid::Uuid>,
 }
 
 /// One state in a data collection flow
@@ -93,7 +99,28 @@ impl Flow {
             name: name,
             states: states,
             active: false,
+
+            stamp: None,
+            id: None,
         }
+    }
+
+    fn run(&mut self, park: ParkState, tx: &mpsc::Sender<CmdFrom>, wstx: &mpsc::Sender<String>, wsrx: &mpsc::Receiver<String>) {
+        // are we just starting the flow now?
+        if !self.active {
+            println!("Beginning flow {}!", self.name);
+
+            // need a timestamp and ID
+            self.stamp = Some(time::get_time());
+            self.id = Some(uuid::Uuid::new_v4());
+            self.active = true;
+        }
+
+        // find the next eligible state
+        let state = self.states.iter_mut().find(|s| !s.done && s.park.as_ref().map_or(true, |p| *p == park)).unwrap();
+        println!("Executing state {}", state.name);
+        state.run(tx, wstx, wsrx);
+        println!("Finished executing state {}", state.name);
     }
 }
 
@@ -106,6 +133,12 @@ impl FlowState {
             done: false,
         }
     }
+    
+    fn run(&mut self, tx: &mpsc::Sender<CmdFrom>, wstx: &mpsc::Sender<String>, wsrx: &mpsc::Receiver<String>) {
+        assert!(!self.done);
+        self.script.iter_mut().map(|c| c.run(tx, wstx, wsrx)).count();
+        self.done = true;
+    }
 }
 
 impl FlowCmd {
@@ -115,6 +148,57 @@ impl FlowCmd {
 
     fn int(prompt: &'static str, limits: (i32, i32)) -> FlowCmd {
         FlowCmd::Int { prompt: prompt, limits: limits, data: None}
+    }
+
+    fn run(&mut self, tx: &mpsc::Sender<CmdFrom>, wstx: &mpsc::Sender<String>, wsrx: &mpsc::Receiver<String>) {
+        match *self {
+            FlowCmd::Message(msg) => wstx.send(format!("{}", msg)).unwrap(),
+            FlowCmd::Str { prompt, ref mut data } => {
+                assert!(data.is_none());
+                wstx.send(format!("Please enter {}: <form><input type=\"text\" name=\"{}\"/></form>", prompt, prompt)).unwrap();
+                let mut answer = wsrx.recv().unwrap();
+                while answer.is_empty() {
+                    wstx.send(format!("That's an empty string! Please enter {}: <form><input type=\"text\" name=\"{}\"/></form>", prompt, prompt)).unwrap();
+                    answer = wsrx.recv().unwrap();
+                }
+                *data = Some(answer);
+            },
+            FlowCmd::Int { prompt, limits: (low, high), ref mut data } => {
+                assert!(data.is_none());
+                wstx.send(format!("Please select {} ({}-{} scale): <form><input type=\"text\" name=\"{}\"/></form>", prompt, low, high, prompt)).unwrap();
+                let mut answer = wsrx.recv().unwrap();
+                loop {
+                    match answer.parse() {
+                        Ok(i) if i >= low && i <= high => {
+                            *data = Some(i);
+                            break;
+                        },
+                        Ok(_) => {
+                            wstx.send(format!("Out of range! Please select {} ({}-{} scale): <form><input type=\"text\" name=\"{}\"/></form>", prompt, low, high, prompt)).unwrap();
+                            answer = wsrx.recv().unwrap();
+                        },
+                        Err(_) => {
+                            wstx.send(format!("Not an integer! Please select {} ({}-{} scale): <form><input type=\"text\" name=\"{}\"/></form>", prompt, low, high, prompt)).unwrap();
+                            answer = wsrx.recv().unwrap();
+                        },
+                    }
+                }
+            },
+            FlowCmd::Start(service) => {
+                assert!(rpc!(tx, CmdFrom::Start, service.to_string()).unwrap());
+            },
+            FlowCmd::Stop(service) => {
+                assert!(rpc!(tx, CmdFrom::Stop, service.to_string()).unwrap());
+            },
+            FlowCmd::Send(string) => {
+                tx.send(CmdFrom::Data(string.to_string())).unwrap();
+            },
+            FlowCmd::StopSensors => {
+                for svc in ["bluefox", "structure", "biotac", "optoforce", "stb"].into_iter() {
+                    assert!(rpc!(tx, CmdFrom::Start, svc.to_string()).unwrap());
+                }
+            }
+        }
     }
 }
 
@@ -157,86 +241,22 @@ fn relpath(path: &str) -> String {
 }
 
 /// Handler for the main page of the web interface
-fn index(req: &mut Request) -> IronResult<Response> {
-    let mut data = BTreeMap::<String, Json>::new();
-    data.insert("services".to_string(), vec![ Service::new("Structure Sensor", "structure" , "<img class=\"structure latest\" src=\"img/structure_latest.png\" /><div class=\"structure framenum\">NaN</div>"),
-                                              Service::new("mvBlueFOX3"      , "bluefox"   , "<img class=\"bluefox latest\" src=\"img/bluefox_latest.png\" /><div class=\"bluefox framenum\">NaN</div>"),
-                                              Service::new("OptoForce"       , "optoforce" , ""),
-                                              Service::new("SynTouch BioTac" , "biotac"    , ""),
-                                              Service::new("STB"             , "stb"       , ""),
-                                            ].to_json());
-    data.insert("flows".to_string(), vec! {
-        Flow::new("Episode",
-                  vec! {
-                      FlowState::new("Begin", None, vec! {
-                          FlowCmd::StopSensors,
-                          FlowCmd::Message("Starting new episode!"),
-                      }),
+fn index(flows: Arc<RwLock<Vec<Flow>>>) -> Box<Handler> {
+    Box::new(move |req: &mut Request| -> IronResult<Response> {
+        let mut data = BTreeMap::<String, Json>::new();
+        data.insert("services".to_string(), vec![ Service::new("Structure Sensor", "structure" , "<img class=\"structure latest\" src=\"img/structure_latest.png\" /><div class=\"structure framenum\">NaN</div>"),
+                                                  Service::new("mvBlueFOX3"      , "bluefox"   , "<img class=\"bluefox latest\" src=\"img/bluefox_latest.png\" /><div class=\"bluefox framenum\">NaN</div>"),
+                                                  Service::new("OptoForce"       , "optoforce" , ""),
+                                                  Service::new("SynTouch BioTac" , "biotac"    , ""),
+                                                  Service::new("STB"             , "stb"       , ""),
+                                                ].to_json());
+        data.insert("flows".to_string(), flows.read().unwrap().to_json());
+        data.insert("server".to_string(), format!("{}:{}", req.url.host, WS_PORT).to_json());
 
-                      FlowState::new("Camera aiming", Some(ParkState::None), vec! {
-                          FlowCmd::StopSensors,
-                          FlowCmd::Start("bluefox"), FlowCmd::Start("structure"),
-                          FlowCmd::Message("Use the Refresh button to get the cameras aimed well"),
-                      }),
-                      FlowState::new("Camera capture", None, vec! {
-                          FlowCmd::Send("bluefox disk start"),
-                          FlowCmd::Send("structure disk start"),
-                          FlowCmd::Message("Now recording! Pan the rig around to get images from various angles"),
-                      }),
-                      FlowState::new("Camera finish", None, vec! {
-                          FlowCmd::Send("bluefox disk stop"),
-                          FlowCmd::Send("structure disk stop"),
-                          FlowCmd::Message("Writing to disk, please wait..."),
-                          FlowCmd::Stop("bluefox"), FlowCmd::Stop("structure"),
-                          FlowCmd::Message("Done!"),
-                      }),
-
-                      FlowState::new("BioTac capture", Some(ParkState::BioTac), vec! {
-                          FlowCmd::Start("biotac"), FlowCmd::Start("stb"),
-                          FlowCmd::Message("Recording from BioTac!"),
-                      }),
-                      FlowState::new("BioTac finish", None, vec! {
-                          FlowCmd::Message("Writing to disk, please wait..."),
-                          FlowCmd::Stop("biotac"), FlowCmd::Stop("stb"),
-                          FlowCmd::Message("Done!"),
-                      }),
-
-                      FlowState::new("OptoForce capture", Some(ParkState::OptoForce), vec! {
-                          FlowCmd::Start("optoforce"), FlowCmd::Start("stb"),
-                          FlowCmd::Message("Recording from OptoForce!"),
-                      }),
-                      FlowState::new("OptoForce finish", None, vec! {
-                          FlowCmd::Message("Writing to disk, please wait..."),
-                          FlowCmd::Stop("optoforce"), FlowCmd::Stop("stb"),
-                          FlowCmd::Message("Done!"),
-                      }),
-
-                      FlowState::new("Rigid stick capture", Some(ParkState::Stick), vec! {
-                          FlowCmd::Start("stb"),
-                          FlowCmd::Message("Recording from rigid stick!"),
-                      }),
-                      FlowState::new("Rigid stick finish", None, vec! {
-                          FlowCmd::Message("Writing to disk, please wait..."),
-                          FlowCmd::Stop("stb"),
-                          FlowCmd::Message("Done!"),
-                      }),
-
-                      FlowState::new("Wrap up", Some(ParkState::None), vec! {
-                          FlowCmd::str("episode name"),
-                          FlowCmd::int("hardness",     (1, 5)),
-                          FlowCmd::int("roughness",    (1, 5)),
-                          FlowCmd::int("slipperiness", (1, 5)),
-                          FlowCmd::int("warmness",     (1, 5)),
-                          FlowCmd::int("moldability",  (1, 5)),
-                          FlowCmd::Message("Done!"),
-                      }),
-                  }),
-    }.to_json());
-    data.insert("server".to_string(), format!("{}:{}", req.url.host, WS_PORT).to_json());
-
-    let mut resp = Response::new();
-    resp.set_mut(Template::new("index", data)).set_mut(status::Ok);
-    Ok(resp)
+        let mut resp = Response::new();
+        resp.set_mut(Template::new("index", data)).set_mut(status::Ok);
+        Ok(resp)
+    })
 }
 
 /// Handler for starting/stopping a service
@@ -265,6 +285,22 @@ fn control(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
                     Ok(_) => Ok(Response::with((status::Ok, format!("Kicked {}", service)))),
                     Err(_) => Ok(Response::with((status::InternalServerError, format!("Failed to kick {}", service))))
                 },
+            _ => Ok(Response::with((status::BadRequest, format!("What does {} mean?", action))))
+        }
+    })
+}
+
+/// Handler for starting/continuing a flow
+fn flow(tx: mpsc::Sender<CmdFrom>, flows: Arc<RwLock<Vec<Flow>>>) -> Box<Handler> {
+    let mtx = Mutex::new(tx);
+    Box::new(move |req: &mut Request| -> IronResult<Response> {
+        let params = req.extensions.get::<Router>().unwrap();
+        let service = params.find("flow").unwrap();
+        let action = params.find("action").unwrap();
+
+        match action {
+            "start" => unimplemented!(),
+            "continue" => unimplemented!(),
             _ => Ok(Response::with((status::BadRequest, format!("What does {} mean?", action))))
         }
     })
@@ -320,9 +356,87 @@ guilty!{
                             Static::new(Path::new(&relpath("bootstrap")).join(p)));
             }
 
+            let mut flows = vec! {
+                Flow::new("Test flow",
+                          vec! {
+                              FlowState::new("One", None, vec! {
+                                  FlowCmd::Message("Please insert Tab A into Slot B"),
+                              }),
+                          }),
+                          Flow::new("Episode",
+                                    vec! {
+                                        // TODO shutdown button
+                                        FlowState::new("Begin", None, vec! {
+                                            FlowCmd::StopSensors,
+                                            FlowCmd::Message("Starting new episode!"),
+                                        }),
+                                        // TODO generate unique ID and overall timestamp (+ timestamp for each step)
+
+                                        FlowState::new("Camera aiming", Some(ParkState::None), vec! {
+                                            FlowCmd::StopSensors,
+                                            FlowCmd::Start("bluefox"), FlowCmd::Start("structure"),
+                                            FlowCmd::Message("Use the Refresh button to get the cameras aimed well"),
+                                        }),
+                                        FlowState::new("Camera capture", None, vec! {
+                                            FlowCmd::Send("bluefox disk start"),
+                                            FlowCmd::Send("structure disk start"),
+                                            FlowCmd::Message("Now recording! Pan the rig around to get images from various angles"),
+                                        }),
+                                        FlowState::new("Camera finish", None, vec! {
+                                            FlowCmd::Send("bluefox disk stop"),
+                                            FlowCmd::Send("structure disk stop"),
+                                            FlowCmd::Message("Writing to disk, please wait..."),
+                                            FlowCmd::Stop("bluefox"), FlowCmd::Stop("structure"),
+                                            FlowCmd::Message("Done!"),
+                                        }),
+
+                                        FlowState::new("BioTac capture", Some(ParkState::BioTac), vec! {
+                                            FlowCmd::Start("biotac"), FlowCmd::Start("stb"),
+                                            FlowCmd::Message("Recording from BioTac!"),
+                                        }),
+                                        FlowState::new("BioTac finish", None, vec! {
+                                            FlowCmd::Message("Writing to disk, please wait..."),
+                                            FlowCmd::Stop("biotac"), FlowCmd::Stop("stb"),
+                                            FlowCmd::Message("Done!"),
+                                        }),
+
+                                        FlowState::new("OptoForce capture", Some(ParkState::OptoForce), vec! {
+                                            FlowCmd::Start("optoforce"), FlowCmd::Start("stb"),
+                                            FlowCmd::Message("Recording from OptoForce!"),
+                                        }),
+                                        FlowState::new("OptoForce finish", None, vec! {
+                                            FlowCmd::Message("Writing to disk, please wait..."),
+                                            FlowCmd::Stop("optoforce"), FlowCmd::Stop("stb"),
+                                            FlowCmd::Message("Done!"),
+                                        }),
+
+                                        FlowState::new("Rigid stick capture", Some(ParkState::Stick), vec! {
+                                            FlowCmd::Start("stb"),
+                                            FlowCmd::Message("Recording from rigid stick!"),
+                                        }),
+                                        FlowState::new("Rigid stick finish", None, vec! {
+                                            FlowCmd::Message("Writing to disk, please wait..."),
+                                            FlowCmd::Stop("stb"),
+                                            FlowCmd::Message("Done!"),
+                                        }),
+
+                                        FlowState::new("Wrap up", Some(ParkState::None), vec! {
+                                            FlowCmd::str("episode name"),
+                                            // TODO more questions here?
+                                            FlowCmd::int("hardness",     (1, 5)),
+                                            FlowCmd::int("roughness",    (1, 5)),
+                                            FlowCmd::int("slipperiness", (1, 5)),
+                                            FlowCmd::int("warmness",     (1, 5)),
+                                            FlowCmd::Message("Done!"),
+                                        }),
+                                    }),
+            };
+            let shared_flows = Arc::new(RwLock::new(flows));
+
             let mut router = Router::new();
-            router.get("/", index);
+            router.get("/", index(shared_flows.clone()));
             router.post("/control/:service/:action", control(tx.clone()));
+            router.post("/flow/:flow/:action", flow(tx.clone(), shared_flows.clone()));
 
             mount.mount("/", router);
 

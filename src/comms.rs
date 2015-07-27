@@ -46,9 +46,12 @@ pub enum CmdFrom {
     Panic,
 
     /// Schedule the sending thread to be killed in x ms
-    Timeout(&'static str, u32),
+    Timeout { thread: &'static str, ms: u32 },
     /// Cancel a killing scheduled with Timeout
-    Timein(&'static str),
+    Timein { thread: &'static str },
+
+    /// Service thread panicked (obviously, this would only be sent from the middle-manager thread
+    Panicked { thread: &'static str, panic_reason: String },
 }
 
 /// Desired blocking mode for a service
@@ -149,7 +152,8 @@ macro_rules! stub {
                     $t
                 }
 
-                fn step(&mut self, _: Option<String>) {
+                fn step(&mut self, cmd: Option<String>) {
+                    if cmd.is_some() { unimplemented!(); }
                 }
 
                 fn teardown(&mut self) {
@@ -241,9 +245,9 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
             }
         }
 
-        tx.send(CmdFrom::Timeout(guilty!(C::NAME), 1000)).unwrap();
+        tx.send(CmdFrom::Timeout { thread: guilty!(C::NAME), ms: 1000 }).unwrap();
         let mut c = C::setup(tx.clone(), data);
-        tx.send(CmdFrom::Timein(guilty!(C::NAME))).unwrap();
+        tx.send(CmdFrom::Timein { thread: guilty!(C::NAME) }).unwrap();
 
         let mut block = guilty!(C::BLOCK);
         let actual_period = match block {
