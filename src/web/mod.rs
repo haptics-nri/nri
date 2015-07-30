@@ -7,18 +7,20 @@ extern crate handlebars_iron as hbs;
 extern crate staticfile;
 extern crate mount;
 extern crate router;
+extern crate urlencoded;
+extern crate url;
 extern crate hyper;
 extern crate rustc_serialize as serialize;
 extern crate websocket as ws;
 extern crate uuid;
 extern crate time;
 
+use std::ops::Deref;
 use std::path::Path;
-use std::sync::{Arc, Mutex, RwLock};
-use std::sync::mpsc;
+use std::sync::{Arc, Mutex, RwLock, mpsc};
 use std::thread;
 use std::thread::JoinHandle;
-use std::collections::BTreeMap;
+use std::collections::{HashMap, BTreeMap};
 use super::comms::{Controllable, CmdFrom, Block};
 use super::stb::ParkState;
 use self::iron::prelude::*;
@@ -30,6 +32,8 @@ use self::serialize::json::{ToJson, Json};
 use self::staticfile::Static;
 use self::mount::Mount;
 use self::router::Router;
+use self::urlencoded::{UrlEncodedQuery, UrlEncodedBody};
+use self::url::percent_encoding::percent_decode;
 use self::hyper::server::Listening;
 use self::ws::Sender as WebsocketSender;
 use self::ws::Receiver as WebsocketReceiver;
@@ -37,6 +41,11 @@ use self::uuid::Uuid;
 
 static HTTP_PORT: u16 = 3000;
 static WS_PORT: u16   = 3001;
+
+lazy_static! {
+    static ref RPC_SENDERS: Mutex<HashMap<usize, mpsc::Sender<String>>>                         = Mutex::new(HashMap::new());
+    static ref WS_SENDERS:  Mutex<Vec<ws::server::sender::Sender<ws::stream::WebSocketStream>>> = Mutex::new(Vec::new());
+}
 
 /// Service descriptor
 ///
@@ -105,7 +114,7 @@ impl Flow {
         }
     }
 
-    fn run(&mut self, park: ParkState, tx: &mpsc::Sender<CmdFrom>, wstx: &mpsc::Sender<String>, wsrx: &mpsc::Receiver<String>) {
+    fn run(&mut self, park: ParkState, tx: &mpsc::Sender<CmdFrom>, wsid: usize) {
         // are we just starting the flow now?
         if !self.active {
             println!("Beginning flow {}!", self.name);
@@ -119,7 +128,7 @@ impl Flow {
         // find the next eligible state
         let state = self.states.iter_mut().find(|s| !s.done && s.park.as_ref().map_or(true, |p| *p == park)).unwrap();
         println!("Executing state {}", state.name);
-        state.run(tx, wstx, wsrx);
+        state.run(tx, wsid);
         println!("Finished executing state {}", state.name);
     }
 }
@@ -134,10 +143,40 @@ impl FlowState {
         }
     }
     
-    fn run(&mut self, tx: &mpsc::Sender<CmdFrom>, wstx: &mpsc::Sender<String>, wsrx: &mpsc::Receiver<String>) {
+    fn run(&mut self, tx: &mpsc::Sender<CmdFrom>, wsid: usize) {
         assert!(!self.done);
-        self.script.iter_mut().map(|c| c.run(tx, wstx, wsrx)).count();
+        for c in self.script.iter_mut() {
+            c.run(&tx, wsid);
+        }
         self.done = true;
+    }
+}
+
+fn ws_send(wsid: usize, msg: String) {
+    let mut locked_senders = WS_SENDERS.lock().unwrap();
+
+    locked_senders[wsid].send_message(ws::Message::Text(msg)).unwrap();
+}
+
+fn ws_rpc<T, F: Fn(String) -> Result<T,String>>(wsid: usize, prompt: String, validator: F) -> T {
+    let mut locked_senders = WS_SENDERS.lock().unwrap();
+    let mut locked_rpcs = RPC_SENDERS.lock().unwrap();
+
+    let mut go = |prompt: &str| -> String {
+        let (tx, rx) = mpsc::channel();
+        locked_rpcs.insert(wsid, tx);
+        locked_senders[wsid].send_message(ws::Message::Text(prompt.to_string())).unwrap();
+        rx.recv().unwrap()
+    };
+
+    let mut answer = go(&prompt);
+    loop {
+        match validator(answer) {
+            Ok(ret) => return ret,
+            Err(admonish) => {
+                answer = go(&format!("{} {}", admonish, prompt));
+            }
+        }
     }
 }
 
@@ -150,39 +189,40 @@ impl FlowCmd {
         FlowCmd::Int { prompt: prompt, limits: limits, data: None}
     }
 
-    fn run(&mut self, tx: &mpsc::Sender<CmdFrom>, wstx: &mpsc::Sender<String>, wsrx: &mpsc::Receiver<String>) {
+    fn run(&mut self, tx: &mpsc::Sender<CmdFrom>, wsid: usize) {
         match *self {
-            FlowCmd::Message(msg) => wstx.send(format!("{}", msg)).unwrap(),
+            FlowCmd::Message(msg) => ws_send(wsid, format!("{}", msg)),
             FlowCmd::Str { prompt, ref mut data } => {
                 assert!(data.is_none());
-                wstx.send(format!("Please enter {}: <form><input type=\"text\" name=\"{}\"/></form>", prompt, prompt)).unwrap();
-                let mut answer = wsrx.recv().unwrap();
-                while answer.is_empty() {
-                    wstx.send(format!("That's an empty string! Please enter {}: <form><input type=\"text\" name=\"{}\"/></form>", prompt, prompt)).unwrap();
-                    answer = wsrx.recv().unwrap();
-                }
-                *data = Some(answer);
+                *data = Some(ws_rpc(wsid,
+                                   format!("Please enter {}: <form><input type=\"text\" name=\"{}\"/></form>",
+                                           prompt, prompt),
+                                   |x| {
+                                       if x.is_empty() {
+                                           Err("That's an empty string!".to_string())
+                                       } else {
+                                           Ok(x)
+                                       }
+                                   }));
             },
             FlowCmd::Int { prompt, limits: (low, high), ref mut data } => {
                 assert!(data.is_none());
-                wstx.send(format!("Please select {} ({}-{} scale): <form><input type=\"text\" name=\"{}\"/></form>", prompt, low, high, prompt)).unwrap();
-                let mut answer = wsrx.recv().unwrap();
-                loop {
-                    match answer.parse() {
-                        Ok(i) if i >= low && i <= high => {
-                            *data = Some(i);
-                            break;
-                        },
-                        Ok(_) => {
-                            wstx.send(format!("Out of range! Please select {} ({}-{} scale): <form><input type=\"text\" name=\"{}\"/></form>", prompt, low, high, prompt)).unwrap();
-                            answer = wsrx.recv().unwrap();
-                        },
-                        Err(_) => {
-                            wstx.send(format!("Not an integer! Please select {} ({}-{} scale): <form><input type=\"text\" name=\"{}\"/></form>", prompt, low, high, prompt)).unwrap();
-                            answer = wsrx.recv().unwrap();
-                        },
-                    }
-                }
+                *data = Some(ws_rpc(wsid,
+                                   format!("Please select {} ({}-{} scale): <form><input type=\"text\" name=\"{}\"/></form>",
+                                           prompt, low, high, prompt),
+                                   |x| {
+                                       match x.parse() {
+                                           Ok(i) if i >= low && i <= high => {
+                                               Ok(i)
+                                           },
+                                           Ok(_) => {
+                                               Err("Out of range!".to_string())
+                                           },
+                                           Err(_) => {
+                                               Err("Not an integer!".to_string())
+                                           },
+                                       }
+                                   }));
             },
             FlowCmd::Start(service) => {
                 assert!(rpc!(tx, CmdFrom::Start, service.to_string()).unwrap());
@@ -259,15 +299,22 @@ fn index(flows: Arc<RwLock<Vec<Flow>>>) -> Box<Handler> {
     })
 }
 
+macro_rules! params {
+    ($req:expr, $($n:ident)+) => {
+        let ($($n,)+) = {
+            let params = $req.extensions.get::<Router>().unwrap();
+            ($(String::from_utf8(percent_decode(params.find(stringify!($n)).unwrap().as_bytes())).unwrap(),)+)
+        };
+    }
+}
+
 /// Handler for starting/stopping a service
 fn control(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
     let mtx = Mutex::new(tx);
     Box::new(move |req: &mut Request| -> IronResult<Response> {
-        let params = req.extensions.get::<Router>().unwrap();
-        let service = params.find("service").unwrap();
-        let action = params.find("action").unwrap();
+        params!(req, service action);
 
-        match action {
+        match &*action {
             "start" =>
                 if rpc!(mtx.lock().unwrap(), CmdFrom::Start, service.to_string()).unwrap() {
                     Ok(Response::with((status::Ok, format!("Started {}", service))))
@@ -294,12 +341,24 @@ fn control(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
 fn flow(tx: mpsc::Sender<CmdFrom>, flows: Arc<RwLock<Vec<Flow>>>) -> Box<Handler> {
     let mtx = Mutex::new(tx);
     Box::new(move |req: &mut Request| -> IronResult<Response> {
-        let params = req.extensions.get::<Router>().unwrap();
-        let service = params.find("flow").unwrap();
-        let action = params.find("action").unwrap();
+        let wsid   = req.get_ref::<UrlEncodedBody>().unwrap()["wsid"][0].parse().unwrap();
+        params!(req, flow action);
 
-        match action {
-            "start" => unimplemented!(),
+        match &*action {
+            "start" => {
+                let mut locked_flows = flows.write().unwrap();
+                for f in locked_flows.iter_mut() {
+                    if f.name == flow {
+                        if f.active {
+                            return Ok(Response::with((status::BadRequest, format!("Already in the middle of \"{}\" flow", flow))));
+                        } else {
+                            f.run(ParkState::metermaid(), mtx.lock().unwrap().deref(), wsid);
+                            return Ok(Response::with((status::Ok, format!("Started \"{}\" flow", flow))));
+                        }
+                    }
+                }
+                Ok(Response::with((status::BadRequest, format!("Could not find \"{}\" flow", flow))))
+            },
             "continue" => unimplemented!(),
             _ => Ok(Response::with((status::BadRequest, format!("What does {} mean?", action))))
         }
@@ -350,12 +409,6 @@ guilty!{
         const BLOCK: Block = Block::Infinite,
 
         fn setup(tx: mpsc::Sender<CmdFrom>, _: Option<String>) -> Web {
-            let mut mount = Mount::new();
-            for p in ["css", "fonts", "js"].iter() {
-                mount.mount(&format!("/{}/", p),
-                            Static::new(Path::new(&relpath("bootstrap")).join(p)));
-            }
-
             let flows = vec! {
                 Flow::new("Test flow",
                           vec! {
@@ -431,20 +484,6 @@ guilty!{
                                         }),
                                     }),
             };
-            let shared_flows = Arc::new(RwLock::new(flows));
-
-            let mut router = Router::new();
-            router.get("/", index(shared_flows.clone()));
-            router.post("/control/:service/:action", control(tx.clone()));
-            router.post("/flow/:flow/:action", flow(tx.clone(), shared_flows.clone()));
-
-            mount.mount("/", router);
-
-            let mut chain = Chain::new(mount);
-            maybe_watch(&mut chain);
-            chain.link_after(Catchall::new());
-
-            let listening = Iron::new(chain).http(("0.0.0.0", HTTP_PORT)).unwrap();
 
             let (wstx, wsrx) = mpsc::channel();
             let ctx = tx.clone();
@@ -452,21 +491,19 @@ guilty!{
 
                 let ws = ws::Server::bind(("0.0.0.0", WS_PORT)).unwrap();
 
-                let ws_senders = Arc::new(Mutex::new(Vec::<ws::server::sender::Sender<_>>::new())); // FIXME why is the typechecker so confused here
-                let ws_senders_clone = ws_senders.clone();
                 let mut ws_relays = Vec::new();
 
                 let marshal = thread::spawn(move || {
                     // relay messages from above to all WS threads
                     while let Ok(msg) = wsrx.recv() {
-                        ws_senders_clone.lock().unwrap().iter_mut().map(|ref mut s| {
+                        WS_SENDERS.lock().unwrap().iter_mut().map(|ref mut s| {
                             s.send_message(ws::Message::clone(&msg)).unwrap(); // FIXME why is the typechecker so confused here
                         }).count();
                     }
 
                     println!("web: shutting down websocket servers");
                     // kill all WS threads now
-                    ws_senders_clone.lock().unwrap().iter_mut().map(|ref mut s| {
+                    WS_SENDERS.lock().unwrap().iter_mut().map(|ref mut s| {
                         s.send_message(ws::Message::Close(None)).unwrap();
                     }).count();
                 });
@@ -494,12 +531,15 @@ guilty!{
                         .unwrap();
                     
                     println!("Websocket connection from {}", ip);
+
+                    let mut locked_senders = WS_SENDERS.lock().unwrap();
+                    let wsid = locked_senders.len();
                     
-                    let message = ws::Message::Text("Hello".to_string());
+                    let message = ws::Message::Text(format!("hello {}", wsid));
                     client.send_message(message).unwrap();
                     
                     let (sender, mut receiver) = client.split();
-                    ws_senders.lock().unwrap().push(sender);
+                    locked_senders.push(sender);
                     let cctx = ctx.clone();
                     ws_relays.push(thread::spawn(move || {
                         for message in receiver.incoming_messages() {
@@ -511,7 +551,21 @@ guilty!{
                                     return;
                                 },
                                 ws::Message::Text(text) => {
-                                    cctx.send(CmdFrom::Data(text)).unwrap();
+                                    if text.starts_with("RPC") {
+                                        let space = text.find(' ').unwrap();
+                                        let id = text[3..space].parse::<usize>().unwrap();
+                                        let msg = text[space..].to_string();
+                                        
+                                        let mut locked_senders = WS_SENDERS.lock().unwrap();
+                                        let locked_rpcs = RPC_SENDERS.lock().unwrap();
+                                        if let Some(rpc) = locked_rpcs.get(&id) {
+                                            rpc.send(msg).unwrap();
+                                        } else {
+                                            locked_senders[id].send_message(ws::Message::Text("RPC ERROR: nobody listening".to_string())).unwrap();
+                                        }
+                                    } else {
+                                        cctx.send(CmdFrom::Data(text)).unwrap();
+                                    }
                                 },
                                 _ => ()
                             }
@@ -519,6 +573,26 @@ guilty!{
                     }));
                 }
             });
+
+            let shared_flows = Arc::new(RwLock::new(flows));
+
+            let mut router = Router::new();
+            router.get("/", index(shared_flows.clone()));
+            router.post("/control/:service/:action", control(tx.clone()));
+            router.post("/flow/:flow/:action", flow(tx.clone(), shared_flows.clone()));
+
+            let mut mount = Mount::new();
+            for p in ["css", "fonts", "js"].iter() {
+                mount.mount(&format!("/{}/", p),
+                            Static::new(Path::new(&relpath("bootstrap")).join(p)));
+            }
+            mount.mount("/", router);
+
+            let mut chain = Chain::new(mount);
+            maybe_watch(&mut chain);
+            chain.link_after(Catchall::new());
+
+            let listening = Iron::new(chain).http(("0.0.0.0", HTTP_PORT)).unwrap();
 
             Web { listening: listening, websocket: thread, wstx: wstx }
         }

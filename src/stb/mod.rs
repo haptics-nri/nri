@@ -15,6 +15,12 @@ pub enum ParkState {
     Multiple = -1
 }
 
+impl ParkState {
+    pub fn metermaid() -> ParkState {
+        ParkState::None
+    }
+}
+
 group_attr!{
     #[cfg(target_os = "linux")]
 

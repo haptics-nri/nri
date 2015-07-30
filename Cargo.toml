@@ -39,6 +39,8 @@ staticfile = { version = "*", default-features = false }
 mount = "*"
 hyper = "*"
 router = "*"
+urlencoded = "*"
+url = "*"
 rustc-serialize = "*"
 websocket = "*"
 
