@@ -300,10 +300,18 @@ fn index(flows: Arc<RwLock<Vec<Flow>>>) -> Box<Handler> {
 }
 
 macro_rules! params {
-    ($req:expr, $($n:ident)+) => {
-        let ($($n,)+) = {
+    ($req:expr => [URL $($url:ident),*] [GET $($get:ident),*] [POST $($post:ident),*]) => {
+        let ($($url,)*) = {
             let params = $req.extensions.get::<Router>().unwrap();
-            ($(String::from_utf8(percent_decode(params.find(stringify!($n)).unwrap().as_bytes())).unwrap(),)+)
+            ($(String::from_utf8(percent_decode(params.find(stringify!($url)).unwrap().as_bytes())).unwrap(),)*)
+        };
+        let ($($get,)*) = {
+            let params = $req.extensions.get::<UrlEncodedQuery>().unwrap();
+            ($(params[stringify!($get)][0].clone(),)*)
+        };
+        let ($($post,)*) = {
+            let params = $req.extensions.get::<UrlEncodedBody>().unwrap();
+            ($(params[stringify!($post)][0].clone(),)*)
         };
     }
 }
@@ -312,7 +320,9 @@ macro_rules! params {
 fn control(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
     let mtx = Mutex::new(tx);
     Box::new(move |req: &mut Request| -> IronResult<Response> {
-        params!(req, service action);
+        params!(req => [URL service, action]
+                       [GET]
+                       [POST]);
 
         match &*action {
             "start" =>
@@ -341,8 +351,10 @@ fn control(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
 fn flow(tx: mpsc::Sender<CmdFrom>, flows: Arc<RwLock<Vec<Flow>>>) -> Box<Handler> {
     let mtx = Mutex::new(tx);
     Box::new(move |req: &mut Request| -> IronResult<Response> {
-        let wsid   = req.get_ref::<UrlEncodedBody>().unwrap()["wsid"][0].parse().unwrap();
-        params!(req, flow action);
+        params!(req => [URL flow, action]
+                       [GET]
+                       [POST wsid]);
+        let wsid = wsid.parse().unwrap();
 
         match &*action {
             "start" => {
