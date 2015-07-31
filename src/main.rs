@@ -308,6 +308,8 @@ fn main() {
         let mut services = rxspawn!(reply_tx; CLI, Web, Structure, Bluefox, Optoforce, STB);
         let mut timers = HashMap::new();
 
+        thread::sleep_ms(500); // wait for threads to start
+
         start(&services, "cli".to_string());
         start(&services, "web".to_string());
 
