@@ -21,6 +21,7 @@ use std::sync::{Arc, Mutex, RwLock, mpsc};
 use std::thread;
 use std::thread::JoinHandle;
 use std::collections::{HashMap, BTreeMap};
+use std::io::Read;
 use super::comms::{Controllable, CmdFrom, Block};
 use super::stb::ParkState;
 use self::iron::prelude::*;
@@ -350,6 +351,16 @@ macro_rules! params {
     }
 }
 
+trait DrainableRequest {
+    fn drain(&mut self);
+}
+
+impl<'a, 'b> DrainableRequest for Request<'a, 'b> {
+    fn drain(&mut self) {
+        self.body.read_to_end(&mut vec![]);
+    }
+}
+
 /// Handler for starting/stopping a service
 fn control(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
     let mtx = Mutex::new(tx);
@@ -379,7 +390,7 @@ fn control(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
             _ => Response::with((status::BadRequest, format!("What does {} mean?", action)))
         };
 
-        response.headers.set(Connection::close());
+        req.drain();
         Ok(response)
     })
 }
@@ -411,7 +422,7 @@ fn flow(tx: mpsc::Sender<CmdFrom>, flows: Arc<RwLock<Vec<Flow>>>) -> Box<Handler
             _ => Response::with((status::BadRequest, format!("What does {} mean?", action)))
         };
 
-        response.headers.set(Connection::close());
+        req.drain();
         Ok(response)
     })
 }
