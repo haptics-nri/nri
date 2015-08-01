@@ -21,7 +21,7 @@ use std::sync::{Arc, Mutex, RwLock, mpsc};
 use std::thread;
 use std::thread::JoinHandle;
 use std::collections::{HashMap, BTreeMap};
-use std::io::Read;
+use std::io::{self, Read};
 use super::comms::{Controllable, CmdFrom, Block};
 use super::stb::ParkState;
 use self::iron::prelude::*;
@@ -351,16 +351,6 @@ macro_rules! params {
     }
 }
 
-trait DrainableRequest {
-    fn drain(&mut self);
-}
-
-impl<'a, 'b> DrainableRequest for Request<'a, 'b> {
-    fn drain(&mut self) {
-        self.body.read_to_end(&mut vec![]);
-    }
-}
-
 /// Handler for starting/stopping a service
 fn control(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
     let mtx = Mutex::new(tx);
@@ -369,7 +359,7 @@ fn control(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
                        [GET]
                        [POST]);
 
-        let mut response = match &*action {
+        Ok(match &*action {
             "start" =>
                 if rpc!(mtx.lock().unwrap(), CmdFrom::Start, service.to_string()).unwrap() {
                     Response::with((status::Ok, format!("Started {}", service)))
@@ -388,10 +378,7 @@ fn control(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
                     Err(_) => Response::with((status::InternalServerError, format!("Failed to kick {}", service)))
                 },
             _ => Response::with((status::BadRequest, format!("What does {} mean?", action)))
-        };
-
-        req.drain();
-        Ok(response)
+        })
     })
 }
 
@@ -404,7 +391,7 @@ fn flow(tx: mpsc::Sender<CmdFrom>, flows: Arc<RwLock<Vec<Flow>>>) -> Box<Handler
                        [POST wsid]);
         let wsid = wsid.parse().unwrap();
 
-        let mut response = match &*action {
+        Ok(match &*action {
             "start" => {
                 let mut locked_flows = flows.write().unwrap();
                 if let Some(found) = locked_flows.iter_mut().find(|f| f.name == flow) {
@@ -420,10 +407,7 @@ fn flow(tx: mpsc::Sender<CmdFrom>, flows: Arc<RwLock<Vec<Flow>>>) -> Box<Handler
             },
             "continue" => unimplemented!(),
             _ => Response::with((status::BadRequest, format!("What does {} mean?", action)))
-        };
-
-        req.drain();
-        Ok(response)
+        })
     })
 }
 
@@ -448,9 +432,39 @@ impl Catchall {
 impl AfterMiddleware for Catchall {
     fn catch(&self, req: &mut Request, err: IronError) -> IronResult<Response> {
         match err.response.status {
-            Some(status::NotFound) => Ok(Response::with(status::NotFound)),
+            Some(status::NotFound) => Ok(err.response),
             _ => Err(err)
         }
+    }
+}
+
+struct Drain;
+
+impl Drain {
+    fn new() -> Drain { Drain }
+
+    fn drain(req: &mut Request, resp: &mut Response) {
+        const LIMIT: u64 = 1024 * 1024;
+
+        io::copy(&mut req.body.by_ref().take(LIMIT), &mut io::sink());
+        let mut buf = [0];
+        if let Ok(n) = req.body.read(&mut buf) {
+            if n > 0 {
+                resp.headers.set(Connection::close());
+            }
+        }
+    }
+}
+
+impl AfterMiddleware for Drain {
+    fn after(&self, req: &mut Request, mut resp: Response) -> IronResult<Response> {
+        Drain::drain(req, &mut resp);
+        Ok(resp)
+    }
+
+    fn catch(&self, req: &mut Request, mut err: IronError) -> IronResult<Response> {
+        Drain::drain(req, &mut err.response);
+        Err(err)
     }
 }
 
@@ -652,7 +666,8 @@ guilty!{
 
             let mut chain = Chain::new(mount);
             maybe_watch(&mut chain);
-            //chain.link_after(Catchall::new());
+            chain.link_after(Catchall::new());
+            chain.link_after(Drain::new());
 
             let listening = Iron::new(chain).http(("0.0.0.0", HTTP_PORT)).unwrap();
 
