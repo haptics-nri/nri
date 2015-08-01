@@ -332,6 +332,7 @@ extern "C" {
     fn DMR_Init(pDevices: *mut HDMR) -> TDMR_ERROR;
     fn DMR_Close() -> TDMR_ERROR;
 
+    fn DMR_GetDeviceCount(pDevCnt: *mut c_uint) -> TDMR_ERROR;
     fn DMR_GetDevice(pHDev: *mut HDEV, searchMode: DeviceSearchMode, pSearchString: *const c_char, devNr: c_uint, wildcard: c_char) -> TDMR_ERROR;
     fn DMR_OpenDevice(hDev: HDEV, pHDrv: *mut HDRV) -> TDMR_ERROR;
     fn DMR_CloseDevice(hDrv: HDRV, hDev: HDEV) -> TDMR_ERROR;
@@ -419,8 +420,10 @@ impl Device {
     pub fn new() -> Result<Device,TDMR_ERROR> {
         let mut this = Device { dmr: HDMR(0), dev: HDEV(0), drv: HDRV(0) };
         try!(dmr_status2result!(unsafe { DMR_Init(&mut this.dmr) }));
-
-        try!(dmr_status2result!(unsafe { DMR_GetDevice(&mut this.dev, DeviceSearchMode::Serial, c_str!("*"), 0, b'*' as c_char) }));
+        let mut n: u32 = 0;
+        try!(dmr_status2result!(unsafe { DMR_GetDeviceCount(&mut n as *mut _) }));
+        println!("Have {} Bluefox devices.", n);
+        try!(dmr_status2result!(unsafe { DMR_GetDevice(&mut this.dev, DeviceSearchMode::Serial, b"*\0" as *const u8 as *const c_char, 0, b'*' as c_char) }));
         dmr_status2result!(unsafe { DMR_OpenDevice(this.dev, &mut this.drv) }, this)
     }
 
