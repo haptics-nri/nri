@@ -26,6 +26,7 @@ use super::stb::ParkState;
 use self::iron::prelude::*;
 use self::iron::status;
 use self::iron::middleware::{Handler, AfterMiddleware};
+use self::iron::headers::Connection;
 use self::hbs::{Template, HandlebarsEngine};
 #[cfg(feature = "watch")] use self::hbs::Watchable;
 use self::serialize::json::{ToJson, Json};
@@ -357,26 +358,29 @@ fn control(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
                        [GET]
                        [POST]);
 
-        match &*action {
+        let mut response = match &*action {
             "start" =>
                 if rpc!(mtx.lock().unwrap(), CmdFrom::Start, service.to_string()).unwrap() {
-                    Ok(Response::with((status::Ok, format!("Started {}", service))))
+                    Response::with((status::Ok, format!("Started {}", service)))
                 } else {
-                    Ok(Response::with((status::InternalServerError, format!("Failed to start {}", service))))
+                    Response::with((status::InternalServerError, format!("Failed to start {}", service)))
                 },
             "stop" =>
                 if rpc!(mtx.lock().unwrap(), CmdFrom::Stop, service.to_string()).unwrap() {
-                    Ok(Response::with((status::Ok, format!("Stopped {}", service))))
+                    Response::with((status::Ok, format!("Stopped {}", service)))
                 } else {
-                    Ok(Response::with((status::InternalServerError, format!("Failed to stop {}", service))))
+                    Response::with((status::InternalServerError, format!("Failed to stop {}", service)))
                 },
             "kick" => 
                 match mtx.lock().unwrap().send(CmdFrom::Data(format!("kick {}", service))) {
-                    Ok(_) => Ok(Response::with((status::Ok, format!("Kicked {}", service)))),
-                    Err(_) => Ok(Response::with((status::InternalServerError, format!("Failed to kick {}", service))))
+                    Ok(_) => Response::with((status::Ok, format!("Kicked {}", service))),
+                    Err(_) => Response::with((status::InternalServerError, format!("Failed to kick {}", service)))
                 },
-            _ => Ok(Response::with((status::BadRequest, format!("What does {} mean?", action))))
-        }
+            _ => Response::with((status::BadRequest, format!("What does {} mean?", action)))
+        };
+
+        response.headers.set(Connection::close());
+        Ok(response)
     })
 }
 
@@ -389,24 +393,26 @@ fn flow(tx: mpsc::Sender<CmdFrom>, flows: Arc<RwLock<Vec<Flow>>>) -> Box<Handler
                        [POST wsid]);
         let wsid = wsid.parse().unwrap();
 
-        match &*action {
+        let mut response = match &*action {
             "start" => {
                 let mut locked_flows = flows.write().unwrap();
-                for f in locked_flows.iter_mut() {
-                    if f.name == flow {
-                        if f.active {
-                            return Ok(Response::with((status::BadRequest, format!("Already in the middle of \"{}\" flow", flow))));
-                        } else {
-                            f.run(ParkState::metermaid(), mtx.lock().unwrap().deref(), wsid);
-                            return Ok(Response::with((status::Ok, format!("Started \"{}\" flow", flow))));
-                        }
+                if let Some(found) = locked_flows.iter_mut().find(|f| f.name == flow) {
+                    if found.active {
+                        Response::with((status::BadRequest, format!("Already in the middle of \"{}\" flow", flow)))
+                    } else {
+                        found.run(ParkState::metermaid(), mtx.lock().unwrap().deref(), wsid);
+                        Response::with((status::Ok, format!("Started \"{}\" flow", flow)))
                     }
+                } else {
+                    Response::with((status::BadRequest, format!("Could not find \"{}\" flow", flow)))
                 }
-                Ok(Response::with((status::BadRequest, format!("Could not find \"{}\" flow", flow))))
             },
             "continue" => unimplemented!(),
-            _ => Ok(Response::with((status::BadRequest, format!("What does {} mean?", action))))
-        }
+            _ => Response::with((status::BadRequest, format!("What does {} mean?", action)))
+        };
+
+        response.headers.set(Connection::close());
+        Ok(response)
     })
 }
 
