@@ -302,16 +302,49 @@ fn index(flows: Arc<RwLock<Vec<Flow>>>) -> Box<Handler> {
 macro_rules! params {
     ($req:expr => [URL $($url:ident),*] [GET $($get:ident),*] [POST $($post:ident),*]) => {
         let ($($url,)*) = {
-            let params = $req.extensions.get::<Router>().unwrap();
-            ($(String::from_utf8(percent_decode(params.find(stringify!($url)).unwrap().as_bytes())).unwrap(),)*)
+            if let Some(params) = $req.extensions.get::<Router>() {
+                ($({
+                    println!("DBG extracting :{} from URL", stringify!($url));
+                    let p = params.find(stringify!($url)).unwrap();
+                    println!("DBG :{} = {}", stringify!($url), p);
+                    String::from_utf8(percent_decode(p.as_bytes())).unwrap()
+                },)*)
+            } else {
+                ($({
+                    println!("DBG making up default value for :{}", stringify!($url));
+                    Default::default()
+                },)*)
+            }
         };
         let ($($get,)*) = {
-            let params = $req.extensions.get::<UrlEncodedQuery>().unwrap();
-            ($(params[stringify!($get)][0].clone(),)*)
+            if let Some(params) = $req.extensions.get::<UrlEncodedQuery>() {
+                ($({
+                    println!("DBG extracting GET {}", stringify!($get));
+                    let p = params[stringify!($get)][0].clone();
+                    println!("DBG GET {} = {}", stringify!($get), p);
+                    p
+                },)*)
+            } else {
+                ($({
+                    println!("DBG making up default value for GET {}", stringify!($get));
+                    Default::default()
+                },)*)
+            }
         };
         let ($($post,)*) = {
-            let params = $req.extensions.get::<UrlEncodedBody>().unwrap();
-            ($(params[stringify!($post)][0].clone(),)*)
+            if let Some(params) = $req.extensions.get::<UrlEncodedBody>() {
+                ($({
+                    println!("DBG extracting POST {}", stringify!($post));
+                    let p = params[stringify!($post)][0].clone();
+                    println!("DBG POST {} = {}", stringify!($post), p);
+                    p
+                },)*)
+            } else {
+                ($({
+                    println!("DBG making up default value for POST {}", stringify!($post));
+                    Default::default()
+                },)*)
+            }
         };
     }
 }
@@ -602,7 +635,7 @@ guilty!{
 
             let mut chain = Chain::new(mount);
             maybe_watch(&mut chain);
-            chain.link_after(Catchall::new());
+            //chain.link_after(Catchall::new());
 
             let listening = Iron::new(chain).http(("0.0.0.0", HTTP_PORT)).unwrap();
 
