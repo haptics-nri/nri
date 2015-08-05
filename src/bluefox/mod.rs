@@ -33,6 +33,9 @@ group_attr!{
 
         /// PNG writer rebootable thread
         png: RestartableThread<PngStuff>,
+
+        /// Timestamp file handle
+        stampfile: File,
     }
 
     guilty!{
@@ -60,6 +63,8 @@ group_attr!{
                         prof!("encode", PNGEncoder::new(&mut encoded).encode(&resized, ww, hh, bd).unwrap());
                         prof!("send", mtx.lock().unwrap().send(CmdFrom::Data(format!("send kick bluefox {} data:image/png;base64,{}", i, prof!("base64", encoded.to_base64(base64::STANDARD))))).unwrap());
                     }),
+
+                    stampfile: File::create("data/bluefox_times.csv").unwrap(),
                 }
             }
 
@@ -70,6 +75,8 @@ group_attr!{
 
                 let mut f = File::create(format!("data/bluefox{}.dat", self.i)).unwrap();
                 prof!("write", f.write_all(image.data()).unwrap());
+                let stamp = time::get_time();
+                writeln!(self.stampfile, "{},{},{:.9}", self.i, fname, stamp.sec as f64 + stamp.nsec as f64 / 1_000_000_000f64);
                 match data.as_ref().map(|s| s as &str) {
                     Some("kick") => {
                         //self.device.set_reverse_x(!self.device.get_reverse_x().unwrap());
