@@ -5,12 +5,12 @@
 pub enum ParkState {
     /// All end effectors parked
     None = 0,
-    /// The Biotac is out
-    BioTac = 1,
     /// The Optoforce is out
-    OptoForce = 2,
+    OptoForce = 1,
     /// The rigid stick is out
-    Stick = 4,
+    Stick = 2,
+    /// The Biotac is out
+    BioTac = 4,
     /// Multiple end effectors unparked! The sky is falling!
     Multiple = -1
 }
