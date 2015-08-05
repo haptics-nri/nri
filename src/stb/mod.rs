@@ -1,23 +1,26 @@
 //! Service to read data from the STB and attached sensors
 
-/// Which end effector is in use (i.e. not parked)
-#[derive(Eq, PartialEq)]
-pub enum ParkState {
-    /// All end effectors parked
-    None = 0,
-    /// The Optoforce is out
-    OptoForce = 1,
-    /// The rigid stick is out
-    Stick = 2,
-    /// The Biotac is out
-    BioTac = 4,
-    /// Multiple end effectors unparked! The sky is falling!
-    Multiple = -1
+enum_from_primitive! {
+    /// Which end effector is in use (i.e. not parked)
+    #[derive(Eq, PartialEq)]
+    pub enum ParkState {
+        // All end effectors parked // TODO enum_from_primitive! doesn't support internal doc comments
+        None = 0,
+        // The Optoforce is out
+        OptoForce = 1,
+        // The rigid stick is out
+        Stick = 2,
+        // The Biotac is out
+        BioTac = 4,
+        // Multiple end effectors unparked! The sky is falling!
+        Multiple = -1
+    }
 }
 
+#[cfg(not(target_os = "linux"))]
 impl ParkState {
-    pub fn metermaid() -> ParkState {
-        ParkState::None
+    pub fn metermaid() -> Option<ParkState> {
+        Some(ParkState::Stick)
     }
 }
 
@@ -35,9 +38,36 @@ group_attr!{
     use std::fmt::{self, Display, Debug, Formatter};
     use self::serial::prelude::*;
 
+    fn serialport() -> Box<SerialPort> {
+        let mut port = serial::open("/dev/ttySTB").unwrap();
+        port.reconfigure(&|settings| {
+            try!(settings.set_baud_rate(serial::Baud115200));
+            Ok(())
+        }).unwrap();
+        Box::new(port)
+    }
+
+    impl ParkState {
+        pub fn metermaid() -> Option<ParkState> {
+            let port = serialport();
+
+            port.write(&['4' as u8]); // FIXME write -> write_all, read -> read_to_slice
+
+            let mut buf = [0u8; 1];
+            match port.read_to_slice(&buf) {
+                Ok(1)          => {
+                    match ParkState::from_u8(buf[0]) {
+                        Some(ps) => Some(ps),
+                        None     => Some(ParkState::Multiple)
+                    }
+                },
+                Ok(0) | Err(_) => None
+            }
+        }
+    }
 
     pub struct STB {
-        port: Box<serial::SerialPort>,
+        port: Box<SerialPort>,
         file: File,
         i: usize,
         start: time::Tm,
@@ -138,21 +168,17 @@ group_attr!{
             fn setup(_: Sender<CmdFrom>, _: Option<String>) -> STB {
                 assert_eq!(mem::size_of::<Packet>(), u8::MAX as usize);
 
-                let mut port = serial::open("/dev/ttySTB").unwrap();
-                port.reconfigure(&|settings| {
-                    try!(settings.set_baud_rate(serial::Baud115200));
-                    Ok(())
-                }).unwrap();
+                let port = serialport();
                 port.write(&['1' as u8]);
 
-                STB { port: Box::new(port), file: File::create("data/stb.dat").unwrap(), i: 0, start: time::now() }
+                STB { port: port, file: File::create("data/stb.dat").unwrap(), i: 0, start: time::now() }
             }
 
             fn step(&mut self, _: Option<String>) {
                 self.i += 1;
 
                 let mut size_buf = [0u8; 4];
-                let packet_size = match self.port.read(&mut size_buf) {
+                let packet_size = match PORT.read(&mut size_buf) {
                     Ok(l) if l == size_buf.len() => {
                         if &size_buf[..3] == b"aaa" {
                             size_buf[3] as usize
@@ -171,7 +197,7 @@ group_attr!{
                     }
                 };
                 let mut buf = Vec::<u8>::with_capacity(packet_size);
-                match self.port.deref_mut().take(packet_size as u64).read_to_end(&mut buf) {
+                match PORT.deref_mut().take(packet_size as u64).read_to_end(&mut buf) {
                     Ok(n) if n == packet_size => {
                         let packet = match unsafe { Packet::new(&buf) } {
                             Ok(p) => p,
@@ -189,7 +215,7 @@ group_attr!{
             }
 
             fn teardown(&mut self) {
-                self.port.write(&['2' as u8]);
+                PORT.write(&['2' as u8]);
                 let end = time::now();
                 let millis = (end - self.start).num_milliseconds() as f64;
                 println!("{} STB packets grabbed in {} s ({} FPS)!", self.i, millis/1000.0, 1000.0*(self.i as f64)/millis);
