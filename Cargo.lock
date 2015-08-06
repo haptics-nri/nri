@@ -4,6 +4,7 @@ version = "0.1.0"
 dependencies = [
  "chrono 0.2.15 (registry+https://github.com/rust-lang/crates.io-index)",
  "csv 0.14.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "custom_derive 0.1.0 (git+git://github.com/durka/rust-custom-derive?branch=export-tryfrom)",
  "enum_primitive 0.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "guilt-by-association 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -112,6 +113,11 @@ dependencies = [
  "byteorder 0.3.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-serialize 0.3.15 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "custom_derive"
+version = "0.1.0"
+source = "git+git://github.com/durka/rust-custom-derive?branch=export-tryfrom#67b63af4064432f30089e65d48fdff4b0f0381d0"
 
 [[package]]
 name = "enum_primitive"
