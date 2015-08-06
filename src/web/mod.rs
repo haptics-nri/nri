@@ -398,7 +398,7 @@ fn flow(tx: mpsc::Sender<CmdFrom>, flows: Arc<RwLock<Vec<Flow>>>) -> Box<Handler
                     if found.active {
                         Response::with((status::BadRequest, format!("Already in the middle of \"{}\" flow", flow)))
                     } else {
-                        found.run(ParkState::metermaid(), mtx.lock().unwrap().deref(), wsid);
+                        found.run(ParkState::metermaid().unwrap(), mtx.lock().unwrap().deref(), wsid);
                         Response::with((status::Ok, format!("Started \"{}\" flow", flow)))
                     }
                 } else {

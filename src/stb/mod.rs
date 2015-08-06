@@ -37,6 +37,7 @@ group_attr!{
     use std::ops::DerefMut;
     use std::fmt::{self, Display, Debug, Formatter};
     use self::serial::prelude::*;
+    use enum_primitive::FromPrimitive;
 
     fn serialport() -> Box<SerialPort> {
         let mut port = serial::open("/dev/ttySTB").unwrap();
@@ -47,21 +48,21 @@ group_attr!{
         Box::new(port)
     }
 
-    impl ParkState {
-        pub fn metermaid() -> Option<ParkState> {
-            let port = serialport();
+    impl super::ParkState {
+        pub fn metermaid() -> Option<super::ParkState> {
+            let mut port = serialport();
 
             port.write(&['4' as u8]); // FIXME write -> write_all, read -> read_to_slice
 
             let mut buf = [0u8; 1];
-            match port.read_to_slice(&buf) {
+            match port.read(&mut buf) { // TODO read_to_slice
                 Ok(1)          => {
-                    match ParkState::from_u8(buf[0]) {
+                    match super::ParkState::from_u8(buf[0]) {
                         Some(ps) => Some(ps),
-                        None     => Some(ParkState::Multiple)
+                        None     => Some(super::ParkState::Multiple)
                     }
                 },
-                Ok(0) | Err(_) => None
+                Ok(_) | Err(_) => None
             }
         }
     }
@@ -168,7 +169,7 @@ group_attr!{
             fn setup(_: Sender<CmdFrom>, _: Option<String>) -> STB {
                 assert_eq!(mem::size_of::<Packet>(), u8::MAX as usize);
 
-                let port = serialport();
+                let mut port = serialport();
                 port.write(&['1' as u8]);
 
                 STB { port: port, file: File::create("data/stb.dat").unwrap(), i: 0, start: time::now() }
@@ -178,7 +179,7 @@ group_attr!{
                 self.i += 1;
 
                 let mut size_buf = [0u8; 4];
-                let packet_size = match PORT.read(&mut size_buf) {
+                let packet_size = match self.port.read(&mut size_buf) {
                     Ok(l) if l == size_buf.len() => {
                         if &size_buf[..3] == b"aaa" {
                             size_buf[3] as usize
@@ -197,7 +198,7 @@ group_attr!{
                     }
                 };
                 let mut buf = Vec::<u8>::with_capacity(packet_size);
-                match PORT.deref_mut().take(packet_size as u64).read_to_end(&mut buf) {
+                match self.port.deref_mut().take(packet_size as u64).read_to_end(&mut buf) {
                     Ok(n) if n == packet_size => {
                         let packet = match unsafe { Packet::new(&buf) } {
                             Ok(p) => p,
@@ -215,7 +216,7 @@ group_attr!{
             }
 
             fn teardown(&mut self) {
-                PORT.write(&['2' as u8]);
+                self.port.write(&['2' as u8]);
                 let end = time::now();
                 let millis = (end - self.start).num_milliseconds() as f64;
                 println!("{} STB packets grabbed in {} s ({} FPS)!", self.i, millis/1000.0, 1000.0*(self.i as f64)/millis);
