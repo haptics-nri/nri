@@ -1,18 +1,19 @@
 //! Service to read data from the STB and attached sensors
 
-enum_from_primitive! {
+custom_derive! {
     /// Which end effector is in use (i.e. not parked)
-    #[derive(Eq, PartialEq)]
+    #[derive(Eq, PartialEq, TryFrom(u8))]
     pub enum ParkState {
-        // All end effectors parked // TODO enum_from_primitive! doesn't support internal doc comments
+        /// All end effectors parked
+        /// TODO enum_from_primitive! doesn't support internal doc comments
         None = 0,
-        // The Optoforce is out
+        /// The Optoforce is out
         OptoForce = 1,
-        // The rigid stick is out
+        /// The rigid stick is out
         Stick = 2,
-        // The Biotac is out
+        /// The Biotac is out
         BioTac = 4,
-        // Multiple end effectors unparked! The sky is falling!
+        /// Multiple end effectors unparked! The sky is falling!
         Multiple = -1
     }
 }

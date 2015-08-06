@@ -17,6 +17,7 @@ watch = ["handlebars-iron/watch"]
 log = "*"
 env_logger = "*"
 libc = "*"
+enum_primitive = "*"
 #lazy_static = "*"
 time = "*"
 chrono = "*"
@@ -24,7 +25,6 @@ image = "*"
 hprof = "*"
 #ioctl-rs = "*"
 num = "*"
-enum_primitive = "*"
 serial = "*"
 csv = "*"
 uuid = "*"
@@ -60,4 +60,8 @@ branch = "stabilize"
 
 [dependencies.lazy_static] # waiting for cargo publish
 git = "git://github.com/kimundi/lazy-static.rs"
+
+[dependencies.custom_derive] # waiting for PR accept
+git = "git://github.com/durka/rust-custom-derive"
+branch = "export-tryfrom"
 
