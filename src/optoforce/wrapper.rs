@@ -6,6 +6,9 @@ use std::ffi::CString;
 use std::fmt;
 use std::ops::Deref;
 
+// FIXME this is totally undefined behavior all the time!
+// for literals: b"str\0".as_ptr()
+// for strings: keep the CString alive until the C function returns
 macro_rules! c_str {
     ($s:expr) => {
         CString::new($s).unwrap().as_ptr()
