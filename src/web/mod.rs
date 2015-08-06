@@ -301,53 +301,30 @@ fn index(flows: Arc<RwLock<Vec<Flow>>>) -> Box<Handler> {
     })
 }
 
+macro_rules! ignore {
+    ($($t:tt)*) => {}
+}
+
+macro_rules! bind {
+    ($req:expr, $ext:ident ($($var:ident),*) |$p:ident, $v:ident| $extract:expr) => {
+        let ($($var,)*) = {
+            if let Some($p) = $req.extensions.get::<$ext>() {
+                ($( {
+                    let $v = stringify!($var);
+                    $extract
+                } ,)*)
+            } else {
+                ($({ ignore!($var); Default::default() } ,)*)
+            }
+        };
+    }
+}
+
 macro_rules! params {
     ($req:expr => [URL $($url:ident),*] [GET $($get:ident),*] [POST $($post:ident),*]) => {
-        let ($($url,)*) = {
-            if let Some(params) = $req.extensions.get::<Router>() {
-                ($({
-                    println!("DBG extracting :{} from URL", stringify!($url));
-                    let p = params.find(stringify!($url)).unwrap();
-                    println!("DBG :{} = {}", stringify!($url), p);
-                    String::from_utf8(percent_decode(p.as_bytes())).unwrap()
-                },)*)
-            } else {
-                ($({
-                    println!("DBG making up default value for :{}", stringify!($url));
-                    Default::default()
-                },)*)
-            }
-        };
-        let ($($get,)*) = {
-            if let Some(params) = $req.extensions.get::<UrlEncodedQuery>() {
-                ($({
-                    println!("DBG extracting GET {}", stringify!($get));
-                    let p = params[stringify!($get)][0].clone();
-                    println!("DBG GET {} = {}", stringify!($get), p);
-                    p
-                },)*)
-            } else {
-                ($({
-                    println!("DBG making up default value for GET {}", stringify!($get));
-                    Default::default()
-                },)*)
-            }
-        };
-        let ($($post,)*) = {
-            if let Some(params) = $req.extensions.get::<UrlEncodedBody>() {
-                ($({
-                    println!("DBG extracting POST {}", stringify!($post));
-                    let p = params[stringify!($post)][0].clone();
-                    println!("DBG POST {} = {}", stringify!($post), p);
-                    p
-                },)*)
-            } else {
-                ($({
-                    println!("DBG making up default value for POST {}", stringify!($post));
-                    Default::default()
-                },)*)
-            }
-        };
+        bind!($req, Router ($($url),*) |p, v| String::from_utf8(percent_decode(p.find(v).unwrap().as_bytes())).unwrap());
+        bind!($req, UrlEncodedQuery ($($get),*) |p, v| p[v][0].clone());
+        bind!($req, UrlEncodedBody ($($post),*) |p, v| p[v][0].clone());
     }
 }
 
@@ -450,6 +427,7 @@ impl Drain {
         let mut buf = [0];
         if let Ok(n) = req.body.read(&mut buf) {
             if n > 0 {
+                error!("Body too large, closing connection");
                 resp.headers.set(Connection::close());
             }
         }
