@@ -2,7 +2,7 @@
 
 custom_derive! {
     /// Which end effector is in use (i.e. not parked)
-    #[derive(Eq, PartialEq, TryFrom(u8))]
+    #[derive(Eq, PartialEq, Debug, TryFrom(u8))]
     pub enum ParkState {
         /// All end effectors parked
         /// TODO enum_from_primitive! doesn't support internal doc comments
@@ -38,7 +38,7 @@ group_attr!{
     use std::ops::DerefMut;
     use std::fmt::{self, Display, Debug, Formatter};
     use self::serial::prelude::*;
-    use enum_primitive::FromPrimitive;
+    use custom_derive::TryFrom;
 
     fn serialport() -> Box<SerialPort> {
         let mut port = serial::open("/dev/ttySTB").unwrap();
@@ -58,9 +58,10 @@ group_attr!{
             let mut buf = [0u8; 1];
             match port.read(&mut buf) { // TODO read_to_slice
                 Ok(1)          => {
-                    match super::ParkState::from_u8(buf[0]) {
-                        Some(ps) => Some(ps),
-                        None     => Some(super::ParkState::Multiple)
+                    println!("DBG meter maid says {:b}", buf[0]);
+                    match super::ParkState::try_from(!buf[0]) {
+                        Ok(ps) => Some(ps),
+                        Err(_) => Some(super::ParkState::Multiple)
                     }
                 },
                 Ok(_) | Err(_) => None
