@@ -5,6 +5,7 @@ extern crate lodepng;
 #[macro_use] mod common;
 
 use std::{env, process, fmt};
+use std::io::{Read, Write};
 use std::fs::File;
 use std::path::Path;
 use lodepng::{encode_file, ColorType};
@@ -26,11 +27,16 @@ impl fmt::Debug for Row {
 fn main() {
     let inname = common::parse_in_arg(&mut env::args().skip(1));
 
-    let mut csvrdr = csv::Reader::from_reader(attempt!(File::open(&inname))).has_headers(false);
+    let mut csvfile = attempt!(File::open(&inname));
+    let mut csvrdr = csv::Reader::from_reader(csvfile).has_headers(false);
+    let mut csvwtr = csv::Writer::from_memory();
+    csvwtr.encode(("Frame number", "Filename", "Unix timestamp"));
+
     let mut i = 0;
     for row in csvrdr.decode() {
         indentln!(> "reading frame {}...", i);
         let (num, fname, stamp): (usize, String, f64) = row.ok().expect(&format!("failed to parse row {} of {}", i, inname));
+        csvwtr.encode((num, Path::new(&fname).with_extension("png").to_str().unwrap().to_string(), stamp));
         i += 1;
         let dat_path = Path::new(&inname).with_file_name(fname);
         let dat = dat_path.to_str().unwrap().to_string();
@@ -48,5 +54,7 @@ fn main() {
         attempt!(encode_file(png, &pixels, 640, rows.len(), ColorType::LCT_GREY, 16));
     }
     indentln!("finished {} frames", i);
+
+    attempt!(File::create(&inname)).write_all(csvwtr.as_bytes());
 }
 
