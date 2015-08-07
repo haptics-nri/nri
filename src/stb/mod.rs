@@ -5,7 +5,6 @@ custom_derive! {
     #[derive(Eq, PartialEq, Debug, TryFrom(u8))]
     pub enum ParkState {
         /// All end effectors parked
-        /// TODO enum_from_primitive! doesn't support internal doc comments
         None = 0,
         /// The Optoforce is out
         OptoForce = 1,
