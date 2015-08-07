@@ -46,6 +46,9 @@ guilty!{
                             errorln!("Failed to stop {}", dev);
                         }
                     },
+                    "status" => {
+                        println!("{:?}", super::stb::ParkState::metermaid());
+                    },
                     "quit" => {
                         self.tx.send(CmdFrom::Quit).unwrap();
                     },
