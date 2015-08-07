@@ -58,7 +58,7 @@ group_attr!{
             match port.read(&mut buf) { // TODO read_to_slice
                 Ok(1)          => {
                     println!("DBG meter maid says {:b}", buf[0]);
-                    match super::ParkState::try_from(!buf[0]) {
+                    match super::ParkState::try_from(!(buf[0] | 0b1111_1000)) {
                         Ok(ps) => Some(ps),
                         Err(_) => Some(super::ParkState::Multiple)
                     }
