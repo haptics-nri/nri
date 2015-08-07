@@ -73,7 +73,8 @@ group_attr!{
 
                 let image = self.device.request().unwrap();
 
-                let mut f = File::create(format!("data/bluefox{}.dat", self.i)).unwrap();
+                let fname = format!("bluefox{}.dat", self.i);
+                let mut f = File::create(format!("data/{}", fname)).unwrap();
                 prof!("write", f.write_all(image.data()).unwrap());
                 let stamp = time::get_time();
                 writeln!(self.stampfile, "{},{},{:.9}", self.i, fname, stamp.sec as f64 + stamp.nsec as f64 / 1_000_000_000f64);
