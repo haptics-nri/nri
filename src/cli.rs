@@ -1,8 +1,8 @@
 //! CLI interface to view and control running services
 
 use super::comms::{Controllable, CmdFrom, Block};
-use std::io;
-use std::io::{BufRead, Write};
+use std::thread;
+use std::io::{self, BufRead, Write};
 use std::process::Command;
 use std::sync::mpsc::Sender;
 
@@ -31,34 +31,49 @@ guilty!{
             if line.starts_with("!") {
                 Command::new("sh").args(&["-c", &line[1..]]).status().unwrap();
             } else {
-                let mut words = line.split(" ");
-                match words.next().unwrap_or("") {
-                    "" => {},
-                    "start" => {
-                        let dev = words.next().unwrap_or("");
-                        if !rpc!(self.tx, CmdFrom::Start, dev.to_string()).unwrap() {
-                            errorln!("Failed to start {}", dev);
-                        }
-                    },
-                    "stop" => {
-                        let dev = words.next().unwrap_or("");
-                        if !rpc!(self.tx, CmdFrom::Stop, dev.to_string()).unwrap() {
-                            errorln!("Failed to stop {}", dev);
-                        }
-                    },
-                    "status" => {
-                        println!("{:?}", super::stb::ParkState::metermaid());
-                    },
-                    "quit" => {
-                        self.tx.send(CmdFrom::Quit).unwrap();
-                    },
-                    "panic" => {
-                        self.tx.send(CmdFrom::Panic).unwrap();
-                    },
-                    "websend" => {
-                        self.tx.send(CmdFrom::Data("send test".to_string())).unwrap();
-                    },
-                    _ => println!("Unknown command!")
+                for command in line.split(";") {
+                    let mut words = command.trim().split(" ");
+                    match words.next().unwrap_or("") {
+                        "" => {},
+                        "sleep" => {
+                            if let Some(ms_str) = words.next() {
+                                if let Ok(ms) = ms_str.parse::<u32>() {
+                                    thread::sleep_ms(ms);
+                                } else {
+                                    errorln!("Invalid millisecond value");
+                                }
+                            } else {
+                                errorln!("No millisecond value");
+                            }
+                        },
+                        "start" => {
+                            while let Some(dev) = words.next() {
+                                if !rpc!(self.tx, CmdFrom::Start, dev.to_string()).unwrap() {
+                                    errorln!("Failed to start {}", dev);
+                                }
+                            }
+                        },
+                        "stop" => {
+                            while let Some(dev) = words.next() {
+                                if !rpc!(self.tx, CmdFrom::Stop, dev.to_string()).unwrap() {
+                                    errorln!("Failed to stop {}", dev);
+                                }
+                            }
+                        },
+                        "status" => {
+                            println!("{:?}", super::stb::ParkState::metermaid());
+                        },
+                        "quit" => {
+                            self.tx.send(CmdFrom::Quit).unwrap();
+                        },
+                        "panic" => {
+                            self.tx.send(CmdFrom::Panic).unwrap();
+                        },
+                        "websend" => {
+                            self.tx.send(CmdFrom::Data("send test".to_string())).unwrap();
+                        },
+                        _ => println!("Unknown command!")
+                    }
                 }
             }
         }
