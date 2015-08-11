@@ -29,6 +29,7 @@ serial = "*"
 csv = "*"
 uuid = "*"
 threadpool = "*"
+abort_on_panic = "*"
 
 # stuff that I wrote
 guilt-by-association = "*"

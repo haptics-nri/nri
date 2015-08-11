@@ -150,6 +150,7 @@ use stb::STB;
 #[macro_use] extern crate enum_primitive;
 #[macro_use] extern crate custom_derive;
 #[macro_use] extern crate lazy_static;
+#[macro_use] extern crate abort_on_panic;
 extern crate num;
 extern crate env_logger;
 extern crate hprof;
