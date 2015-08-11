@@ -10,6 +10,6 @@ fi
 touch $FILE
 
 while [ -e $FILE ]; do
-    screen -Dm -S nri ./run.sh
+    screen -L -Dm -S nri ./run.sh
 done
 
