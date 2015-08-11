@@ -30,47 +30,104 @@ group_attr!{
     extern crate serial;
     extern crate time;
     use ::comms::{Controllable, CmdFrom, Block};
-    use std::io::{Read, Write};
+    use ::scribe::{Writer, Writable};
+    use std::io::{self, Read, Write};
     use std::fs::File;
     use std::sync::mpsc::Sender;
     use std::{u8, ptr, mem, slice, ops};
     use std::ops::DerefMut;
     use std::fmt::{self, Display, Debug, Formatter};
     use self::serial::prelude::*;
+    use self::time::Duration;
     use custom_derive::TryFrom;
 
-    fn serialport() -> Box<SerialPort> {
+    trait RFC980: Read {
+        fn read_exact(&mut self, mut buf: &mut [u8]) -> io::Result<()> {
+            while !buf.is_empty() {
+                match self.read(buf) {
+                    Ok(0)   => break,
+                    Ok(n)   => {
+                        let tmp = buf;
+                        buf = &mut tmp[n..];
+                    },
+                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted
+                            => {},
+                    Err(e)  => return Err(e),
+                }
+            }
+
+            if !buf.is_empty() {
+                Err(io::Error::new(io::ErrorKind::Other, "failed to fill whole buffer"))
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    trait Coffee: Read + Write {
+        fn coffee<W: Write>(self, w: W) -> CoffeeImpl<Self, W> where Self: Sized {
+            CoffeeImpl { parent: self, writer: w }
+        }
+    }
+
+    struct CoffeeImpl<RW: Read + Write, W: Write> {
+        parent: RW,
+        writer: W,
+    }
+
+    impl<RW: Read + Write, W: Write> Read for CoffeeImpl<RW, W> {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            let n = try!(self.parent.read(buf));
+            try!(self.writer.write_all(&buf[..n]));
+            Ok(n)
+        }
+    }
+
+    impl<RW: Read + Write, W: Write> Write for CoffeeImpl<RW, W> {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> { self.parent.write(buf) }
+        fn flush(&mut self)             -> io::Result<()>    { self.parent.flush()    }
+    }
+
+    impl<T: Read> RFC980 for T {}
+    impl<T: Read + Write> Coffee for T {}
+
+    trait StaticReadWrite: Read + Write + 'static {}
+    impl<T: Read + Write + 'static> StaticReadWrite for T {}
+
+    fn serialport() -> Box<StaticReadWrite> {
         let mut port = serial::open("/dev/ttySTB").unwrap();
         port.reconfigure(&|settings| {
             try!(settings.set_baud_rate(serial::Baud115200));
             Ok(())
         }).unwrap();
+        port.set_timeout(Duration::milliseconds(100)).unwrap();
         Box::new(port)
+        //Box::new(port.coffee(File::create("data/stbdump.dat").unwrap()))
     }
 
     impl super::ParkState {
         pub fn metermaid() -> Option<super::ParkState> {
             let mut port = serialport();
 
-            port.write(&['4' as u8]); // FIXME write -> write_all, read -> read_to_slice
+            port.write_all(&['4' as u8]).unwrap();
 
             let mut buf = [0u8; 1];
-            match port.read(&mut buf) { // TODO read_to_slice
-                Ok(1)          => {
+            match port.read_exact(&mut buf) {
+                Ok(())         => {
                     println!("DBG meter maid says {:b}", buf[0]);
                     match super::ParkState::try_from(!(buf[0] | 0b1111_1000)) {
                         Ok(ps) => Some(ps),
                         Err(_) => Some(super::ParkState::Multiple)
                     }
                 },
-                Ok(_) | Err(_) => None
+                Err(_)         => None
             }
         }
     }
 
     pub struct STB {
-        port: Box<SerialPort>,
-        file: File,
+        port: Box<StaticReadWrite>,
+        file: Writer<Packet>,
         i: usize,
         start: time::Tm,
     }
@@ -83,11 +140,14 @@ group_attr!{
     }
     #[repr(packed)]
     struct Packet {
+        stamp  : time::Timespec,
         ft     : [u8; 31],
         n_acc  : u8,
         n_gyro : u8,
         imu    : [XYZ<i16>; 37]
     }
+
+    unsafe impl Writable for Packet {}
 
     impl Packet {
         unsafe fn new(buf: &[u8]) -> Result<Packet, String> {
@@ -101,6 +161,7 @@ group_attr!{
 
             unsafe fn only_stb(buf: &[u8]) -> Packet {
                 let mut p: Packet = Packet {
+                    stamp  : time::get_time(),
                     ft     : mem::zeroed::<[u8; 31]>(),
                     n_acc  : 0,
                     n_gyro : 0,
@@ -113,6 +174,7 @@ group_attr!{
             unsafe fn imu_and_stb(buf: &[u8], a: usize, g: usize) -> Packet {
                 let s = 2 + 6*(a + g + 1);
                 let mut p: Packet = Packet {
+                    stamp  : time::get_time(),
                     ft     : mem::zeroed::<[u8; 31]>(),
                     n_acc  : a as u8,
                     n_gyro : g as u8,
@@ -165,42 +227,53 @@ group_attr!{
     guilty! {
         impl Controllable for STB {
             const NAME: &'static str = "stb",
-            const BLOCK: Block = Block::Immediate,
+            const BLOCK: Block = Block::Period(333_333),
 
             fn setup(_: Sender<CmdFrom>, _: Option<String>) -> STB {
-                assert_eq!(mem::size_of::<Packet>(), u8::MAX as usize);
+                assert_eq!(mem::size_of::<Packet>(), u8::MAX as usize + mem::size_of::<time::Timespec>());
 
                 let mut port = serialport();
-                port.write(&['1' as u8]);
+                port.write_all(&['1' as u8]).unwrap();
 
-                STB { port: port, file: File::create("data/stb.dat").unwrap(), i: 0, start: time::now() }
+                STB { port: port, file: Writer::to_file("data/stb.dat"), i: 0, start: time::now() }
             }
 
             fn step(&mut self, _: Option<String>) {
                 self.i += 1;
 
+                /*
+                let mut b = [0u8; 4096];
+                self.port.read_exact(&mut b).err().map(|e| println!("STB read error {:?}", e));
+                */
                 let mut size_buf = [0u8; 4];
-                let packet_size = match self.port.read(&mut size_buf) {
-                    Ok(l) if l == size_buf.len() => {
+                let packet_size = match self.port.read_exact(&mut size_buf) {
+                    Ok(()) => {
                         if &size_buf[..3] == b"aaa" {
                             size_buf[3] as usize
                         } else {
-                            errorln!("The STB did not sent the expected packet size prefix!");
-                            return;
+                            errorln!("The STB did not send the expected packet size prefix! instead {:?}", size_buf);
+                            let mut scanning = [0u8; 1];
+                            let mut count = 0;
+                            while count < 3 {
+                                self.port.read_exact(&mut scanning).unwrap();
+                                if scanning[0] == 'a' as u8 {
+                                    count += 1;
+                                } else {
+                                    count = 0;
+                                }
+                            }
+                            self.port.read_exact(&mut scanning).unwrap();
+                            scanning[0] as usize
                         }
-                    },
-                    Ok(_) => {
-                        errorln!("Something went wrong reading the packet size from the STB!");
-                        return;
                     },
                     Err(e) => {
                         errorln!("Error reading packet size from the STB: {:?}", e);
                         return;
                     }
                 };
-                let mut buf = Vec::<u8>::with_capacity(packet_size);
-                match self.port.deref_mut().take(packet_size as u64).read_to_end(&mut buf) {
-                    Ok(n) if n == packet_size => {
+                let mut buf = vec![0u8; packet_size];
+                match self.port.read_exact(&mut buf[..]) {
+                    Ok(()) => {
                         let packet = match unsafe { Packet::new(&buf) } {
                             Ok(p) => p,
                             Err(s) => {
@@ -208,16 +281,14 @@ group_attr!{
                                 return;
                             },
                         };
-                        self.file.write_all(unsafe { slice::from_raw_parts(&time::get_time() as *const _ as *const _, mem::size_of::<time::Timespec>()) });
-                        self.file.write_all(unsafe { slice::from_raw_parts(&packet as *const _ as *const _, mem::size_of_val(&packet)) });
+                        self.file.write(packet);
                     },
-                    Ok(_)   => errorln!("Read partial packet from STB?"),
                     Err(e)  => errorln!("Error reading packet from STB: {:?}", e)
                 }
             }
 
             fn teardown(&mut self) {
-                self.port.write(&['2' as u8]);
+                self.port.write_all(&['2' as u8]).unwrap();
                 let end = time::now();
                 let millis = (end - self.start).num_milliseconds() as f64;
                 println!("{} STB packets grabbed in {} s ({} FPS)!", self.i, millis/1000.0, 1000.0*(self.i as f64)/millis);
