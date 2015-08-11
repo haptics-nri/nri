@@ -102,13 +102,13 @@ pub enum Message {
 
 pub unsafe trait Writable {}
 
-pub struct Writer<T> {
+pub struct Writer<T: ?Sized> {
     handle: Handle,
     dst   : Destination,
     _ghost: PhantomData<*const T>
 }
 
-impl<T: Writable + Send + 'static> Writer<T> {
+impl<T: ?Sized> Writer<T> {
     pub fn to_file<S: Into<String>>(name: S) -> Writer<T> {
         let (tx, rx) = mpsc::channel();
         send(Message::Open(name.into(), tx));
@@ -130,7 +130,9 @@ impl<T: Writable + Send + 'static> Writer<T> {
             _ghost: PhantomData,
         }
     }
+}
 
+impl<T: Writable + Send + 'static> Writer<T> {
     pub fn write(&mut self, data: T) {
         let mut raw_data = vec![0u8; mem::size_of::<T>()].into_boxed_slice();
         unsafe {
@@ -146,11 +148,27 @@ impl<T: Writable + Send + 'static> Writer<T> {
     }
 }
 
+impl Writer<[u8]> {
+    pub fn write(&mut self, data: &[u8]) {
+        let mut raw_data = vec![0u8; data.len()].into_boxed_slice();
+        unsafe {
+            ptr::copy::<u8>(data as *const[u8] as *const u8,
+                            raw_data.deref_mut() as *mut [u8] as *mut u8,
+                            data.len());
+        }
+
+        send(match self.dst {
+            Destination::Name    => Message::Write(self.handle, raw_data),
+            Destination::Pattern => Message::Packet(self.handle, raw_data),
+        });
+    }
+}
+
 fn send(m: Message) {
     WORKER.lock().unwrap().tx.as_ref().unwrap().send(m).unwrap();
 }
 
-impl<T> Drop for Writer<T> {
+impl<T: ?Sized> Drop for Writer<T> {
     fn drop(&mut self) {
         send(match self.dst {
             Destination::Name    => Message::Close(self.handle),

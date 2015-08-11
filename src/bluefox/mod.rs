@@ -15,6 +15,7 @@ group_attr!{
     use std::sync::Mutex;
     use std::sync::mpsc::Sender;
     use ::comms::{Controllable, CmdFrom, Block, RestartableThread};
+    use ::scribe::{Writer, Writable};
 
     type PngStuff = (usize, Vec<u8>, (usize, usize), ColorType);
 
@@ -35,7 +36,9 @@ group_attr!{
         png: RestartableThread<PngStuff>,
 
         /// Timestamp file handle
-        stampfile: File,
+        stampfile: Writer<[u8]>,
+
+        writer: Writer<[u8]>
     }
 
     guilty!{
@@ -64,7 +67,8 @@ group_attr!{
                         prof!("send", mtx.lock().unwrap().send(CmdFrom::Data(format!("send kick bluefox {} data:image/png;base64,{}", i, prof!("base64", encoded.to_base64(base64::STANDARD))))).unwrap());
                     }),
 
-                    stampfile: File::create("data/bluefox_times.csv").unwrap(),
+                    stampfile: Writer::to_file("data/bluefox_times.csv"),
+                    writer: Writer::to_files("data/bluefox{}.dat"),
                 }
             }
 
@@ -73,11 +77,9 @@ group_attr!{
 
                 let image = self.device.request().unwrap();
 
-                let fname = format!("bluefox{}.dat", self.i);
-                let mut f = File::create(format!("data/{}", fname)).unwrap();
-                prof!("write", f.write_all(image.data()).unwrap());
                 let stamp = time::get_time();
-                writeln!(self.stampfile, "{},{},{:.9}", self.i, fname, stamp.sec as f64 + stamp.nsec as f64 / 1_000_000_000f64);
+                self.writer.write(image.data());
+                self.stampfile.write(format!("{},bluefox{}.dat,{:.9}\n", self.i, self.i, stamp.sec as f64 + stamp.nsec as f64 / 1_000_000_000f64).as_bytes());
                 match data.as_ref().map(|s| s as &str) {
                     Some("kick") => {
                         //self.device.set_reverse_x(!self.device.get_reverse_x().unwrap());
