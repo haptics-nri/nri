@@ -28,6 +28,7 @@ num = "*"
 serial = "*"
 csv = "*"
 uuid = "*"
+threadpool = "*"
 
 # stuff that I wrote
 guilt-by-association = "*"

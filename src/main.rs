@@ -125,6 +125,7 @@ macro_rules! prof {
 }
 
 #[macro_use] mod comms;
+mod scribe;
 mod cli;
 mod web;
 mod stb;
