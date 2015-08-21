@@ -133,12 +133,13 @@ mod optoforce;
 mod structure;
 mod bluefox;
 
+use std::{fs, process};
 use std::io::{Write, BufRead};
 use std::thread;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{channel, Sender};
 use std::collections::HashMap;
-use comms::{Controllable, CmdTo, CmdFrom};
+use comms::{Controllable, CmdTo, CmdFrom, Power};
 use cli::CLI;
 use web::Web;
 use structure::Structure;
@@ -294,6 +295,8 @@ fn stop_all(services: &mut [Service]) {
         s.tx.lock().unwrap().as_ref().map(|s| s.send(CmdTo::Quit).unwrap());
         s.thread.take().map(|t| t.join().unwrap_or_else(|e| errorln!("Failed to join {} thread: {:?}", s.name, e)));
     }
+
+    // TODO wait for writer thread
 }
 
 /// Main function that does everything
@@ -336,6 +339,28 @@ fn main() {
                     CmdFrom::Panic        => {
                         println!("KABOOM");
                         panic!("Child thread initiated panic");
+                    },
+                    CmdFrom::Power(power) => {
+                        // step 1. delete keepalive file
+                        fs::remove_file("keepalive").unwrap();
+
+                        // step 2. stop all services
+                        stop_all(&mut services[1..]);
+
+                        // step 3. reboot system through DBUS
+                        process::Command::new("dbus-send")
+                            .arg("--system")
+                            .arg("--print-reply")
+                            .arg("--dest=org.freedesktop.login1")
+                            .arg("/org/freedesktop/login1")
+                            .arg(
+                                match power {
+                                    Power::PowerOff => "org.freedesktop.login1.Manager.PowerOff",
+                                    Power::Reboot   => "org.freedesktop.login1.Manager.Reboot",
+                                })
+                            .arg("boolean:true")
+                            .spawn().unwrap()
+                            .wait().unwrap();
                     },
                     CmdFrom::Timeout { thread: who, ms }  => {
                         // TODO actually time the service and do something if it times out

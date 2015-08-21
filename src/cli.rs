@@ -1,6 +1,6 @@
 //! CLI interface to view and control running services
 
-use super::comms::{Controllable, CmdFrom, Block};
+use super::comms::{Controllable, CmdFrom, Power, Block};
 use std::thread;
 use std::io::{self, BufRead, Write};
 use std::process::Command;
@@ -69,6 +69,12 @@ guilty!{
                         "panic" => {
                             self.tx.send(CmdFrom::Panic).unwrap();
                         },
+                        "reboot" => {
+                            self.tx.send(CmdFrom::Power(Power::Reboot)).unwrap();
+                        }
+                        "poweroff" => {
+                            self.tx.send(CmdFrom::Power(Power::PowerOff)).unwrap();
+                        }
                         "websend" => {
                             self.tx.send(CmdFrom::Data("send test".to_string())).unwrap();
                         },

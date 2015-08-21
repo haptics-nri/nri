@@ -45,6 +45,9 @@ pub enum CmdFrom {
     /// Abort the main thread immediately (never do this)
     Panic,
 
+    /// Shut down or reboot the computer
+    Power(Power),
+
     /// Schedule the sending thread to be killed in x ms
     Timeout { thread: &'static str, ms: u32 },
     /// Cancel a killing scheduled with Timeout
@@ -52,6 +55,12 @@ pub enum CmdFrom {
 
     /// Service thread panicked (obviously, this would only be sent from the middle-manager thread
     Panicked { thread: &'static str, panic_reason: String },
+}
+
+#[derive(Clone)]
+pub enum Power {
+    PowerOff,
+    Reboot
 }
 
 /// Desired blocking mode for a service

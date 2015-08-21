@@ -30,6 +30,7 @@ csv = "*"
 uuid = "*"
 threadpool = "*"
 abort_on_panic = "*"
+dbus = "*"
 
 # stuff that I wrote
 guilt-by-association = "*"

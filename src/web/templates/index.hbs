@@ -44,6 +44,14 @@
         <div class="container theme-showcase" role="main">
             <div class="jumbotron">
                 <h1>Control Panel</h1>
+
+                <div>
+                    <form method="POST" target="response">
+                        <input type="hidden" name="wsid" class="wsid" value="-1"/>
+                        <button onclick="return confirm('NUC will shut down!')" formaction="/nuc/poweroff" type="submit" class="btn btn-danger">Shut down NUC</button>
+                        <button onclick="return confirm('NUC will reboot!')" formaction="/nuc/reboot" type="submit" class="btn btn-danger">Reboot NUC</button>
+                    </form>
+                </div>
             </div>
 
             <div class="page-header">

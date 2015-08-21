@@ -22,7 +22,7 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::collections::{HashMap, BTreeMap};
 use std::io::{self, Read};
-use super::comms::{Controllable, CmdFrom, Block};
+use super::comms::{Controllable, CmdFrom, Power, Block};
 use super::stb::ParkState;
 use self::iron::prelude::*;
 use self::iron::status;
@@ -326,6 +326,28 @@ macro_rules! params {
         bind!($req, UrlEncodedQuery ($($get),*) |p, v| p[v][0].clone());
         bind!($req, UrlEncodedBody ($($post),*) |p, v| p[v][0].clone());
     }
+}
+
+/// Handler for controlling the NUC itself
+fn nuc(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
+    let mtx = Mutex::new(tx);
+    Box::new(move |req: &mut Request| -> IronResult<Response> {
+        params!(req => [URL action]
+                       [GET]
+                       [POST]);
+
+        Ok(match &*action {
+            "poweroff" => {
+                mtx.lock().unwrap().send(CmdFrom::Power(Power::PowerOff)).unwrap();
+                Response::with((status::Ok, "Powering off..."))
+            },
+            "reboot"   => {
+                mtx.lock().unwrap().send(CmdFrom::Power(Power::Reboot)).unwrap();
+                Response::with((status::Ok, "Rebooting..."))
+            },
+            _ => Response::with((status::BadRequest, format!("What does {} mean?", action)))
+        })
+    })
 }
 
 /// Handler for starting/stopping a service
@@ -632,6 +654,7 @@ guilty!{
 
             let mut router = Router::new();
             router.get("/", index(shared_flows.clone()));
+            router.post("/nuc/:action", nuc(tx.clone()));
             router.post("/control/:service/:action", control(tx.clone()));
             router.post("/flow/:flow/:action", flow(tx.clone(), shared_flows.clone()));
 
