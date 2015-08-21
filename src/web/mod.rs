@@ -26,7 +26,7 @@ use super::comms::{Controllable, CmdFrom, Power, Block};
 use super::stb::ParkState;
 use self::iron::prelude::*;
 use self::iron::status;
-use self::iron::middleware::{Handler, AfterMiddleware};
+use self::iron::middleware::{Handler, BeforeMiddleware, AfterMiddleware};
 use self::iron::headers::Connection;
 use self::hbs::{Template, HandlebarsEngine};
 #[cfg(feature = "watch")] use self::hbs::Watchable;
@@ -308,7 +308,7 @@ macro_rules! ignore {
 macro_rules! bind {
     ($req:expr, $ext:ident ($($var:ident),*) |$p:ident, $v:ident| $extract:expr) => {
         let ($($var,)*) = {
-            if let Some($p) = $req.extensions.get::<$ext>() {
+            if let Ok($p) = $req.get_ref::<$ext>() {
                 ($( {
                     let $v = stringify!($var);
                     $extract
