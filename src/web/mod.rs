@@ -239,7 +239,7 @@ impl FlowCmd {
             },
             FlowCmd::StopSensors => {
                 for svc in ["bluefox", "structure", "biotac", "optoforce", "stb"].into_iter() {
-                    assert!(rpc!(tx, CmdFrom::Start, svc.to_string()).unwrap());
+                    assert!(rpc!(tx, CmdFrom::Stop, svc.to_string()).unwrap());
                 }
             }
         }
