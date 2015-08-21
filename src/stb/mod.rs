@@ -120,7 +120,10 @@ group_attr!{
                         Err(_) => Some(super::ParkState::Multiple)
                     }
                 },
-                Err(_)         => None
+                Err(e)         => {
+                    println!("DBG meter maid error {:?}", e);
+                    None
+                }
             }
         }
     }

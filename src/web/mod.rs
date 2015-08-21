@@ -94,6 +94,7 @@ struct FlowState {
 }
 
 /// Different actions that a flow can perform at each state
+#[derive(Debug)]
 enum FlowCmd {
     Message(&'static str),
     Str { prompt: &'static str, data: Option<String> },
@@ -192,6 +193,7 @@ impl FlowCmd {
     }
 
     fn run(&mut self, tx: &mpsc::Sender<CmdFrom>, wsid: usize) {
+        println!("DBG executing flow state {:?}", self);
         match *self {
             FlowCmd::Message(msg) => ws_send(wsid, format!("{}", msg)),
             FlowCmd::Str { prompt, ref mut data } => {
