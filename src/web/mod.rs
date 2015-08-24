@@ -494,73 +494,73 @@ guilty!{
                                   FlowCmd::Message("Please insert Tab A into Slot B"),
                               }),
                           }),
-                          Flow::new("Episode",
-                                    vec! {
-                                        // TODO shutdown button
-                                        FlowState::new("Begin", None, vec! {
-                                            FlowCmd::StopSensors,
-                                            FlowCmd::Message("Starting new episode!"),
-                                        }),
-                                        // TODO generate unique ID and overall timestamp (+ timestamp for each step)
+                Flow::new("Episode",
+                          vec! {
+                              // TODO shutdown button
+                              FlowState::new("Begin", None, vec! {
+                                  FlowCmd::StopSensors,
+                                  FlowCmd::Message("Starting new episode!"),
+                              }),
+                              // TODO generate unique ID and overall timestamp (+ timestamp for each step)
 
-                                        FlowState::new("Camera aiming", Some(ParkState::None), vec! {
-                                            FlowCmd::StopSensors,
-                                            FlowCmd::Start("bluefox"), FlowCmd::Start("structure"),
-                                            FlowCmd::Message("Use the Refresh button to get the cameras aimed well"),
-                                        }),
-                                        FlowState::new("Camera capture", None, vec! {
-                                            FlowCmd::Send("bluefox disk start"),
-                                            FlowCmd::Send("structure disk start"),
-                                            FlowCmd::Message("Now recording! Pan the rig around to get images from various angles"),
-                                        }),
-                                        FlowState::new("Camera finish", None, vec! {
-                                            FlowCmd::Send("bluefox disk stop"),
-                                            FlowCmd::Send("structure disk stop"),
-                                            FlowCmd::Message("Writing to disk, please wait..."),
-                                            FlowCmd::Stop("bluefox"), FlowCmd::Stop("structure"),
-                                            FlowCmd::Message("Done!"),
-                                        }),
+                              FlowState::new("Camera aiming", Some(ParkState::None), vec! {
+                                  FlowCmd::StopSensors,
+                                  FlowCmd::Start("bluefox"), FlowCmd::Start("structure"),
+                                  FlowCmd::Message("Use the Refresh button to get the cameras aimed well"),
+                              }),
+                              FlowState::new("Camera capture", None, vec! {
+                                  FlowCmd::Send("bluefox disk start"),
+                                  FlowCmd::Send("structure disk start"),
+                                  FlowCmd::Message("Now recording! Pan the rig around to get images from various angles"),
+                              }),
+                              FlowState::new("Camera finish", None, vec! {
+                                  FlowCmd::Send("bluefox disk stop"),
+                                  FlowCmd::Send("structure disk stop"),
+                                  FlowCmd::Message("Writing to disk, please wait..."),
+                                  FlowCmd::Stop("bluefox"), FlowCmd::Stop("structure"),
+                                  FlowCmd::Message("Done!"),
+                              }),
 
-                                        FlowState::new("BioTac capture", Some(ParkState::BioTac), vec! {
-                                            FlowCmd::Start("biotac"), FlowCmd::Start("stb"),
-                                            FlowCmd::Message("Recording from BioTac!"),
-                                        }),
-                                        FlowState::new("BioTac finish", None, vec! {
-                                            FlowCmd::Message("Writing to disk, please wait..."),
-                                            FlowCmd::Stop("biotac"), FlowCmd::Stop("stb"),
-                                            FlowCmd::Message("Done!"),
-                                        }),
+                              FlowState::new("BioTac capture", Some(ParkState::BioTac), vec! {
+                                  FlowCmd::Start("biotac"), FlowCmd::Start("stb"),
+                                  FlowCmd::Message("Recording from BioTac!"),
+                              }),
+                              FlowState::new("BioTac finish", None, vec! {
+                                  FlowCmd::Message("Writing to disk, please wait..."),
+                                  FlowCmd::Stop("biotac"), FlowCmd::Stop("stb"),
+                                  FlowCmd::Message("Done!"),
+                              }),
 
-                                        FlowState::new("OptoForce capture", Some(ParkState::OptoForce), vec! {
-                                            FlowCmd::Start("optoforce"), FlowCmd::Start("stb"),
-                                            FlowCmd::Message("Recording from OptoForce!"),
-                                        }),
-                                        FlowState::new("OptoForce finish", None, vec! {
-                                            FlowCmd::Message("Writing to disk, please wait..."),
-                                            FlowCmd::Stop("optoforce"), FlowCmd::Stop("stb"),
-                                            FlowCmd::Message("Done!"),
-                                        }),
+                              FlowState::new("OptoForce capture", Some(ParkState::OptoForce), vec! {
+                                  FlowCmd::Start("optoforce"), FlowCmd::Start("stb"),
+                                  FlowCmd::Message("Recording from OptoForce!"),
+                              }),
+                              FlowState::new("OptoForce finish", None, vec! {
+                                  FlowCmd::Message("Writing to disk, please wait..."),
+                                  FlowCmd::Stop("optoforce"), FlowCmd::Stop("stb"),
+                                  FlowCmd::Message("Done!"),
+                              }),
 
-                                        FlowState::new("Rigid stick capture", Some(ParkState::Stick), vec! {
-                                            FlowCmd::Start("stb"),
-                                            FlowCmd::Message("Recording from rigid stick!"),
-                                        }),
-                                        FlowState::new("Rigid stick finish", None, vec! {
-                                            FlowCmd::Message("Writing to disk, please wait..."),
-                                            FlowCmd::Stop("stb"),
-                                            FlowCmd::Message("Done!"),
-                                        }),
+                              FlowState::new("Rigid stick capture", Some(ParkState::Stick), vec! {
+                                  FlowCmd::Start("stb"),
+                                  FlowCmd::Message("Recording from rigid stick!"),
+                              }),
+                              FlowState::new("Rigid stick finish", None, vec! {
+                                  FlowCmd::Message("Writing to disk, please wait..."),
+                                  FlowCmd::Stop("stb"),
+                                  FlowCmd::Message("Done!"),
+                              }),
 
-                                        FlowState::new("Wrap up", Some(ParkState::None), vec! {
-                                            FlowCmd::str("episode name"),
-                                            // TODO more questions here?
-                                            FlowCmd::int("hardness",     (1, 5)),
-                                            FlowCmd::int("roughness",    (1, 5)),
-                                            FlowCmd::int("slipperiness", (1, 5)),
-                                            FlowCmd::int("warmness",     (1, 5)),
-                                            FlowCmd::Message("Done!"),
-                                        }),
-                                    }),
+                              FlowState::new("Wrap up", Some(ParkState::None), vec! {
+                                  FlowCmd::str("episode name"),
+                                  // TODO more questions here?
+                                  FlowCmd::int("hardness",     (1, 5)),
+                                  FlowCmd::int("roughness",    (1, 5)),
+                                  FlowCmd::int("slipperiness", (1, 5)),
+                                  FlowCmd::int("warmness",     (1, 5)),
+                                  FlowCmd::Message("Done!"),
+                              }),
+                          }),
             };
 
             let (wstx, wsrx) = mpsc::channel();
