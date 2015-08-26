@@ -10,6 +10,7 @@ dependencies = [
  "enum_primitive 0.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "guilt-by-association 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "handlebars 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "handlebars-iron 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hprof 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hyper 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)",

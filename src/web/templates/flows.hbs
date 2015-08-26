@@ -1,0 +1,43 @@
+<ul>
+    {{#each flows}}
+        <li>
+            {{#if active}}
+                {{#if almostdone}}
+                    <div style="float: right">
+                        <button formaction="/flow/{{name}}/continue"
+                                onclick="return update_flows()"
+                                type="submit"
+                                class="btn btn-success">Finish</button>
+                    </div>
+                {{else}}
+                    <div style="float: right">
+                        <button formaction="/flow/{{name}}/continue"
+                                onclick="return update_flows()"
+                                type="submit"
+                                class="btn btn-success">Next</button>
+                    </div>
+                {{/if}}
+                <b>{{name}}</b>
+                <ol>
+                    {{#each states}}
+                        {{#if done}}
+                            <li><i>{{name}}</i></li>
+                        {{else}}
+                            <li>{{name}}</li>
+                        {{/if}}
+                    {{/each}}
+                </ol>
+            {{else}}
+                <div style="float: right">
+                    <button formaction="/flow/{{name}}/start"
+                            onclick="update_flows()"
+                            type="submit"
+                            class="btn btn-success">Start</button>
+                </div>
+                {{name}}
+            {{/if}}
+            <br/><br/><br/>
+        </li>
+    {{/each}}
+</ul>
+

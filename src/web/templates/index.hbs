@@ -58,30 +58,7 @@
                 <h2>Flows</h2>
                 <form method="POST" target="response">
                     <input type="hidden" name="wsid" class="wsid" value="-1"/>
-                    {{#each flows}}
-                        <div class="container">
-                            {{#if active}}
-                                <b>name</b>
-                                <ol>
-                                    {{#each states}}
-                                        {{#if done}}
-                                            <li><i>{{name}}</i></li>
-                                        {{else}}
-                                            <li>{{name}}</li>
-                                        {{/if}}
-                                    {{/each}}
-                                </ol>
-                            {{else}}
-                                {{name}}
-                                <button formaction="/flow/{{name}}/start"
-                                        type="submit"
-                                        class="btn btn-success">Start</button>
-                                <button formaction="/flow/{{name}}/continue"
-                                        type="submit"
-                                        class="btn btn-warning">Next</button>
-                            {{/if}}
-                        </div>
-                    {{/each}}
+                    {{> flows}}
                 </form>
             </div>
 

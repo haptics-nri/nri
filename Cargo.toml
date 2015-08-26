@@ -38,6 +38,7 @@ guilt-by-association = "*"
 # iron deps
 iron = "*"
 handlebars-iron = "*"
+handlebars = "*"
 staticfile = { version = "*", default-features = false }
 mount = "*"
 hyper = "*"

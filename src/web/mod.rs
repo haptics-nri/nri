@@ -3,7 +3,7 @@
 //! Uses the Iron web framework, Handlebars templates, and Twitter Boostrap.
 
 extern crate iron;
-extern crate handlebars_iron as hbs;
+extern crate handlebars as hbs;
 extern crate staticfile;
 extern crate mount;
 extern crate router;
@@ -22,14 +22,15 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::collections::{HashMap, BTreeMap};
 use std::io::{self, Read};
+use std::fs::{self, File};
+use std::path::PathBuf;
 use super::comms::{Controllable, CmdFrom, Power, Block};
 use super::stb::ParkState;
 use self::iron::prelude::*;
 use self::iron::status;
 use self::iron::middleware::{Handler, BeforeMiddleware, AfterMiddleware};
 use self::iron::headers::Connection;
-use self::hbs::{Template, HandlebarsEngine};
-#[cfg(feature = "watch")] use self::hbs::Watchable;
+use self::hbs::Handlebars;
 use self::serialize::json::{ToJson, Json};
 use self::staticfile::Static;
 use self::mount::Mount;
@@ -76,6 +77,8 @@ struct Flow {
     states: Vec<FlowState>,
     /// Is this the active flow?
     active: bool,
+    /// All states done but one?
+    almostdone: bool,
 
     stamp: Option<time::Timespec>,
     id: Option<uuid::Uuid>,
@@ -109,8 +112,9 @@ impl Flow {
     fn new(name: &'static str, states: Vec<FlowState>) -> Flow {
         Flow {
             name: name,
-            states: states,
             active: false,
+            almostdone: states.len() > 0,
+            states: states,
 
             stamp: None,
             id: None,
@@ -129,10 +133,20 @@ impl Flow {
         }
 
         // find the next eligible state
-        let state = self.states.iter_mut().find(|s| !s.done && s.park.as_ref().map_or(true, |p| *p == park)).unwrap();
-        println!("Executing state {}", state.name);
-        state.run(tx, wsid);
-        println!("Finished executing state {}", state.name);
+        {
+            let state = self.states.iter_mut().find(|s| !s.done && s.park.as_ref().map_or(true, |p| *p == park)).unwrap();
+            println!("Executing state {}", state.name);
+            state.run(tx, wsid);
+            println!("Finished executing state {}", state.name);
+        }
+        
+        // check active/almostdone
+        if let Some(state) = self.states.last() {
+            if state.done {
+                self.active = false;
+                self.almostdone = false;
+            }
+        }
     }
 }
 
@@ -266,7 +280,7 @@ impl ToJson for Service {
 impl ToJson for Flow {
     fn to_json(&self) -> Json {
         let mut m: BTreeMap<String, Json> = BTreeMap::new();
-        jsonize!(m, self; name, states);
+        jsonize!(m, self; name, states, active, almostdone);
         m.to_json()
     }
 }
@@ -284,21 +298,36 @@ fn relpath(path: &str) -> String {
     String::from(Path::new(file!()).parent().unwrap().join(path).to_str().unwrap())
 }
 
+/// Render a template with the data we always use
+fn render(template: &str, data: BTreeMap<String, Json>) -> String {
+    let mut hbs = Handlebars::new();
+
+    let root = Path::new("src/web/templates");
+    for file in fs::read_dir(root).unwrap().take_while(Result::is_ok).map(Result::unwrap) {
+        let mut source = String::from("");
+        File::open(file.path()).unwrap().read_to_string(&mut source).unwrap();
+
+        hbs.register_template_string(file.path().to_str().unwrap(), source.into()).ok().unwrap();
+    }
+
+    hbs.render(template, &data).unwrap()
+}
+
 /// Handler for the main page of the web interface
 fn index(flows: Arc<RwLock<Vec<Flow>>>) -> Box<Handler> {
     Box::new(move |req: &mut Request| -> IronResult<Response> {
         let mut data = BTreeMap::<String, Json>::new();
         data.insert("services".to_string(), vec![ Service::new("Structure Sensor", "structure" , "<img class=\"structure latest\" src=\"img/structure_latest.png\" /><div class=\"structure framenum\">NaN</div>"),
-                                                  Service::new("mvBlueFOX3"      , "bluefox"   , "<img class=\"bluefox latest\" src=\"img/bluefox_latest.png\" /><div class=\"bluefox framenum\">NaN</div>"),
-                                                  Service::new("OptoForce"       , "optoforce" , ""),
-                                                  Service::new("SynTouch BioTac" , "biotac"    , ""),
-                                                  Service::new("STB"             , "stb"       , ""),
-                                                ].to_json());
+        Service::new("mvBlueFOX3"      , "bluefox"   , "<img class=\"bluefox latest\" src=\"img/bluefox_latest.png\" /><div class=\"bluefox framenum\">NaN</div>"),
+        Service::new("OptoForce"       , "optoforce" , ""),
+        Service::new("SynTouch BioTac" , "biotac"    , ""),
+        Service::new("STB"             , "stb"       , ""),
+        ].to_json());
         data.insert("flows".to_string(), flows.read().unwrap().to_json());
         data.insert("server".to_string(), format!("{}:{}", req.url.host, WS_PORT).to_json());
 
         let mut resp = Response::new();
-        resp.set_mut(Template::new("index", data)).set_mut(status::Ok);
+        resp.set_mut(render("index", data)).set_mut(status::Ok);
         Ok(resp)
     })
 }
@@ -392,7 +421,7 @@ fn flow(tx: mpsc::Sender<CmdFrom>, flows: Arc<RwLock<Vec<Flow>>>) -> Box<Handler
                        [POST wsid]);
         let wsid = wsid.parse().unwrap();
 
-        Ok(match &*action {
+        let resp = Ok(match &*action {
             "start" => {
                 let mut locked_flows = flows.write().unwrap();
                 if let Some(found) = locked_flows.iter_mut().find(|f| f.name == flow) {
@@ -408,7 +437,13 @@ fn flow(tx: mpsc::Sender<CmdFrom>, flows: Arc<RwLock<Vec<Flow>>>) -> Box<Handler
             },
             "continue" => unimplemented!(),
             _ => Response::with((status::BadRequest, format!("What does {} mean?", action)))
-        })
+        });
+
+        let mut data = BTreeMap::<String, Json>::new();
+        data.insert("flows".to_string(), flows.read().unwrap().to_json());
+        ws_send(wsid, render("flows", data));
+
+        resp
     })
 }
 
@@ -468,17 +503,6 @@ impl AfterMiddleware for Drain {
         Drain::drain(req, &mut err.response);
         Err(err)
     }
-}
-
-#[cfg(feature = "watch")]
-fn maybe_watch(chain: &mut Chain) {
-    let watcher = Arc::new(HandlebarsEngine::new(&relpath("templates"), ".hbs"));
-    watcher.watch();
-    chain.link_after(watcher);
-}
-#[cfg(not(feature = "watch"))]
-fn maybe_watch(chain: &mut Chain) {
-    chain.link_after(HandlebarsEngine::new(&relpath("templates"), ".hbs"));
 }
 
 guilty!{
@@ -668,7 +692,6 @@ guilty!{
             mount.mount("/", router);
 
             let mut chain = Chain::new(mount);
-            maybe_watch(&mut chain);
             chain.link_after(Catchall::new());
             chain.link_after(Drain::new());
 
