@@ -5,14 +5,12 @@
                 {{#if almostdone}}
                     <div style="float: right">
                         <button formaction="/flow/{{name}}/continue"
-                                onclick="return update_flows()"
                                 type="submit"
                                 class="btn btn-success">Finish</button>
                     </div>
                 {{else}}
                     <div style="float: right">
                         <button formaction="/flow/{{name}}/continue"
-                                onclick="return update_flows()"
                                 type="submit"
                                 class="btn btn-success">Next</button>
                     </div>
@@ -30,7 +28,6 @@
             {{else}}
                 <div style="float: right">
                     <button formaction="/flow/{{name}}/start"
-                            onclick="update_flows()"
                             type="submit"
                             class="btn btn-success">Start</button>
                 </div>

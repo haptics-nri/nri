@@ -30,6 +30,7 @@ use self::iron::prelude::*;
 use self::iron::status;
 use self::iron::middleware::{Handler, BeforeMiddleware, AfterMiddleware};
 use self::iron::headers::Connection;
+use self::iron::modifiers::Header;
 use self::hbs::Handlebars;
 use self::serialize::json::{ToJson, Json};
 use self::staticfile::Static;
@@ -38,6 +39,8 @@ use self::router::Router;
 use self::urlencoded::{UrlEncodedQuery, UrlEncodedBody};
 use self::url::percent_encoding::percent_decode;
 use self::hyper::server::Listening;
+use self::hyper::header::ContentType;
+use self::hyper::mime::{Mime, TopLevel, SubLevel};
 use self::ws::Sender as WebsocketSender;
 use self::ws::Receiver as WebsocketReceiver;
 use self::uuid::Uuid;
@@ -113,7 +116,7 @@ impl Flow {
         Flow {
             name: name,
             active: false,
-            almostdone: states.len() > 0,
+            almostdone: false,
             states: states,
 
             stamp: None,
@@ -133,18 +136,25 @@ impl Flow {
         }
 
         // find the next eligible state
-        {
-            let state = self.states.iter_mut().find(|s| !s.done && s.park.as_ref().map_or(true, |p| *p == park)).unwrap();
+        if let Some(state) = self.states.iter_mut().find(|s| !s.done && s.park.as_ref().map_or(true, |p| *p == park)) {
             println!("Executing state {}", state.name);
             state.run(tx, wsid);
             println!("Finished executing state {}", state.name);
         }
-        
-        // check active/almostdone
-        if let Some(state) = self.states.last() {
-            if state.done {
+
+        let almostdone = match self.states.last() {
+            Some(state) if state.done => true,
+            _ => false
+        };
+        if almostdone {
+            if self.almostdone {
+                // the flow is over! clear everything!
+
                 self.active = false;
                 self.almostdone = false;
+                self.states.iter_mut().map(|s| { s.done = false; }).count();
+            } else {
+                self.almostdone = true;
             }
         }
     }
@@ -303,12 +313,16 @@ fn render(template: &str, data: BTreeMap<String, Json>) -> String {
     let mut hbs = Handlebars::new();
 
     let root = Path::new("src/web/templates");
-    for file in fs::read_dir(root).unwrap().take_while(Result::is_ok).map(Result::unwrap) {
-        let mut source = String::from("");
-        File::open(file.path()).unwrap().read_to_string(&mut source).unwrap();
+    fs::read_dir(root).unwrap()
+        .take_while(Result::is_ok).map(Result::unwrap)
+        .map(   |f|    f.path())
+        .filter(|p|    match p.extension() { Some(ext) if ext == "hbs" => true, _ => false })
+        .map(   |path| {
+            let mut source = String::from("");
+            File::open(&path).unwrap().read_to_string(&mut source).unwrap();
 
-        hbs.register_template_string(file.path().to_str().unwrap(), source.into()).ok().unwrap();
-    }
+            hbs.register_template_string(path.file_stem().unwrap().to_str().unwrap(), source.into()).ok().unwrap();
+        }).count();
 
     hbs.render(template, &data).unwrap()
 }
@@ -327,7 +341,7 @@ fn index(flows: Arc<RwLock<Vec<Flow>>>) -> Box<Handler> {
         data.insert("server".to_string(), format!("{}:{}", req.url.host, WS_PORT).to_json());
 
         let mut resp = Response::new();
-        resp.set_mut(render("index", data)).set_mut(status::Ok);
+        resp.set_mut(render("index", data)).set_mut(Header(ContentType(Mime(TopLevel::Text, SubLevel::Html, vec![])))).set_mut(status::Ok);
         Ok(resp)
     })
 }
@@ -422,26 +436,21 @@ fn flow(tx: mpsc::Sender<CmdFrom>, flows: Arc<RwLock<Vec<Flow>>>) -> Box<Handler
         let wsid = wsid.parse().unwrap();
 
         let resp = Ok(match &*action {
-            "start" => {
+            "start" | "continue" => {
                 let mut locked_flows = flows.write().unwrap();
                 if let Some(found) = locked_flows.iter_mut().find(|f| f.name == flow) {
-                    if found.active {
-                        Response::with((status::BadRequest, format!("Already in the middle of \"{}\" flow", flow)))
-                    } else {
-                        found.run(ParkState::metermaid().unwrap(), mtx.lock().unwrap().deref(), wsid);
-                        Response::with((status::Ok, format!("Started \"{}\" flow", flow)))
-                    }
+                    found.run(ParkState::metermaid().unwrap(), mtx.lock().unwrap().deref(), wsid);
+                    Response::with((status::Ok, format!("{} \"{}\" flow", if found.active { "Continuing" } else { "Starting" }, flow)))
                 } else {
                     Response::with((status::BadRequest, format!("Could not find \"{}\" flow", flow)))
                 }
             },
-            "continue" => unimplemented!(),
             _ => Response::with((status::BadRequest, format!("What does {} mean?", action)))
         });
 
         let mut data = BTreeMap::<String, Json>::new();
         data.insert("flows".to_string(), flows.read().unwrap().to_json());
-        ws_send(wsid, render("flows", data));
+        ws_send(wsid, String::from("flow ") + &render("flows", data));
 
         resp
     })
@@ -516,6 +525,9 @@ guilty!{
                           vec! {
                               FlowState::new("One", None, vec! {
                                   FlowCmd::Message("Please insert Tab A into Slot B"),
+                              }),
+                              FlowState::new("Two", None, vec! {
+                                  FlowCmd::Message("Now fold Tab C on top of Tab D"),
                               }),
                           }),
                 Flow::new("Episode",

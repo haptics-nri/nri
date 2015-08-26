@@ -15,7 +15,7 @@
         <script type="text/javascript">
             window.socket = new WebSocket("ws://{{server}}", "rust-websocket");
             window.socket.onmessage = function (event) {
-                console.log(event.data);
+                console.log(event.data.slice(0, 50).replace(/\s/g, ''));
                 words = event.data.split(' ');
                 switch (words[0]) {
                     case "hello":
@@ -27,6 +27,9 @@
                         break;
                     case "panic":
                         alert("The " + words[1] + " thread crashed! (" + words.slice(2).join(" ") + ")\n\nIf it was running, you may want to click Start again.");
+                        break;
+                    case "flow":
+                        $("#flows").html(event.data.slice(event.data.indexOf(" ")));
                         break;
                 }
             };
@@ -58,7 +61,9 @@
                 <h2>Flows</h2>
                 <form method="POST" target="response">
                     <input type="hidden" name="wsid" class="wsid" value="-1"/>
-                    {{> flows}}
+                    <div id="flows">
+                        {{> flows}}
+                    </div>
                 </form>
             </div>
 
