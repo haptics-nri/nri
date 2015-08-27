@@ -15,11 +15,14 @@
         <script type="text/javascript">
             window.socket = new WebSocket("ws://{{server}}", "rust-websocket");
             window.socket.onmessage = function (event) {
-                console.log(event.data.slice(0, 50).replace(/\s/g, ''));
+                console.log(event.data.slice(0, 50).replace(/\n+/g, ''));
                 words = event.data.split(' ');
                 switch (words[0]) {
                     case "hello":
                         $(".wsid").each(function () { this.value = words[1]; });
+                        break;
+                    case "msg":
+                        alert(event.data.slice(event.data.indexOf(" ")));
                         break;
                     case "kick":
                         $("." + words[1] + ".framenum").each(function () { this.innerHTML = words[2]; });

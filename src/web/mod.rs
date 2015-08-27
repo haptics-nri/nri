@@ -219,7 +219,7 @@ impl FlowCmd {
     fn run(&mut self, tx: &mpsc::Sender<CmdFrom>, wsid: usize) {
         println!("DBG executing flow state {:?}", self);
         match *self {
-            FlowCmd::Message(msg) => ws_send(wsid, format!("{}", msg)),
+            FlowCmd::Message(msg) => ws_send(wsid, format!("msg {}", msg)),
             FlowCmd::Str { prompt, ref mut data } => {
                 assert!(data.is_none());
                 *data = Some(ws_rpc(wsid,
