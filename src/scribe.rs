@@ -1,21 +1,17 @@
 //! Utilities for writing stuff to files
 
-extern crate threadpool;
 extern crate libc;
 
-use std::{mem, ptr, fmt, slice};
+use std::{mem, ptr};
 use std::fs::File;
-use std::io::{self, Write};
-use std::any::Any;
-use std::collections::{VecDeque, HashMap};
-use std::sync::{Arc, Mutex};
+use std::io::Write;
+use std::collections::HashMap;
+use std::sync::Mutex;
 use std::sync::mpsc;
-use std::cell::Cell;
 use std::marker::PhantomData;
 use std::thread;
 use std::convert::Into;
 use std::ops::DerefMut;
-use self::threadpool::ThreadPool;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Handle(usize);
@@ -54,7 +50,7 @@ lazy_static! {
                             files.remove(&h);
                         },
                         Message::Write(h, data) => {
-                            files.get_mut(&h).unwrap().write_all(&data);
+                            files.get_mut(&h).unwrap().write_all(&data).unwrap();
                         },
 
                         Message::Register(s, tx) => {
@@ -70,7 +66,7 @@ lazy_static! {
                         Message::Packet(h, data) => {
                             let i = indices[&h];
                             indices.insert(h, i + 1);
-                            File::create(patterns[&h].replace("{}", &i.to_string())).unwrap().write_all(&data);
+                            File::create(patterns[&h].replace("{}", &i.to_string())).unwrap().write_all(&data).unwrap();
                         },
                     }
                 }

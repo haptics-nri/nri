@@ -362,7 +362,7 @@ fn main() {
                             .spawn().unwrap()
                             .wait().unwrap();
                     },
-                    CmdFrom::Timeout { thread: who, ms }  => {
+                    CmdFrom::Timeout { thread: who, ms: _ }  => {
                         // TODO actually time the service and do something if it times out
                         if find(&services, who.to_string()).is_some() {
                             timers.insert(who, UTC::now());

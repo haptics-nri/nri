@@ -23,12 +23,11 @@ use std::thread::JoinHandle;
 use std::collections::{HashMap, BTreeMap};
 use std::io::{self, Read};
 use std::fs::{self, File};
-use std::path::PathBuf;
 use super::comms::{Controllable, CmdFrom, Power, Block};
 use super::stb::ParkState;
 use self::iron::prelude::*;
 use self::iron::status;
-use self::iron::middleware::{Handler, BeforeMiddleware, AfterMiddleware};
+use self::iron::middleware::{Handler, AfterMiddleware};
 use self::iron::headers::Connection;
 use self::iron::modifiers::Header;
 use self::hbs::Handlebars;
@@ -36,7 +35,7 @@ use self::serialize::json::{ToJson, Json};
 use self::staticfile::Static;
 use self::mount::Mount;
 use self::router::Router;
-use self::urlencoded::{UrlEncodedQuery, UrlEncodedBody};
+#[allow(unused_imports)] use self::urlencoded::{UrlEncodedQuery, UrlEncodedBody};
 use self::url::percent_encoding::percent_decode;
 use self::hyper::server::Listening;
 use self::hyper::header::ContentType;
@@ -351,7 +350,8 @@ macro_rules! ignore {
 }
 
 macro_rules! bind {
-    ($req:expr, $ext:ident ($($var:ident),*) |$p:ident, $v:ident| $extract:expr) => {
+    ($_req:expr, $_ext:ident () |$_p:ident, $_v:ident| $_extract:expr) => {};
+    ($req:expr, $ext:ident ($($var:ident),+) |$p:ident, $v:ident| $extract:expr) => {
         let ($($var,)*) = {
             if let Ok($p) = $req.get_ref::<$ext>() {
                 ($( {
@@ -475,7 +475,7 @@ impl Catchall {
 }
 
 impl AfterMiddleware for Catchall {
-    fn catch(&self, req: &mut Request, err: IronError) -> IronResult<Response> {
+    fn catch(&self, _: &mut Request, err: IronError) -> IronResult<Response> {
         match err.response.status {
             Some(status::NotFound) => Ok(err.response),
             _ => Err(err)
@@ -491,7 +491,7 @@ impl Drain {
     fn drain(req: &mut Request, resp: &mut Response) {
         const LIMIT: u64 = 1024 * 1024;
 
-        io::copy(&mut req.body.by_ref().take(LIMIT), &mut io::sink());
+        io::copy(&mut req.body.by_ref().take(LIMIT), &mut io::sink()).unwrap();
         let mut buf = [0];
         if let Ok(n) = req.body.read(&mut buf) {
             if n > 0 {
@@ -686,6 +686,8 @@ guilty!{
                         }
                     }));
                 }
+
+                marshal.join().unwrap();
             });
 
             let shared_flows = Arc::new(RwLock::new(flows));
