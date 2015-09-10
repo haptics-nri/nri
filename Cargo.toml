@@ -42,7 +42,7 @@ handlebars = "*"
 staticfile = { version = "*", default-features = false }
 mount = "*"
 hyper = "*"
-#router = "*"
+router = "*"
 urlencoded = "*"
 url = "*"
 rustc-serialize = "*"
@@ -57,10 +57,6 @@ websocket = "*"
 #[dependencies.ioctl-rs]
 #git = "git://github.com/haptics-nri/ioctl-rs"
 #branch = "usbdevfs"
-
-[dependencies.router] # working on a PR
-git = "git://github.com/durka/router"
-branch = "impl-plugin"
 
 [dependencies.lodepng] # waiting for cargo publish
 git = "git://github.com/durka/lodepng-rust"

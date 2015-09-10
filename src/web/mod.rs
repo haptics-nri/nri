@@ -350,10 +350,10 @@ macro_rules! ignore {
 }
 
 macro_rules! bind {
-    ($_req:expr, $_ext:ident () |$_p:ident, $_v:ident| $_extract:expr) => {};
-    ($req:expr, $ext:ident ($($var:ident),+) |$p:ident, $v:ident| $extract:expr) => {
+    ($_req:expr, $_ok:ident = $($_meth:ident).+::<$_ext:ident> () |$_p:ident, $_v:ident| $_extract:expr) => {};
+    ($req:expr, $ok:ident = $($meth:ident).+::<$ext:ident> ($($var:ident),+) |$p:ident, $v:ident| $extract:expr) => {
         let ($($var,)*) = {
-            if let Ok($p) = $req.get_ref::<$ext>() {
+            if let $ok($p) = $req.$($meth).+::<$ext>() {
                 ($( {
                     let $v = stringify!($var);
                     $extract
@@ -367,9 +367,9 @@ macro_rules! bind {
 
 macro_rules! params {
     ($req:expr => [URL $($url:ident),*] [GET $($get:ident),*] [POST $($post:ident),*]) => {
-        bind!($req, Router ($($url),*) |p, v| String::from_utf8(percent_decode(p.find(v).unwrap().as_bytes())).unwrap());
-        bind!($req, UrlEncodedQuery ($($get),*) |p, v| p[v][0].clone());
-        bind!($req, UrlEncodedBody ($($post),*) |p, v| p[v][0].clone());
+        bind!($req, Some = extensions.get::<Router>   ($($url),*)  |p, v| String::from_utf8(percent_decode(p.find(v).unwrap().as_bytes())).unwrap());
+        bind!($req, Ok   = get_ref::<UrlEncodedQuery> ($($get),*)  |p, v| p[v][0].clone());
+        bind!($req, Ok   = get_ref::<UrlEncodedBody>  ($($post),*) |p, v| p[v][0].clone());
     }
 }
 
