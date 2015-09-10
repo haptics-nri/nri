@@ -67,7 +67,7 @@ struct Service {
 impl Service {
     /// Create a new service descriptor with the given name
     fn new(s: &str, t: &str, e: &str) -> Service {
-        Service { name: s.to_string(), shortname: t.to_string(), extra: e.to_string() }
+        Service { name: s.to_owned(), shortname: t.to_owned(), extra: e.to_owned() }
     }
 }
 
@@ -171,7 +171,7 @@ impl FlowState {
     
     fn run(&mut self, tx: &mpsc::Sender<CmdFrom>, wsid: usize) {
         assert!(!self.done);
-        for c in self.script.iter_mut() {
+        for c in &mut self.script {
             c.run(&tx, wsid);
         }
         self.done = true;
@@ -191,7 +191,7 @@ fn ws_rpc<T, F: Fn(String) -> Result<T,String>>(wsid: usize, prompt: String, val
     let mut go = |prompt: &str| -> String {
         let (tx, rx) = mpsc::channel();
         locked_rpcs.insert(wsid, tx);
-        locked_senders[wsid].send_message(ws::Message::Text(prompt.to_string())).unwrap();
+        locked_senders[wsid].send_message(ws::Message::Text(prompt.to_owned())).unwrap();
         rx.recv().unwrap()
     };
 
@@ -226,7 +226,7 @@ impl FlowCmd {
                                            prompt, prompt),
                                    |x| {
                                        if x.is_empty() {
-                                           Err("That's an empty string!".to_string())
+                                           Err("That's an empty string!".to_owned())
                                        } else {
                                            Ok(x)
                                        }
@@ -243,26 +243,26 @@ impl FlowCmd {
                                                Ok(i)
                                            },
                                            Ok(_) => {
-                                               Err("Out of range!".to_string())
+                                               Err("Out of range!".to_owned())
                                            },
                                            Err(_) => {
-                                               Err("Not an integer!".to_string())
+                                               Err("Not an integer!".to_owned())
                                            },
                                        }
                                    }));
             },
             FlowCmd::Start(service) => {
-                assert!(rpc!(tx, CmdFrom::Start, service.to_string()).unwrap());
+                assert!(rpc!(tx, CmdFrom::Start, service.to_owned()).unwrap());
             },
             FlowCmd::Stop(service) => {
-                assert!(rpc!(tx, CmdFrom::Stop, service.to_string()).unwrap());
+                assert!(rpc!(tx, CmdFrom::Stop, service.to_owned()).unwrap());
             },
             FlowCmd::Send(string) => {
-                tx.send(CmdFrom::Data(string.to_string())).unwrap();
+                tx.send(CmdFrom::Data(string.to_owned())).unwrap();
             },
             FlowCmd::StopSensors => {
-                for svc in ["bluefox", "structure", "biotac", "optoforce", "stb"].into_iter() {
-                    assert!(rpc!(tx, CmdFrom::Stop, svc.to_string()).unwrap());
+                for &svc in &["bluefox", "structure", "biotac", "optoforce", "stb"] {
+                    assert!(rpc!(tx, CmdFrom::Stop, svc.to_owned()).unwrap());
                 }
             }
         }
@@ -271,7 +271,7 @@ impl FlowCmd {
 
 macro_rules! jsonize {
     ($map:ident, $selph:ident, $var:ident) => {{
-        $map.insert(stringify!($var).to_string(), $selph.$var.to_json())
+        $map.insert(stringify!($var).to_owned(), $selph.$var.to_json())
     }};
     ($map:ident, $selph:ident; $($var:ident),+) => {{
         $(jsonize!($map, $selph, $var));+
@@ -330,14 +330,14 @@ fn render(template: &str, data: BTreeMap<String, Json>) -> String {
 fn index(flows: Arc<RwLock<Vec<Flow>>>) -> Box<Handler> {
     Box::new(move |req: &mut Request| -> IronResult<Response> {
         let mut data = BTreeMap::<String, Json>::new();
-        data.insert("services".to_string(), vec![ Service::new("Structure Sensor", "structure" , "<img class=\"structure latest\" src=\"img/structure_latest.png\" /><div class=\"structure framenum\">NaN</div>"),
+        data.insert("services".to_owned(), vec![ Service::new("Structure Sensor", "structure" , "<img class=\"structure latest\" src=\"img/structure_latest.png\" /><div class=\"structure framenum\">NaN</div>"),
         Service::new("mvBlueFOX3"      , "bluefox"   , "<img class=\"bluefox latest\" src=\"img/bluefox_latest.png\" /><div class=\"bluefox framenum\">NaN</div>"),
         Service::new("OptoForce"       , "optoforce" , ""),
         Service::new("SynTouch BioTac" , "biotac"    , ""),
         Service::new("STB"             , "stb"       , ""),
         ].to_json());
-        data.insert("flows".to_string(), flows.read().unwrap().to_json());
-        data.insert("server".to_string(), format!("{}:{}", req.url.host, WS_PORT).to_json());
+        data.insert("flows".to_owned(), flows.read().unwrap().to_json());
+        data.insert("server".to_owned(), format!("{}:{}", req.url.host, WS_PORT).to_json());
 
         let mut resp = Response::new();
         resp.set_mut(render("index", data)).set_mut(Header(ContentType(Mime(TopLevel::Text, SubLevel::Html, vec![])))).set_mut(status::Ok);
@@ -405,13 +405,13 @@ fn control(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
 
         Ok(match &*action {
             "start" =>
-                if rpc!(mtx.lock().unwrap(), CmdFrom::Start, service.to_string()).unwrap() {
+                if rpc!(mtx.lock().unwrap(), CmdFrom::Start, service.clone()).unwrap() {
                     Response::with((status::Ok, format!("Started {}", service)))
                 } else {
                     Response::with((status::InternalServerError, format!("Failed to start {}", service)))
                 },
             "stop" =>
-                if rpc!(mtx.lock().unwrap(), CmdFrom::Stop, service.to_string()).unwrap() {
+                if rpc!(mtx.lock().unwrap(), CmdFrom::Stop, service.clone()).unwrap() {
                     Response::with((status::Ok, format!("Stopped {}", service)))
                 } else {
                     Response::with((status::InternalServerError, format!("Failed to stop {}", service)))
@@ -449,7 +449,7 @@ fn flow(tx: mpsc::Sender<CmdFrom>, flows: Arc<RwLock<Vec<Flow>>>) -> Box<Handler
         });
 
         let mut data = BTreeMap::<String, Json>::new();
-        data.insert("flows".to_string(), flows.read().unwrap().to_json());
+        data.insert("flows".to_owned(), flows.read().unwrap().to_json());
         ws_send(wsid, String::from("flow ") + &render("flows", data));
 
         resp
@@ -631,9 +631,9 @@ guilty!{
                     let mut response = request.accept(); // Form a response
                     
                     if let Some(&ws::header::WebSocketProtocol(ref protocols)) = headers.get() {
-                        if protocols.contains(&("rust-websocket".to_string())) {
+                        if protocols.contains(&("rust-websocket".to_owned())) {
                             // We have a protocol we want to use
-                            response.headers.set(ws::header::WebSocketProtocol(vec!["rust-websocket".to_string()]));
+                            response.headers.set(ws::header::WebSocketProtocol(vec!["rust-websocket".to_owned()]));
                         }
                     }
                     
@@ -668,14 +668,14 @@ guilty!{
                                     if text.starts_with("RPC") {
                                         let space = text.find(' ').unwrap();
                                         let id = text[3..space].parse::<usize>().unwrap();
-                                        let msg = text[space..].to_string();
+                                        let msg = text[space..].to_owned();
                                         
                                         let mut locked_senders = WS_SENDERS.lock().unwrap();
                                         let locked_rpcs = RPC_SENDERS.lock().unwrap();
                                         if let Some(rpc) = locked_rpcs.get(&id) {
                                             rpc.send(msg).unwrap();
                                         } else {
-                                            locked_senders[id].send_message(ws::Message::Text("RPC ERROR: nobody listening".to_string())).unwrap();
+                                            locked_senders[id].send_message(ws::Message::Text("RPC ERROR: nobody listening".to_owned())).unwrap();
                                         }
                                     } else {
                                         cctx.send(CmdFrom::Data(text)).unwrap();
@@ -699,7 +699,7 @@ guilty!{
             router.post("/flow/:flow/:action", flow(tx.clone(), shared_flows.clone()));
 
             let mut mount = Mount::new();
-            for p in ["css", "fonts", "js"].iter() {
+            for p in &["css", "fonts", "js"] {
                 mount.mount(&format!("/{}/", p),
                             Static::new(Path::new(&relpath("bootstrap")).join(p)));
             }

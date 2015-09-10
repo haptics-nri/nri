@@ -238,7 +238,7 @@ group_attr!{
                 let mut port = serialport();
                 port.write_all(&['1' as u8]).unwrap();
 
-                STB { port: port, file: Writer::to_file("data/stb.dat"), i: 0, start: time::now() }
+                STB { port: port, file: Writer::with_file("data/stb.dat"), i: 0, start: time::now() }
             }
 
             fn step(&mut self, _: Option<String>) {

@@ -110,18 +110,18 @@ thread_local! {
 macro_rules! prof {
     ($b:expr) => { prof!(stringify!($b), $b) };
     //($n:expr, $b:expr) => ($b)
-    ($n:expr, $b:expr) => {
+    ($n:expr, $b:expr) => {{
         $crate::PROF.with(|wrapped_prof| {
             let appease_borrowck = wrapped_prof.borrow();
             let g = match *appease_borrowck {
                 Some(ref prof) => prof.enter($n),
                 None => $crate::hprof::enter($n)
             };
-            let ret = { $b };
+            let ret = { $b }; //~ ALLOW let_unit_value
             drop(g);
             ret
         })
-    }
+    }}
 }
 
 #[macro_use] mod comms;
@@ -316,8 +316,8 @@ fn main() {
 
         thread::sleep_ms(500); // wait for threads to start
 
-        start(&services, "cli".to_string());
-        start(&services, "web".to_string());
+        start(&services, "cli".to_owned());
+        start(&services, "web".to_owned());
 
         loop {
             match reply_rx.recv() {
@@ -364,7 +364,7 @@ fn main() {
                     },
                     CmdFrom::Timeout { thread: who, ms: _ }  => {
                         // TODO actually time the service and do something if it times out
-                        if find(&services, who.to_string()).is_some() {
+                        if find(&services, who.to_owned()).is_some() {
                             timers.insert(who, UTC::now());
                         } else {
                             panic!("Nonexistent service asked for timeout");
@@ -381,14 +381,14 @@ fn main() {
                     CmdFrom::Data(d)      => {
                         let mut words = d.split(' ');
                         match &*words.next().unwrap() {
-                            "send" => { send_to(&services, "web".to_string(), CmdTo::Data(d[5..].to_owned())); },
-                            "kick" => { send_to(&services, words.next().unwrap().to_string(), CmdTo::Data("kick".to_string())); },
+                            "send" => { send_to(&services, "web".to_owned(), CmdTo::Data(d[5..].to_owned())); },
+                            "kick" => { send_to(&services, words.next().unwrap().to_owned(), CmdTo::Data("kick".to_owned())); },
                             _      => { errorln!("Strange message {} received from a service", d); }
                         }
                     },
                     CmdFrom::Panicked { thread: who, panic_reason: why } => {
                         errorln!("Service {} panicked! (reason: {})", who, why);
-                        send_to(&services, "web".to_string(), CmdTo::Data(format!("panic {} {}", who, why)));
+                        send_to(&services, "web".to_owned(), CmdTo::Data(format!("panic {} {}", who, why)));
                     },
                 },
                 Err(_) => { stop_all(&mut services[1..]); break; }

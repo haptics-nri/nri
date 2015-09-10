@@ -48,14 +48,14 @@ guilty!{
                         },
                         "start" => {
                             while let Some(dev) = words.next() {
-                                if !rpc!(self.tx, CmdFrom::Start, dev.to_string()).unwrap() {
+                                if !rpc!(self.tx, CmdFrom::Start, dev.to_owned()).unwrap() {
                                     errorln!("Failed to start {}", dev);
                                 }
                             }
                         },
                         "stop" => {
                             while let Some(dev) = words.next() {
-                                if !rpc!(self.tx, CmdFrom::Stop, dev.to_string()).unwrap() {
+                                if !rpc!(self.tx, CmdFrom::Stop, dev.to_owned()).unwrap() {
                                     errorln!("Failed to stop {}", dev);
                                 }
                             }
@@ -76,7 +76,7 @@ guilty!{
                             self.tx.send(CmdFrom::Power(Power::PowerOff)).unwrap();
                         }
                         "websend" => {
-                            self.tx.send(CmdFrom::Data("send test".to_string())).unwrap();
+                            self.tx.send(CmdFrom::Data("send test".to_owned())).unwrap();
                         },
                         _ => println!("Unknown command!")
                     }

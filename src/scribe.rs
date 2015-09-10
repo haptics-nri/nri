@@ -105,7 +105,7 @@ pub struct Writer<T: ?Sized> {
 }
 
 impl<T: ?Sized> Writer<T> {
-    pub fn to_file<S: Into<String>>(name: S) -> Writer<T> {
+    pub fn with_file<S: Into<String>>(name: S) -> Writer<T> {
         let (tx, rx) = mpsc::channel();
         send(Message::Open(name.into(), tx));
 
@@ -116,7 +116,7 @@ impl<T: ?Sized> Writer<T> {
         }
     }
 
-    pub fn to_files<S: Into<String>>(pattern: S) -> Writer<T> {
+    pub fn with_files<S: Into<String>>(pattern: S) -> Writer<T> {
         let (tx, rx) = mpsc::channel();
         send(Message::Register(pattern.into(), tx));
 
@@ -179,6 +179,7 @@ impl<T: ?Sized> Drop for Writer<T> {
 /// started).
 ///
 /// Do not call this function twice, as it will panic!
+#[allow(let_unit_value)]
 extern "C" fn finish_writing() {
     // NB: this function must not panic as that will unwind into libc
 

@@ -67,8 +67,8 @@ group_attr!{
                         prof!("send", mtx.lock().unwrap().send(CmdFrom::Data(format!("send kick bluefox {} data:image/png;base64,{}", i, prof!("base64", encoded.to_base64(base64::STANDARD))))).unwrap());
                     }),
 
-                    stampfile: Writer::to_file("data/bluefox_times.csv"),
-                    writer: Writer::to_files("data/bluefox{}.dat"),
+                    stampfile: Writer::with_file("data/bluefox_times.csv"),
+                    writer: Writer::with_files("data/bluefox{}.dat"),
                 }
             }
 
