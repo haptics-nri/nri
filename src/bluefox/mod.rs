@@ -49,22 +49,45 @@ group_attr!{
             fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Bluefox {
                 let device = wrapper::Device::new().unwrap();
                 //device.request_reset();
-                
-                println!("height = {}\nwidth = {}\npixel format = {:?}", device.get_height().unwrap(), device.get_width().unwrap(), device.get_pixel_format().unwrap());
-                
+
+                println!("height = {}\nwidth = {}\npixel format = {:?}",
+                         device.get_height().unwrap(),
+                         device.get_width().unwrap(),
+                         device.get_pixel_format().unwrap());
+
                 let mtx = Mutex::new(tx);
                 Bluefox {
                     device: device,
                     i: 0,
                     start: time::now(),
 
-                    png: RestartableThread::new("Bluefox PNG thread", move |(i, unencoded, (h, w), bd)| {
+                    png: RestartableThread::new("Bluefox PNG thread",
+                                                move |(i, unencoded, (h, w), bd)| {
                         let mut encoded = Vec::with_capacity(w*h);
-                        let to_resize = prof!("imagebuffer", ImageBuffer::<image::Rgb<u8>, _>::from_raw(w as u32, h as u32, unencoded).unwrap());
+                        let to_resize = prof!("imagebuffer",
+                                              ImageBuffer::<image::Rgb<u8>, _>::from_raw(w as u32,
+                                                                                         h as u32,
+                                                                                         unencoded)
+                                              .unwrap());
                         let (ww, hh) = ((w as u32)/4, (h as u32)/4);
-                        let resized = prof!("resize", imageops::resize(&to_resize, ww, hh, FilterType::Nearest));
-                        prof!("encode", PNGEncoder::new(&mut encoded).encode(&resized, ww, hh, bd).unwrap());
-                        prof!("send", mtx.lock().unwrap().send(CmdFrom::Data(format!("send kick bluefox {} data:image/png;base64,{}", i, prof!("base64", encoded.to_base64(base64::STANDARD))))).unwrap());
+                        let resized = prof!("resize",
+                                            imageops::resize(&to_resize,
+                                                             ww,
+                                                             hh,
+                                                             FilterType::Nearest));
+                        prof!("encode",
+                              PNGEncoder::new(&mut encoded).encode(&resized, ww, hh, bd).unwrap());
+                        prof!("send",
+                              mtx
+                                .lock()
+                                .unwrap()
+                                .send(
+                                    CmdFrom::Data(
+                                        format!("send kick bluefox {} data:image/png;base64,{}",
+                                                i,
+                                                prof!("base64",
+                                                      encoded.to_base64(base64::STANDARD)))))
+                                .unwrap());
                     }),
 
                     stampfile: Writer::with_file("data/bluefox_times.csv"),
@@ -79,17 +102,33 @@ group_attr!{
 
                 let stamp = time::get_time();
                 self.writer.write(image.data());
-                self.stampfile.write(format!("{},bluefox{}.dat,{:.9}\n", self.i, self.i, stamp.sec as f64 + stamp.nsec as f64 / 1_000_000_000f64).as_bytes());
+                self.stampfile.write(format!("{},bluefox{}.dat,{:.9}\n",
+                                             self.i,
+                                             self.i,
+                                             (stamp.sec as f64
+                                              + stamp.nsec as f64
+                                              / 1_000_000_000f64))
+                                     .as_bytes());
                 match data.as_ref().map(|s| s as &str) {
                     Some("kick") => {
                         //self.device.set_reverse_x(!self.device.get_reverse_x().unwrap());
                         //self.device.set_reverse_y(!self.device.get_reverse_y().unwrap());
                         println!("buf = {:?}", image.buf);
-                        prof!("send to thread", self.png.send((self.i, image.data().into(), image.size(), ColorType::RGB(8))).unwrap())
+                        prof!("send to thread",
+                              self.png.send((self.i,
+                                             image.data().into(),
+                                             image.size(),
+                                             ColorType::RGB(8)))
+                              .unwrap())
                     },
                     Some(_) | None => ()
                 }
-                //PNGEncoder::new(&mut f).encode(image.data(), image.size().1 as u32, image.size().0 as u32, ColorType::RGB(8));
+                /*
+                PNGEncoder::new(&mut f).encode(image.data(),
+                                               image.size().1 as u32,
+                                               image.size().0 as u32,
+                                               ColorType::RGB(8));
+                */
             }
 
             fn teardown(&mut self) {
@@ -98,7 +137,10 @@ group_attr!{
                 //device.request_reset();
                 self.device.close().unwrap();
                 let millis = (end - self.start).num_milliseconds() as f64;
-                println!("{} bluefox frames grabbed in {} s ({} FPS)!", self.i, millis/1000.0, 1000.0*(self.i as f64)/millis);
+                println!("{} bluefox frames grabbed in {} s ({} FPS)!",
+                         self.i,
+                         millis/1000.0,
+                         1000.0*(self.i as f64)/millis);
             }
         }
     }
@@ -106,4 +148,3 @@ group_attr!{
 
 #[cfg(not(target_os = "linux"))]
 stub!(Bluefox);
-

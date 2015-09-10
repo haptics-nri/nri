@@ -17,13 +17,17 @@ use std::ops::DerefMut;
 pub struct Handle(usize);
 
 impl Handle {
-    pub fn new() -> Handle { Handle(0) }
-    pub fn next(self) -> Handle { Handle(self.0 + 1) }
+    pub fn new() -> Handle {
+        Handle(0)
+    }
+    pub fn next(self) -> Handle {
+        Handle(self.0 + 1)
+    }
 }
 
 struct Worker {
-    thread: Option<thread::JoinHandle<()>>,
-    tx: Option<mpsc::Sender<Message>>,
+    thread : Option<thread::JoinHandle<()>>,
+    tx     : Option<mpsc::Sender<Message>>,
 }
 
 lazy_static! {
@@ -99,9 +103,9 @@ pub enum Message {
 pub unsafe trait Writable {}
 
 pub struct Writer<T: ?Sized> {
-    handle: Handle,
-    dst   : Destination,
-    _ghost: PhantomData<*const T>
+    handle : Handle,
+    dst    : Destination,
+    _ghost : PhantomData<*const T>,
 }
 
 impl<T: ?Sized> Writer<T> {
@@ -111,8 +115,8 @@ impl<T: ?Sized> Writer<T> {
 
         Writer {
             handle: rx.recv().unwrap(),
-            dst   : Destination::Name,
-            _ghost: PhantomData,
+            dst: Destination::Name,
+            _ghost: PhantomData
         }
     }
 
@@ -122,8 +126,8 @@ impl<T: ?Sized> Writer<T> {
 
         Writer {
             handle: rx.recv().unwrap(),
-            dst   : Destination::Pattern,
-            _ghost: PhantomData,
+            dst: Destination::Pattern,
+            _ghost: PhantomData
         }
     }
 }
@@ -138,9 +142,9 @@ impl<T: Writable + Send + 'static> Writer<T> {
         }
 
         send(match self.dst {
-            Destination::Name    => Message::Write(self.handle, raw_data),
-            Destination::Pattern => Message::Packet(self.handle, raw_data),
-        });
+                Destination::Name    => Message::Write(self.handle, raw_data),
+                Destination::Pattern => Message::Packet(self.handle, raw_data),
+            });
     }
 }
 
@@ -154,9 +158,9 @@ impl Writer<[u8]> {
         }
 
         send(match self.dst {
-            Destination::Name    => Message::Write(self.handle, raw_data),
-            Destination::Pattern => Message::Packet(self.handle, raw_data),
-        });
+                Destination::Name    => Message::Write(self.handle, raw_data),
+                Destination::Pattern => Message::Packet(self.handle, raw_data),
+            });
     }
 }
 
@@ -167,9 +171,9 @@ fn send(m: Message) {
 impl<T: ?Sized> Drop for Writer<T> {
     fn drop(&mut self) {
         send(match self.dst {
-            Destination::Name    => Message::Close(self.handle),
-            Destination::Pattern => Message::Unregister(self.handle),
-        });
+                Destination::Name    => Message::Close(self.handle),
+                Destination::Pattern => Message::Unregister(self.handle),
+            });
     }
 }
 
@@ -179,6 +183,7 @@ impl<T: ?Sized> Drop for Writer<T> {
 /// started).
 ///
 /// Do not call this function twice, as it will panic!
+#[allow(unknown_lints)]
 #[allow(let_unit_value)]
 extern "C" fn finish_writing() {
     // NB: this function must not panic as that will unwind into libc
@@ -209,4 +214,3 @@ extern "C" fn finish_writing() {
         }
     });
 }
-

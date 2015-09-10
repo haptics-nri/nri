@@ -12,36 +12,36 @@ use std::thread;
 #[derive(PartialEq, Debug)]
 #[allow(dead_code)]
 enum OniStatus {
-	Ok             = 0,
-	Error          = 1,
-	NotImplemented = 2,
-	NotSupported   = 3,
-	BadParameter   = 4,
-	OutOfFlow      = 5,
-	NoDevice       = 6,
-	TimeOut        = 102,
+    Ok             = 0,
+    Error          = 1,
+    NotImplemented = 2,
+    NotSupported   = 3,
+    BadParameter   = 4,
+    OutOfFlow      = 5,
+    NoDevice       = 6,
+    TimeOut        = 102,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 #[allow(dead_code)]
 pub enum OniError {
-	Error          = 1,
-	NotImplemented = 2,
-	NotSupported   = 3,
-	BadParameter   = 4,
-	OutOfFlow      = 5,
-	NoDevice       = 6,
-	TimeOut        = 102,
+    Error          = 1,
+    NotImplemented = 2,
+    NotSupported   = 3,
+    BadParameter   = 4,
+    OutOfFlow      = 5,
+    NoDevice       = 6,
+    TimeOut        = 102,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 #[allow(dead_code)]
 pub enum OniSensorType {
-	IR    = 1,
-	Color = 2,
-	Depth = 3,
+    IR    = 1,
+    Color = 2,
+    Depth = 3,
 
 }
 
@@ -50,18 +50,18 @@ pub enum OniSensorType {
 #[allow(dead_code)]
 pub enum OniPixelFormat {
 	// Depth
-	Depth1mm   = 100,
-	Depth100um = 101,
-	Shift92    = 102,
-	Shift93    = 103,
+    Depth1mm   = 100,
+    Depth100um = 101,
+    Shift92    = 102,
+    Shift93    = 103,
 
 	// Color
-	RGB888     = 200,
-	YUV422     = 201,
-	Gray8      = 202,
-	Gray16     = 203,
-	JPEG       = 204,
-	YUYV       = 205,
+    RGB888 = 200,
+    YUV422 = 201,
+    Gray8  = 202,
+    Gray16 = 203,
+    JPEG   = 204,
+    YUYV   = 205,
 }
 
 pub mod prop {
@@ -155,61 +155,58 @@ pub mod prop {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct OniCropping
-{
-	enabled: c_int,
-	origin_x: c_int,
-	origin_y: c_int,
-	width: c_int,
-	height: c_int,
+pub struct OniCropping {
+    enabled  : c_int,
+    origin_x : c_int,
+    origin_y : c_int,
+    width    : c_int,
+    height   : c_int,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 #[allow(raw_pointer_derive)]
 pub struct OniFrame {
-	pub data_size: i32,
-	data: *mut c_void,
+    pub data_size    : i32,
+    data             : *mut c_void,
 
-	sensor_type: OniSensorType,
-	timestamp: u64,
-	frame_index: i32,
+    sensor_type      : OniSensorType,
+    timestamp        : u64,
+    frame_index      : i32,
 
-	pub width: i32,
-	pub height: i32,
+    pub width        : i32,
+    pub height       : i32,
 
-	video_mode: OniVideoMode,
-	cropping_enabled: i32,
-	crop_origin_x: i32,
-	crop_origin_y: i32,
+    video_mode       : OniVideoMode,
+    cropping_enabled : i32,
+    crop_origin_x    : i32,
+    crop_origin_y    : i32,
 
-	stride: i32,
+    stride           : i32,
 }
 
 #[repr(C)]
 #[derive(Debug,Copy,Clone)]
 pub struct OniVideoMode {
-	pub pixel_format: OniPixelFormat,
-	pub resolution_x: i32,
-	pub resolution_y: i32,
-	pub fps: i32,
+    pub pixel_format : OniPixelFormat,
+    pub resolution_x : i32,
+    pub resolution_y : i32,
+    pub fps          : i32,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 #[allow(dead_code)]
-pub struct OniSensorInfo
-{
-	sensor_type: OniSensorType,
-	num_supported_video_modes: i32,
-	supported_video_modes: *const OniVideoMode
+pub struct OniSensorInfo {
+    sensor_type               : OniSensorType,
+    num_supported_video_modes : i32,
+    supported_video_modes     : *const OniVideoMode,
 }
 
 impl OniSensorInfo {
     pub fn video_modes(&self) -> &[OniVideoMode] {
-        unsafe {
-            slice::from_raw_parts(self.supported_video_modes, self.num_supported_video_modes as usize)
-        }
+        unsafe { slice::from_raw_parts(self.supported_video_modes,
+                                       self.num_supported_video_modes as usize) }
     }
 }
 
@@ -244,7 +241,7 @@ macro_rules! status2result {
     }
 }
 
-pub fn initialize() -> Result<(),OniError> {
+pub fn initialize() -> Result<(), OniError> {
     /*
     match ioctl::usbdevfs_reset("/dev/bus/usb/002/002") {
         Ok(_) => println!("Device reset succeeded"),
@@ -265,26 +262,26 @@ pub fn shutdown() {
 #[allow(raw_pointer_derive)]
 #[derive(Debug)]
 pub struct Device {
-    pdev: *mut c_void
+    pdev: *mut c_void,
 }
 
 #[allow(raw_pointer_derive)]
 #[derive(Debug)]
 pub struct VideoStream {
     pvs: *mut c_void,
-    running: Cell<bool>
+    running: Cell<bool>,
 }
 
 #[allow(raw_pointer_derive)]
 #[derive(Debug)]
 pub struct Frame {
-    pf: *mut OniFrame
+    pf: *mut OniFrame,
 }
 
 #[allow(raw_pointer_derive)]
 #[derive(Debug)]
 pub struct SensorInfo {
-    pinfo: *const OniSensorInfo
+    pinfo: *const OniSensorInfo,
 }
 
 macro_rules! c_str {
@@ -294,27 +291,29 @@ macro_rules! c_str {
 }
 
 impl Device {
-    pub fn new(uri: Option<&str>) -> Result<Device,OniError> {
+    pub fn new(uri: Option<&str>) -> Result<Device, OniError> {
         let mut dev = Device { pdev: ptr::null_mut() };
         let c_uri = match uri {
             Some(u) => c_str!(u),
-            None    => ptr::null()
+            None    => ptr::null(),
         };
         status2result!(unsafe { oniDeviceOpen(c_uri, &mut dev.pdev) }, dev)
     }
 
     pub fn close(&mut self) {
-        unsafe { oniDeviceClose(self.pdev); } // TODO this returns an error which I am ignoring
+        unsafe {
+            oniDeviceClose(self.pdev);
+        } // TODO this returns an error which I am ignoring
     }
 }
 
 impl VideoStream {
-    pub fn new(dev: &Device, sensor_type: OniSensorType) -> Result<VideoStream,OniError> {
+    pub fn new(dev: &Device, sensor_type: OniSensorType) -> Result<VideoStream, OniError> {
         let mut vs = VideoStream { pvs: ptr::null_mut(), running: Cell::new(false) };
         status2result!(unsafe { oniDeviceCreateStream(dev.pdev, sensor_type, &mut vs.pvs) }, vs)
     }
 
-    pub fn start(&self) -> Result<(),OniError> {
+    pub fn start(&self) -> Result<(), OniError> {
         try!(status2result!(unsafe { oniStreamStart(self.pvs) }));
         self.running.set(true);
         Ok(())
@@ -329,13 +328,13 @@ impl VideoStream {
         self.running.get()
     }
 
-    pub fn read_frame(&self) -> Result<Frame,OniError> {
+    pub fn read_frame(&self) -> Result<Frame, OniError> {
         let mut pframe: *mut OniFrame = ptr::null_mut();
         try!(status2result!(unsafe { oniStreamReadFrame(self.pvs, &mut pframe) }));
         Ok(Frame { pf: unsafe { ptr::read(&pframe) } })
     }
 
-    pub fn info(&self) -> Result<SensorInfo,OniError> {
+    pub fn info(&self) -> Result<SensorInfo, OniError> {
         let pinfo = unsafe { oniStreamGetSensorInfo(self.pvs) };
         if pinfo.is_null() {
             Err(OniError::Error)
@@ -344,11 +343,11 @@ impl VideoStream {
         }
     }
 
-    pub fn set<P: prop::Stream>(&self, data: P::Data) -> Result<(),OniError> {
+    pub fn set<P: prop::Stream>(&self, data: P::Data) -> Result<(), OniError> {
         status2result!(unsafe { oniStreamSetProperty(self.pvs, guilty!(P::ID), &P::to_c(data) as *const _ as *const c_void, mem::size_of::<P::CData>() as c_int) })
     }
 
-    pub fn get<P: prop::Stream>(&self) -> Result<P::Data,OniError> {
+    pub fn get<P: prop::Stream>(&self) -> Result<P::Data, OniError> {
         unsafe {
             let mut cdata: P::CData = mem::uninitialized();
             let mut size : c_int    = mem::uninitialized();
@@ -357,7 +356,7 @@ impl VideoStream {
             Ok(P::from_c(cdata))
         }
     }
-    
+
     pub fn destroy(&self) {
         unsafe { oniStreamDestroy(self.pvs) }
     }
@@ -390,4 +389,3 @@ impl Deref for SensorInfo {
         unsafe { &*self.pinfo }
     }
 }
-

@@ -1,5 +1,3 @@
-use std::process::Command;
-
 fn main() {
     let project_dir = env!("CARGO_MANIFEST_DIR");
     //let out_dir = env!("OUT_DIR");
@@ -13,4 +11,3 @@ fn main() {
     println!("cargo:rustc-link-search=native={}/src/optoforce", project_dir);
     println!("cargo:rustc-libdir={}/src/optoforce", project_dir);
 }
-

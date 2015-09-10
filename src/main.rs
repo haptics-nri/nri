@@ -96,7 +96,8 @@ macro_rules! group_attr {
     };
 }
 
-#[macro_use] extern crate guilt_by_association;
+#[macro_use]
+extern crate guilt_by_association;
 
 // TODO move this profiling stuff to a mod
 use std::cell::RefCell;
@@ -147,11 +148,16 @@ use bluefox::Bluefox;
 use optoforce::Optoforce;
 use stb::STB;
 
-#[macro_use] extern crate log;
-#[macro_use] extern crate enum_primitive;
-#[macro_use] extern crate custom_derive;
-#[macro_use] extern crate lazy_static;
-#[macro_use] extern crate abort_on_panic;
+#[macro_use]
+extern crate log;
+#[macro_use]
+extern crate enum_primitive;
+#[macro_use]
+extern crate custom_derive;
+#[macro_use]
+extern crate lazy_static;
+#[macro_use]
+extern crate abort_on_panic;
 extern crate num;
 extern crate env_logger;
 extern crate hprof;
@@ -217,10 +223,10 @@ impl Service {
      *   - notifies the master thread using CmdFrom::Panicked
      *   - creates a new channel and replaces self.tx so the master thread doesn't notice
      *   - starts a new service thread (but does not send CmdTo::Start)
-     *   
+     *
      *  This modification from within the middle manager thread is the reason self.tx is such a
      *  monstrosity of containers.
-     * 
+     *
      *  NB: for this scheme to work, the middle manager thread must never panic!
      */
     fn start<T: Controllable>(mut self, reply: &Sender<CmdFrom>) -> Service {
@@ -277,8 +283,8 @@ fn send_to(services: &[Service], s: String, cmd: CmdTo) -> bool {
         Some(srv) => {
             srv.tx.lock().unwrap().as_ref().map(|s| s.send(cmd).unwrap());
             true
-        },
-        None => false 
+        }
+        None => false,
     }
 }
 
@@ -399,8 +405,7 @@ fn main() {
         // so just exit, and it will be killed
 
     });
-    
+
     println!("\n\n");
     hprof::profiler().print_timing();
 }
-

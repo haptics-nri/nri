@@ -49,18 +49,26 @@ pub enum CmdFrom {
     Power(Power),
 
     /// Schedule the sending thread to be killed in x ms
-    Timeout { thread: &'static str, ms: u32 },
+    Timeout {
+        thread: &'static str,
+        ms: u32,
+    },
     /// Cancel a killing scheduled with Timeout
-    Timein { thread: &'static str },
+    Timein {
+        thread: &'static str,
+    },
 
     /// Service thread panicked (obviously, this would only be sent from the middle-manager thread
-    Panicked { thread: &'static str, panic_reason: String },
+    Panicked {
+        thread: &'static str,
+        panic_reason: String,
+    },
 }
 
 #[derive(Clone)]
 pub enum Power {
     PowerOff,
-    Reboot
+    Reboot,
 }
 
 /// Desired blocking mode for a service
@@ -71,7 +79,7 @@ pub enum Block {
     /// Do not call step() again until there is a command from on high. Used by services that do
     /// all the work in background threads or have nothing to do.
     Infinite,
-    
+
     /// No delay -- call step() again immediately. Used by IO-bound or CPU-bound services.
     Immediate,
 
@@ -80,7 +88,7 @@ pub enum Block {
     /// called approximately every N ns. A simple proportional controller is used to adjust the
     /// sleep time, to account for unmeasured delays and get as close as possible to the desired
     /// period.
-    Period(i64)
+    Period(i64),
 }
 
 guilty!{
@@ -118,7 +126,7 @@ guilty!{
 /// Convenience macro for making an "RPC" call from a service up to the main thread. This is done
 /// by generating a nonce channel, stuffing the sending end into a message that gets sent to the
 /// main thread, and then waiting for the main thread to send back a reply.
-/// 
+///
 /// This is a macro instead of a function because you need to pass in the _name_ of a CmdFrom
 /// variant without constructing it (because a Sender is needed to construct it, but the macro is
 /// creating the channel for you). Possibly a better design would be structs and a trait/generic.
@@ -173,7 +181,10 @@ macro_rules! stub {
 }
 
 /// Represents the two loops in go(), used in conjunction with maybe_break!
-enum Break { Running, Alive }
+enum Break {
+    Running,
+    Alive,
+}
 
 // TODO move into utility macros mod
 /// Pass-through macro for re-interpreting a token tree as an expression
@@ -199,10 +210,10 @@ macro_rules! maybe_break {
 /// Called in the case of a command from the main thread when the service is already running
 fn handle_ok<C: Controllable>(cmd: CmdTo, c: &mut C, data: &mut Option<String>) -> Option<Break> {
     match cmd {
-        CmdTo::Start => {}, // already started
+        CmdTo::Start => {}                          // already started
         CmdTo::Stop => return Some(Break::Running), // shutdown command
-        CmdTo::Quit => return handle_err(c), // real shutdown command
-        CmdTo::Data(d) => *data = Some(d), // have data!
+        CmdTo::Quit => return handle_err(c),        // real shutdown command
+        CmdTo::Data(d) => *data = Some(d),
     }
     None
 }
@@ -222,14 +233,14 @@ fn handle<C: Controllable>(block: bool, c: &mut C, rx: &Receiver<CmdTo>, data: &
     if block {
         match rx.recv() {
             Ok(cmd) => handle_ok(cmd, c, data),
-            Err(_) => handle_err(c)
+            Err(_) => handle_err(c),
         }
     } else {
         match rx.try_recv() {
             Ok(cmd) => handle_ok(cmd, c, data),
             Err(e) => match e {
                 TryRecvError::Empty => None, // continue
-                TryRecvError::Disconnected => handle_err(c), // main thread exploded?
+                TryRecvError::Disconnected => handle_err(c),
             },
         }
     }
@@ -246,9 +257,9 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
         'hatching: loop {
             match rx.recv() {
                 Ok(cmd) => match cmd {
-                    CmdTo::Start => break 'hatching, // let's go!
+                    CmdTo::Start => break 'hatching,      // let's go!
                     CmdTo::Data(_) => continue 'hatching, // sorry, not listening yet
-                    CmdTo::Stop | CmdTo::Quit => break 'alive, // didn't even get to start
+                    CmdTo::Stop | CmdTo::Quit => break 'alive,
                 },
                 Err(_) => return, // main thread exploded?
             }
@@ -260,9 +271,9 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
 
         let mut block = guilty!(C::BLOCK);
         let actual_period = match block {
-            Block::Immediate => 0,
-            Block::Infinite  => -1,
-            Block::Period(period) => period
+            Block::Immediate      => 0,
+            Block::Infinite       => -1,
+            Block::Period(period) => period,
         };
 
         super::PROF.with(|wrapped_prof| {
@@ -281,8 +292,8 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
                 Block::Immediate => {
                     maybe_break!(handle(false, &mut c, &rx, &mut data), 'running, 'alive);
                     prof!("step", c.step(data));
-                },
-                Block::Infinite  => {
+                }
+                Block::Infinite => {
                     maybe_break!(handle(true, &mut c, &rx, &mut data), 'running, 'alive);
                     prof!("step", c.step(data));
                 }
@@ -291,7 +302,9 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
                     prof!("step", c.step(data));
                     if let Some(nanos) = (time::now() - start).num_nanoseconds() {
                         if nanos < desired_period {
-                            unsafe { nanosleep(&timespec { tv_sec: 0, tv_nsec: desired_period - nanos }, ptr::null_mut()); }
+                            unsafe {
+                                nanosleep(&timespec { tv_sec: 0, tv_nsec: desired_period - nanos }, ptr::null_mut());
+                            }
                         }
                     }
 
@@ -304,7 +317,6 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
                         life_start = time::now();
                     }
                 }
-
             }
         }
 
@@ -330,7 +342,7 @@ pub struct RestartableThread<Data: Send + 'static> {
     /// Handle to the running thread
     ///
     /// Wrapped in an option so it can be joined without moving self.
-    thread: Option<thread::JoinHandle<()>>
+    thread: Option<thread::JoinHandle<()>>,
 }
 
 impl<Data: Send + 'static> RestartableThread<Data> {
@@ -338,7 +350,8 @@ impl<Data: Send + 'static> RestartableThread<Data> {
     /// The thread will run (and wait for input) until RestartableThread::join() is called or the
     /// RestartableThread instance is dropped.
     /// To pass input, use RestartableThread::send().
-    pub fn new<F>(n: &'static str, f: F) -> RestartableThread<Data> where F: Send + 'static + Fn(Data)
+    pub fn new<F>(n: &'static str, f: F) -> RestartableThread<Data>
+        where F: Send + 'static + Fn(Data)
     {
         let (tx, rx) = channel();
         RestartableThread {
@@ -357,7 +370,7 @@ impl<Data: Send + 'static> RestartableThread<Data> {
                         prof.print_timing();
                     }
                 });
-            }))
+            })),
         }
     }
 
@@ -391,4 +404,3 @@ impl<Data: Send + 'static> Drop for RestartableThread<Data> {
         self.join();
     }
 }
-

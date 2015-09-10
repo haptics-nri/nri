@@ -302,4 +302,3 @@ group_attr!{
 
 #[cfg(not(target_os = "linux"))]
 stub!(STB);
-

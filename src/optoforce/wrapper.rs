@@ -39,15 +39,15 @@ extern "C" {
 
 #[repr(C)]
 pub struct Version {
-    major:    c_int,
-    minor:    c_int,
-    revision: c_int
+    major    : c_int,
+    minor    : c_int,
+    revision : c_int,
 }
 
 pub struct Double(c_double);
 
 impl fmt::Debug for Double {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(),fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "{: >7.3}", self.deref())
     }
 }
@@ -62,15 +62,15 @@ impl Deref for Double {
 
 #[derive(Debug)]
 pub struct XYZ {
-    x: Double,
-    y: Double,
-    z: Double
+    x : Double,
+    y : Double,
+    z : Double,
 }
 
 type Handle = *mut c_void;
 
 pub struct Device {
-    pdev: Handle
+    pdev: Handle,
 }
 
 impl Device {
@@ -78,15 +78,17 @@ impl Device {
         Device { pdev: unsafe { lofa_create_sensor(opt.buffer as c_int, opt.factor as c_float) } }
     }
 
-    pub fn connect(&self, opt: ConnectOptions) -> Result<(),()> {
+    pub fn connect(&self, opt: ConnectOptions) -> Result<(), ()> {
         match unsafe { lofa_sensor_connect(self.pdev, c_str!(opt.path), opt.baud) } {
             true => Ok(()),
-            false => Err(())
+            false => Err(()),
         }
     }
 
     pub fn disconnect(&self, block: bool) {
-        unsafe { lofa_sensor_disconnect(self.pdev, block); }
+        unsafe {
+            lofa_sensor_disconnect(self.pdev, block);
+        }
     }
 
     pub fn set(&self, conf: Settings) {
@@ -103,13 +105,13 @@ impl Device {
 }
 
 pub struct DeviceOptions {
-    pub buffer: isize,
-    pub factor: f32
+    pub buffer : isize,
+    pub factor : f32,
 }
 
 pub struct ConnectOptions<'a> {
-    pub path: &'a str,
-    pub baud: i32
+    pub path : &'a str,
+    pub baud : i32,
 }
 
 pub mod settings {
@@ -212,10 +214,10 @@ pub mod settings {
 
 #[derive(Debug, Copy, Clone)]
 pub struct Settings {
-    pub speed:  settings::Speed,
-    pub filter: settings::Filter,
-    pub mode:   settings::Mode,
-    pub state:  settings::State
+    pub speed  : settings::Speed,
+    pub filter : settings::Filter,
+    pub mode   : settings::Mode,
+    pub state  : settings::State,
 }
 
 impl Settings {
@@ -223,10 +225,22 @@ impl Settings {
         Default::default()
     }
 
-    pub fn set_speed(mut self, speed: settings::Speed) -> Settings { self.speed = speed; self }
-    pub fn set_filter(mut self, filter: settings::Filter) -> Settings { self.filter = filter; self }
-    pub fn set_mode(mut self, mode: settings::Mode) -> Settings { self.mode = mode; self }
-    pub fn set_state(mut self, state: settings::State) -> Settings { self.state = state; self }
+    pub fn set_speed(mut self, speed: settings::Speed) -> Settings {
+        self.speed = speed;
+        self
+    }
+    pub fn set_filter(mut self, filter: settings::Filter) -> Settings {
+        self.filter = filter;
+        self
+    }
+    pub fn set_mode(mut self, mode: settings::Mode) -> Settings {
+        self.mode = mode;
+        self
+    }
+    pub fn set_state(mut self, state: settings::State) -> Settings {
+        self.state = state;
+        self
+    }
 
     fn encode(self) -> u8 {
         (self.mode.to_device())
@@ -237,11 +251,11 @@ impl Settings {
 
     fn decode(byte: u8) -> Option<Settings> {
         Some(Settings {
-            mode:   try_opt!(settings::Mode::  from_device( byte       & 0b0000_0001)),
-            filter: try_opt!(settings::Filter::from_device((byte >> 1) & 0b0000_0011)),
-            speed:  try_opt!(settings::Speed:: from_device((byte >> 3) & 0b0000_0011)),
-            state:  try_opt!(settings::State:: from_device((byte >> 5) & 0b0000_0111)),
-        })
+                mode   : try_opt!(settings::Mode::  from_device( byte       & 0b0000_0001)),
+                filter : try_opt!(settings::Filter::from_device((byte >> 1) & 0b0000_0011)),
+                speed  : try_opt!(settings::Speed:: from_device((byte >> 3) & 0b0000_0011)),
+                state  : try_opt!(settings::State:: from_device((byte >> 5) & 0b0000_0111)),
+            })
     }
 }
 
@@ -260,10 +274,10 @@ impl Default for ConnectOptions<'static> {
 impl Default for Settings {
     fn default() -> Settings {
         Settings {
-            state:  settings::State:: SensorOk,
-            speed:  settings::Speed:: Hz100   ,
-            filter: settings::Filter::Hz15    ,
-            mode:   settings::Mode::  Force
+            state  : settings::State ::SensorOk,
+            speed  : settings::Speed ::Hz100,
+            filter : settings::Filter::Hz15,
+            mode   : settings::Mode  ::Force
         }
     }
 }
@@ -276,4 +290,3 @@ impl Drop for Device {
         }
     }
 }
-
