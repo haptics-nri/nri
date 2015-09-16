@@ -65,6 +65,7 @@
 //! NUC. You can see what it chose by running <code>hostname -I</code> -- it seems to like 10.42.0.1.
 
 #![cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#![cfg_attr(feature = "nightly", feature(const_fn, read_exact, core_intrinsics))]
 
 /// Just like println!, but prints to stderr
 #[macro_export]

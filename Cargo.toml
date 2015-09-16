@@ -12,6 +12,7 @@ debug = true
 [features]
 default = ["watch"]
 watch = ["handlebars-iron/watch"]
+nightly = []
 
 [dependencies]
 log = "*"

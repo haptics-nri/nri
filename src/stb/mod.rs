@@ -41,27 +41,35 @@ group_attr!{
     use self::time::Duration;
     use custom_derive::TryFrom;
 
-    trait RFC980: Read {
-        fn read_exact(&mut self, mut buf: &mut [u8]) -> io::Result<()> {
-            while !buf.is_empty() {
-                match self.read(buf) {
-                    Ok(0)   => break,
-                    Ok(n)   => {
-                        let tmp = buf;
-                        buf = &mut tmp[n..];
-                    },
-                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted
-                            => {},
-                    Err(e)  => return Err(e),
+    group_attr! {
+        #[cfg(not(feature = "nightly"))]
+
+        use std::io::{self, Read};
+
+        trait RFC980: Read {
+            fn read_exact(&mut self, mut buf: &mut [u8]) -> io::Result<()> {
+                while !buf.is_empty() {
+                    match self.read(buf) {
+                        Ok(0)   => break,
+                        Ok(n)   => {
+                            let tmp = buf;
+                            buf = &mut tmp[n..];
+                        },
+                        Err(ref e) if e.kind() == io::ErrorKind::Interrupted
+                                => {},
+                        Err(e)  => return Err(e),
+                    }
+                }
+
+                if !buf.is_empty() {
+                    Err(io::Error::new(io::ErrorKind::Other, "failed to fill whole buffer"))
+                } else {
+                    Ok(())
                 }
             }
-
-            if !buf.is_empty() {
-                Err(io::Error::new(io::ErrorKind::Other, "failed to fill whole buffer"))
-            } else {
-                Ok(())
-            }
         }
+
+        impl<T: Read> RFC980 for T {}
     }
 
     trait Coffee: Read + Write {
@@ -88,7 +96,6 @@ group_attr!{
         fn flush(&mut self)             -> io::Result<()>    { self.parent.flush()    }
     }
 
-    impl<T: Read> RFC980 for T {}
     impl<T: Read + Write> Coffee for T {}
 
     trait StaticReadWrite: Read + Write + 'static {}
