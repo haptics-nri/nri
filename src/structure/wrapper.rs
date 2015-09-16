@@ -1,16 +1,16 @@
+#![allow(dead_code)]
+
 extern crate libc;
-use self::libc::{c_void, c_char, c_float, c_int};
+use self::libc::{c_void, c_char, c_int};
 use std::ptr;
 use std::mem;
 use std::ffi::CString;
 use std::cell::Cell;
 use std::ops::Deref;
 use std::slice;
-use std::thread;
 
 #[repr(C)]
 #[derive(PartialEq, Debug)]
-#[allow(dead_code)]
 enum OniStatus {
     Ok             = 0,
     Error          = 1,
@@ -24,7 +24,6 @@ enum OniStatus {
 
 #[repr(C)]
 #[derive(Debug)]
-#[allow(dead_code)]
 pub enum OniError {
     Error          = 1,
     NotImplemented = 2,
@@ -37,7 +36,6 @@ pub enum OniError {
 
 #[repr(C)]
 #[derive(Debug)]
-#[allow(dead_code)]
 pub enum OniSensorType {
     IR    = 1,
     Color = 2,
@@ -47,7 +45,6 @@ pub enum OniSensorType {
 
 #[repr(C)]
 #[derive(Debug,Copy,Clone)]
-#[allow(dead_code)]
 pub enum OniPixelFormat {
 	// Depth
     Depth1mm   = 100,
@@ -196,7 +193,7 @@ pub struct OniVideoMode {
 
 #[repr(C)]
 #[derive(Debug)]
-#[allow(dead_code)]
+#[allow(raw_pointer_derive)]
 pub struct OniSensorInfo {
     sensor_type               : OniSensorType,
     num_supported_video_modes : i32,

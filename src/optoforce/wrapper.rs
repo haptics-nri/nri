@@ -1,3 +1,5 @@
+#![allow(dead_code)] // these are full bindings to the adapter lib
+
 extern crate libc;
 use self::libc::{c_void, c_int, c_char, c_uchar, c_float, c_double};
 use std::default::Default;
@@ -44,6 +46,7 @@ pub struct Version {
     revision : c_int,
 }
 
+#[repr(C)]
 pub struct Double(c_double);
 
 impl fmt::Debug for Double {
@@ -61,6 +64,7 @@ impl Deref for Double {
 }
 
 #[derive(Debug)]
+#[repr(C)]
 pub struct XYZ {
     x : Double,
     y : Double,
@@ -175,7 +179,7 @@ pub mod settings {
     }
 
     make_enum! {
-        Speed: u8 => u8 {
+        Speed: u16 => u8 {
             (Hz30   , 30   , 3),
             (Hz100  , 100  , 2),
             (Hz333  , 333  , 1),

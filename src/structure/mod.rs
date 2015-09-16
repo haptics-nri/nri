@@ -130,7 +130,7 @@ group_attr!{
                         let mut f = File::create(format!("data/{}", fname)).unwrap();
                         prof!("write", f.write_all(&data).unwrap());
                         let stamp = time::get_time();
-                        writeln!(self.stampfile, "{},{},{:.9}", self.i, fname, stamp.sec as f64 + stamp.nsec as f64 / 1_000_000_000f64);
+                        writeln!(self.stampfile, "{},{},{:.9}", self.i, fname, stamp.sec as f64 + stamp.nsec as f64 / 1_000_000_000f64).unwrap();
                         match cmd.as_ref().map(|s| s as &str) {
                             Some("kick") => {
                                 prof!("send to thread", self.png.send((self.i, data, false, (frame.height, frame.width), ColorType::Gray(16))).unwrap());
@@ -149,7 +149,7 @@ group_attr!{
                         let mut f = File::create(format!("data/{}", fname)).unwrap();
                         prof!("write", f.write_all(data).unwrap());
                         let stamp = time::get_time();
-                        writeln!(self.stampfile, "{},{},{:.9}", self.i, fname, stamp.sec as f64 + stamp.nsec as f64 / 1_000_000_000f64);
+                        writeln!(self.stampfile, "{},{},{:.9}", self.i, fname, stamp.sec as f64 + stamp.nsec as f64 / 1_000_000_000f64).unwrap();
                         match cmd.as_ref().map(|s| s as &str) {
                             Some("kick") => {
                                 prof!("send to thread", self.png.send((self.i, data.into(), true, (frame.height, frame.width), ColorType::RGB(8))).unwrap());

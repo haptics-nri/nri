@@ -6,7 +6,6 @@ group_attr!{
     extern crate time;
     extern crate image;
     extern crate rustc_serialize as serialize;
-    use std::fs::File;
     use std::io::Write;
     use self::image::{imageops, ImageBuffer, ColorType, FilterType};
     use self::image::png::PNGEncoder;
@@ -15,7 +14,7 @@ group_attr!{
     use std::sync::Mutex;
     use std::sync::mpsc::Sender;
     use ::comms::{Controllable, CmdFrom, Block, RestartableThread};
-    use ::scribe::{Writer, Writable};
+    use ::scribe::Writer;
 
     type PngStuff = (usize, Vec<u8>, (usize, usize), ColorType);
 

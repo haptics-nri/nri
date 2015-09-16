@@ -1,10 +1,11 @@
+#![allow(dead_code)]
+
 extern crate libc;
-use self::libc::{c_void, c_int, c_uint, c_char, size_t, c_double};
+use self::libc::{c_void, c_int, c_uint, c_char, c_double};
 use num::FromPrimitive;
 use std::slice;
 use std::mem;
 use std::ptr;
-use std::ffi::CString;
 
 macro_rules! dmr_status2result {
     ($code:expr) => { dmr_status2result!($code, ()) };
@@ -57,7 +58,6 @@ impl HOBJ {
 
 #[repr(C)]
 #[derive(Debug)]
-#[allow(dead_code)]
 pub enum TDMR_ERROR {
     DMR_NO_ERROR                             = 0,
     DMR_DEV_NOT_FOUND                        = -2100,
@@ -113,7 +113,6 @@ pub enum TDMR_ERROR {
 
 #[repr(C)]
 #[derive(Debug)]
-#[allow(dead_code)]
 pub enum TPROPHANDLING_ERROR {
     PROPHANDLING_NO_ERROR                           = 0,
     PROPHANDLING_NOT_A_LIST                         = -2000,
@@ -162,7 +161,6 @@ pub enum TPROPHANDLING_ERROR {
 
 #[repr(C)]
 #[derive(Debug)]
-#[allow(dead_code)]
 enum DeviceSearchMode {
     Serial   = 1,
     Family   = 2,
@@ -172,7 +170,6 @@ enum DeviceSearchMode {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
-#[allow(dead_code)]
 pub enum PixelFormat {
     Raw                  = 0,
     Mono8                = 1,
@@ -210,7 +207,6 @@ pub mod settings {
     enum_from_primitive! {
         #[repr(C)]
         #[derive(Copy, Clone, Debug)]
-        #[allow(dead_code)]
         pub enum PixelFormat {
             BayerGR8      = 17301512,
             BayerGR10     = 17825804,
@@ -230,7 +226,6 @@ pub mod settings {
     enum_from_primitive! {
         #[repr(C)]
         #[derive(Copy, Clone, Debug)]
-        #[allow(dead_code)]
         pub enum ColorProc {
             Auto             = 0,
             Raw              = 1,
@@ -243,7 +238,6 @@ pub mod settings {
     enum_from_primitive! {
         #[repr(C)]
         #[derive(Copy, Clone, Debug)]
-        #[allow(dead_code)]
         pub enum InterpolationMode {
             NearestNeighbor = 0,
             Linear          = 1,
@@ -254,7 +248,6 @@ pub mod settings {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
-#[allow(dead_code)]
 pub enum ValueType {
     Int    = 0x1,
     Float  = 0x2,
@@ -265,7 +258,6 @@ pub enum ValueType {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
-#[allow(dead_code)]
 pub enum ComponentType {
     Prop = 0x00010000,
     List = 0x00020000,
@@ -279,7 +271,6 @@ pub enum ComponentType {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
-#[allow(dead_code)]
 enum ListType {
     Undefined              = -1,
     Setting                = 0,
@@ -299,7 +290,6 @@ enum ListType {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
-#[allow(dead_code)]
 enum SearchMode {
     IgnoreLists      = 0x2,
     IgnoreMethods    = 0x4,
@@ -316,6 +306,7 @@ struct ChannelData {
 
 #[repr(C, packed)]
 #[derive(Debug)]
+#[allow(raw_pointer_derive)]
 struct ImageBuffer {
     pub bytes_per_pixel : c_int,
     pub height          : c_int,
@@ -369,15 +360,15 @@ pub struct Device {
 }
 
 trait ObjProp {
-    unsafe fn GetT(hObj: HOBJ, pval: *mut Self, index: c_int) -> TPROPHANDLING_ERROR;
-    unsafe fn SetT(hObj: HOBJ, val: Self, index: c_int) -> TPROPHANDLING_ERROR;
+    unsafe fn get(h_obj: HOBJ, pval: *mut Self, index: c_int) -> TPROPHANDLING_ERROR;
+    unsafe fn set(h_obj: HOBJ, val: Self, index: c_int) -> TPROPHANDLING_ERROR;
 }
 
 macro_rules! obj_set_impl {
     ($t:ty, $get:ident, $set:ident) => {
         impl ObjProp for $t {
-            unsafe fn GetT(hObj: HOBJ, pval: *mut Self, index: c_int) -> TPROPHANDLING_ERROR { $get(hObj, pval, index) }
-            unsafe fn SetT(hObj: HOBJ, val: Self, index: c_int) -> TPROPHANDLING_ERROR { $set(hObj, val, index) }
+            unsafe fn get(h_obj: HOBJ, pval: *mut Self, index: c_int) -> TPROPHANDLING_ERROR { $get(h_obj, pval, index) }
+            unsafe fn set(h_obj: HOBJ, val: Self, index: c_int) -> TPROPHANDLING_ERROR { $set(h_obj, val, index) }
         }
     }
 }
@@ -455,13 +446,13 @@ impl Device {
     getset!(get_scale_height,  set_scale_height,  HOBJ(0x800004), i32);
 
     fn set_prop<T: ObjProp>(&self, prop: HOBJ, value: T, index: c_int) -> Result<(), TPROPHANDLING_ERROR> {
-        prop_status2result!(unsafe { T::SetT(prop, value, index) })
+        prop_status2result!(unsafe { T::set(prop, value, index) })
     }
 
     fn get_prop<T: ObjProp>(&self, prop: HOBJ, index: c_int) -> Result<T, TPROPHANDLING_ERROR> {
         unsafe {
             let mut value: T = mem::uninitialized();
-            prop_status2result!(T::GetT(prop, &mut value, index), value)
+            prop_status2result!(T::get(prop, &mut value, index), value)
         }
     }
 

@@ -55,7 +55,7 @@ group_attr!{
     use std::thread;
     use std::io::Write;
     use std::fs::File;
-    use std::{mem, slice, ptr};
+    use std::{mem, slice};
 
 
     mod wrapper;
@@ -74,7 +74,7 @@ group_attr!{
 
             fn setup(_: Sender<CmdFrom>, _: Option<String>) -> Optoforce {
                 let dev = wrapper::Device::new(Default::default());
-                dev.connect(wrapper::ConnectOptions { path: "/dev/ttyOPTO", ..Default::default() });
+                dev.connect(wrapper::ConnectOptions { path: "/dev/ttyOPTO", ..Default::default() }).unwrap();
                 thread::sleep_ms(100);
                 dev.set(wrapper::Settings::new()
                         .set_speed(wrapper::settings::Speed::Hz1000)
@@ -85,8 +85,8 @@ group_attr!{
 
             fn step(&mut self, _: Option<String>) {
                 let xyz = self.device.read();
-                self.file.write_all(unsafe { slice::from_raw_parts(&time::get_time() as *const _ as *const _, mem::size_of::<time::Timespec>()) });
-                self.file.write_all(unsafe { slice::from_raw_parts(&xyz as *const _ as *const _, mem::size_of_val(&xyz)) });
+                self.file.write_all(unsafe { slice::from_raw_parts(&time::get_time() as *const _ as *const _, mem::size_of::<time::Timespec>()) }).unwrap();
+                self.file.write_all(unsafe { slice::from_raw_parts(&xyz as *const _ as *const _, mem::size_of_val(&xyz)) }).unwrap();
                 self.i += 1;
                 if (self.i % 100) == 0 {
                     println!("Optoforce #{} {:?}", self.i, xyz);

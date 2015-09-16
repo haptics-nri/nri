@@ -34,43 +34,46 @@ group_attr!{
     use std::io::{self, Read, Write};
     use std::fs::File;
     use std::sync::mpsc::Sender;
-    use std::{u8, ptr, mem, slice, ops};
-    use std::ops::DerefMut;
+    use std::{u8, ptr, mem, ops};
     use std::fmt::{self, Display, Debug, Formatter};
     use self::serial::prelude::*;
     use self::time::Duration;
     use custom_derive::TryFrom;
 
-    group_attr! {
-        #[cfg(not(feature = "nightly"))]
-
-        use std::io::{self, Read};
-
-        trait RFC980: Read {
-            fn read_exact(&mut self, mut buf: &mut [u8]) -> io::Result<()> {
-                while !buf.is_empty() {
-                    match self.read(buf) {
-                        Ok(0)   => break,
-                        Ok(n)   => {
-                            let tmp = buf;
-                            buf = &mut tmp[n..];
-                        },
-                        Err(ref e) if e.kind() == io::ErrorKind::Interrupted
-                                => {},
-                        Err(e)  => return Err(e),
-                    }
-                }
-
-                if !buf.is_empty() {
-                    Err(io::Error::new(io::ErrorKind::Other, "failed to fill whole buffer"))
-                } else {
-                    Ok(())
-                }
-            }
+    trait RFC980: Read {
+        fn read_exact_shim(&mut self, buf: &mut [u8]) -> io::Result<()> {
+            self.read_exact_real(buf)
         }
 
-        impl<T: Read> RFC980 for T {}
+        #[cfg(feature = "nightly")]
+        fn read_exact_real(&mut self, buf: &mut [u8]) -> io::Result<()> {
+            self.read_exact(buf)
+        }
+
+        #[cfg(not(feature = "nightly"))]
+        fn read_exact_real(&mut self, mut buf: &mut [u8]) -> io::Result<()> {
+            while !buf.is_empty() {
+                match self.read(buf) {
+                    Ok(0)   => break,
+                    Ok(n)   => {
+                        let tmp = buf;
+                        buf = &mut tmp[n..];
+                    },
+                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted
+                            => {},
+                    Err(e)  => return Err(e),
+                }
+            }
+
+            if !buf.is_empty() {
+                Err(io::Error::new(io::ErrorKind::Other, "failed to fill whole buffer"))
+            } else {
+                Ok(())
+            }
+        }
     }
+
+    impl<T: Read> RFC980 for T {}
 
     trait Coffee: Read + Write {
         fn coffee<W: Write>(self, w: W) -> CoffeeImpl<Self, W> where Self: Sized {
@@ -101,6 +104,10 @@ group_attr!{
     trait StaticReadWrite: Read + Write + 'static {}
     impl<T: Read + Write + 'static> StaticReadWrite for T {}
 
+    fn byte_copy(from: &[u8], mut to: &mut [u8]) -> usize {
+        to.write(from).unwrap()
+    }
+
     fn serialport() -> Box<StaticReadWrite> {
         let mut port = serial::open("/dev/ttySTB").unwrap();
         port.reconfigure(&|settings| {
@@ -108,8 +115,11 @@ group_attr!{
             Ok(())
         }).unwrap();
         port.set_timeout(Duration::milliseconds(100)).unwrap();
-        Box::new(port)
-        //Box::new(port.coffee(File::create("data/stbdump.dat").unwrap()))
+        if false {
+            Box::new(port.coffee(File::create("data/stbdump.dat").unwrap()))
+        } else {
+            Box::new(port)
+        }
     }
 
     impl super::ParkState {
@@ -119,7 +129,7 @@ group_attr!{
             port.write_all(&['4' as u8]).unwrap();
 
             let mut buf = [0u8; 1];
-            match port.read_exact(&mut buf) {
+            match port.read_exact_shim(&mut buf) {
                 Ok(())         => {
                     println!("DBG meter maid says {:b}", buf[0]);
                     match super::ParkState::try_from(!(buf[0] | 0b1111_1000)) {
@@ -149,6 +159,7 @@ group_attr!{
         z: T
     }
     #[repr(packed)]
+    #[allow(dead_code)]
     struct Packet {
         stamp  : time::Timespec,
         ft     : [u8; 31],
@@ -177,7 +188,7 @@ group_attr!{
                     n_gyro : 0,
                     imu    : mem::zeroed::<[XYZ<i16>; 37]>(),
                 };
-                for i in 0..31 { p.ft[i] = buf[i]; }
+                byte_copy(buf, &mut p.ft);
                 p
             }
 
@@ -190,7 +201,7 @@ group_attr!{
                     n_gyro : g as u8,
                     imu    : mem::zeroed::<[XYZ<i16>; 37]>()
                 };
-                for i in 0..31 { p.ft[i] = buf[s + i]; }
+                byte_copy(&buf[s..], &mut p.ft);
                 ptr::copy::<XYZ<i16>>(buf[2..s].as_ptr() as *const XYZ<i16>, p.imu.as_mut_ptr(), (a+g+1) as usize);
                 p
             }
@@ -253,10 +264,10 @@ group_attr!{
 
                 /*
                 let mut b = [0u8; 4096];
-                self.port.read_exact(&mut b).err().map(|e| println!("STB read error {:?}", e));
+                self.port.read_exact_shim(&mut b).err().map(|e| println!("STB read error {:?}", e));
                 */
                 let mut size_buf = [0u8; 4];
-                let packet_size = match self.port.read_exact(&mut size_buf) {
+                let packet_size = match self.port.read_exact_shim(&mut size_buf) {
                     Ok(()) => {
                         if &size_buf[..3] == b"aaa" {
                             size_buf[3] as usize
@@ -265,14 +276,14 @@ group_attr!{
                             let mut scanning = [0u8; 1];
                             let mut count = 0;
                             while count < 3 {
-                                self.port.read_exact(&mut scanning).unwrap();
+                                self.port.read_exact_shim(&mut scanning).unwrap();
                                 if scanning[0] == 'a' as u8 {
                                     count += 1;
                                 } else {
                                     count = 0;
                                 }
                             }
-                            self.port.read_exact(&mut scanning).unwrap();
+                            self.port.read_exact_shim(&mut scanning).unwrap();
                             scanning[0] as usize
                         }
                     },
@@ -282,7 +293,7 @@ group_attr!{
                     }
                 };
                 let mut buf = vec![0u8; packet_size];
-                match self.port.read_exact(&mut buf[..]) {
+                match self.port.read_exact_shim(&mut buf[..]) {
                     Ok(()) => {
                         let packet = match unsafe { Packet::new(&buf) } {
                             Ok(p) => p,
