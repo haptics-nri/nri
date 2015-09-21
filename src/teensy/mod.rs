@@ -1,4 +1,4 @@
-//! Service to read data from the STB and attached sensors
+//! Service to read data from the Teensy and attached sensors
 
 custom_derive! {
     /// Which end effector is in use (i.e. not parked)
@@ -109,14 +109,14 @@ group_attr!{
     }
 
     fn serialport() -> Box<StaticReadWrite> {
-        let mut port = serial::open("/dev/ttySTB").unwrap();
+        let mut port = serial::open("/dev/ttyTeensy").unwrap();
         port.reconfigure(&|settings| {
             try!(settings.set_baud_rate(serial::Baud115200));
             Ok(())
         }).unwrap();
         port.set_timeout(Duration::milliseconds(100)).unwrap();
         if false {
-            Box::new(port.coffee(File::create("data/stbdump.dat").unwrap()))
+            Box::new(port.coffee(File::create("data/teensydump.dat").unwrap()))
         } else {
             Box::new(port)
         }
@@ -145,7 +145,7 @@ group_attr!{
         }
     }
 
-    pub struct STB {
+    pub struct Teensy {
         port: Box<StaticReadWrite>,
         file: Writer<Packet>,
         i: usize,
@@ -176,11 +176,11 @@ group_attr!{
                 let sum = buf[..buf.len()-1].into_iter().fold(0, |a, b| { u8::wrapping_add(a, *b) });
                 match buf[buf.len()-1] {
                     s if s == sum => Ok(()),
-                    s => Err(format!("Received STB packet with wrong checksum (it says {}, I calculate {})!", s, sum)),
+                    s => Err(format!("Received Teensy packet with wrong checksum (it says {}, I calculate {})!", s, sum)),
                 }
             }
 
-            unsafe fn only_stb(buf: &[u8]) -> Packet {
+            unsafe fn only_analog(buf: &[u8]) -> Packet {
                 let mut p: Packet = Packet {
                     stamp  : time::get_time(),
                     ft     : mem::zeroed::<[u8; 31]>(),
@@ -192,7 +192,7 @@ group_attr!{
                 p
             }
 
-            unsafe fn imu_and_stb(buf: &[u8], a: usize, g: usize) -> Packet {
+            unsafe fn imu_and_analog(buf: &[u8], a: usize, g: usize) -> Packet {
                 let s = 2 + 6*(a + g + 1);
                 let mut p: Packet = Packet {
                     stamp  : time::get_time(),
@@ -207,22 +207,22 @@ group_attr!{
             }
 
             match buf.len() {
-                x if x < 31 => Err(format!("Implausibly small packet ({}) from STB!", x)),
-                31 => Ok(only_stb(buf)),
+                x if x < 31 => Err(format!("Implausibly small packet ({}) from Teensy!", x)),
+                31 => Ok(only_analog(buf)),
                 32 => {
                     try!(checksum(buf));
-                    Ok(only_stb(buf))
+                    Ok(only_analog(buf))
                 },
                 x => {
                     let a = buf[0] as usize;
                     let g = buf[1] as usize;
                     match x {
-                        t if t == 31 + 2 + 6*(a + g + 1) => Ok(imu_and_stb(buf, a, g)),
+                        t if t == 31 + 2 + 6*(a + g + 1) => Ok(imu_and_analog(buf, a, g)),
                         t if t == 31 + 2 + 6*(a + g + 1) + 1 => {
                             try!(checksum(buf));
-                            Ok(imu_and_stb(buf, a, g))
+                            Ok(imu_and_analog(buf, a, g))
                         },
-                        _ => Err(format!("Impossible packet size ({}) from STB!", x)),
+                        _ => Err(format!("Impossible packet size ({}) from Teensy!", x)),
                     }
                 },
             }
@@ -246,17 +246,17 @@ group_attr!{
     }
 
     guilty! {
-        impl Controllable for STB {
-            const NAME: &'static str = "stb",
+        impl Controllable for Teensy {
+            const NAME: &'static str = "teensy",
             const BLOCK: Block = Block::Period(333_333),
 
-            fn setup(_: Sender<CmdFrom>, _: Option<String>) -> STB {
+            fn setup(_: Sender<CmdFrom>, _: Option<String>) -> Teensy {
                 assert_eq!(mem::size_of::<Packet>(), u8::MAX as usize + mem::size_of::<time::Timespec>());
 
                 let mut port = serialport();
                 port.write_all(&['1' as u8]).unwrap();
 
-                STB { port: port, file: Writer::with_file("data/stb.dat"), i: 0, start: time::now() }
+                Teensy { port: port, file: Writer::with_file("data/teensy.dat"), i: 0, start: time::now() }
             }
 
             fn step(&mut self, _: Option<String>) {
@@ -264,7 +264,7 @@ group_attr!{
 
                 /*
                 let mut b = [0u8; 4096];
-                self.port.read_exact_shim(&mut b).err().map(|e| println!("STB read error {:?}", e));
+                self.port.read_exact_shim(&mut b).err().map(|e| println!("Teensy read error {:?}", e));
                 */
                 let mut size_buf = [0u8; 4];
                 let packet_size = match self.port.read_exact_shim(&mut size_buf) {
@@ -272,7 +272,7 @@ group_attr!{
                         if &size_buf[..3] == b"aaa" {
                             size_buf[3] as usize
                         } else {
-                            errorln!("The STB did not send the expected packet size prefix! instead {:?}", size_buf);
+                            errorln!("The Teensy did not send the expected packet size prefix! instead {:?}", size_buf);
                             let mut scanning = [0u8; 1];
                             let mut count = 0;
                             while count < 3 {
@@ -288,7 +288,7 @@ group_attr!{
                         }
                     },
                     Err(e) => {
-                        errorln!("Error reading packet size from the STB: {:?}", e);
+                        errorln!("Error reading packet size from the Teensy: {:?}", e);
                         return;
                     }
                 };
@@ -304,7 +304,7 @@ group_attr!{
                         };
                         self.file.write(packet);
                     },
-                    Err(e)  => errorln!("Error reading packet from STB: {:?}", e)
+                    Err(e)  => errorln!("Error reading packet from Teensy: {:?}", e)
                 }
             }
 
@@ -312,11 +312,11 @@ group_attr!{
                 self.port.write_all(&['2' as u8]).unwrap();
                 let end = time::now();
                 let millis = (end - self.start).num_milliseconds() as f64;
-                println!("{} STB packets grabbed in {} s ({} FPS)!", self.i, millis/1000.0, 1000.0*(self.i as f64)/millis);
+                println!("{} Teensy packets grabbed in {} s ({} FPS)!", self.i, millis/1000.0, 1000.0*(self.i as f64)/millis);
             }
         }
     }
 }
 
 #[cfg(not(target_os = "linux"))]
-stub!(STB);
+stub!(Teensy);

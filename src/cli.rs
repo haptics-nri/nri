@@ -61,7 +61,7 @@ guilty!{
                             }
                         },
                         "status" => {
-                            println!("{:?}", super::stb::ParkState::metermaid());
+                            println!("{:?}", super::teensy::ParkState::metermaid());
                         },
                         "quit" => {
                             self.tx.send(CmdFrom::Quit).unwrap();

@@ -24,7 +24,7 @@ use std::collections::{HashMap, BTreeMap};
 use std::io::{self, Read};
 use std::fs::{self, File};
 use super::comms::{Controllable, CmdFrom, Power, Block};
-use super::stb::ParkState;
+use super::teensy::ParkState;
 use self::iron::prelude::*;
 use self::iron::status;
 use self::iron::middleware::{Handler, AfterMiddleware};
@@ -69,6 +69,13 @@ impl Service {
     fn new(s: &str, t: &str, e: &str) -> Service {
         Service { name: s.to_owned(), shortname: t.to_owned(), extra: e.to_owned() }
     }
+}
+
+#[derive(Debug)]
+enum EventContour {
+    Starting,
+    Continuing,
+    Finishing
 }
 
 /// Descriptor of a data collection flow
@@ -122,7 +129,9 @@ impl Flow {
         Flow { name: name, active: false, almostdone: false, states: states, stamp: None, id: None }
     }
 
-    fn run(&mut self, park: ParkState, tx: &mpsc::Sender<CmdFrom>, wsid: usize) {
+    fn run(&mut self, park: ParkState, tx: &mpsc::Sender<CmdFrom>, wsid: usize) -> EventContour {
+        let mut ret = EventContour::Continuing;
+
         // are we just starting the flow now?
         if !self.active {
             println!("Beginning flow {}!", self.name);
@@ -131,6 +140,8 @@ impl Flow {
             self.stamp = Some(time::get_time());
             self.id = Some(uuid::Uuid::new_v4());
             self.active = true;
+
+            ret = EventContour::Starting;
         }
 
         // find the next eligible state
@@ -151,10 +162,14 @@ impl Flow {
                 self.active = false;
                 self.almostdone = false;
                 self.states.iter_mut().map(|s| { s.done = false; }).count();
+
+                ret = EventContour::Finishing;
             } else {
                 self.almostdone = true;
             }
         }
+
+        ret
     }
 }
 
@@ -255,7 +270,7 @@ impl FlowCmd {
                 tx.send(CmdFrom::Data(string.to_owned())).unwrap();
             }
             FlowCmd::StopSensors => {
-                for &svc in &["bluefox", "structure", "biotac", "optoforce", "stb"] {
+                for &svc in &["bluefox", "structure", "biotac", "optoforce", "teensy"] {
                     assert!(rpc!(tx, CmdFrom::Stop, svc.to_owned()).unwrap());
                 }
             }
@@ -325,11 +340,11 @@ fn index(flows: Arc<RwLock<Vec<Flow>>>) -> Box<Handler> {
     Box::new(move |req: &mut Request| -> IronResult<Response> {
                       let mut data = BTreeMap::<String, Json>::new();
                       data.insert("services".to_owned(), vec![
-                                  Service::new("Structure Sensor", "structure" , "<img class=\"structure latest\" src=\"img/structure_latest.png\" /><div class=\"structure framenum\">NaN</div>"),
-                                  Service::new("mvBlueFOX3"      , "bluefox"   , "<img class=\"bluefox latest\" src=\"img/bluefox_latest.png\" /><div class=\"bluefox framenum\">NaN</div>"),
+                                  Service::new("Structure Sensor", "structure" , "<img class=\"structure latest\" /><div class=\"structure framenum\"></div>"),
+                                  Service::new("mvBlueFOX3"      , "bluefox"   , "<img class=\"bluefox latest\" /><div class=\"bluefox framenum\"></div>"),
                                   Service::new("OptoForce"       , "optoforce" , ""),
                                   Service::new("SynTouch BioTac" , "biotac"    , ""),
-                                  Service::new("STB"             , "stb"       , ""),
+                                  Service::new("Teensy"          , "teensy"    , ""),
                       ].to_json());
                       data.insert("flows".to_owned(), flows.read().unwrap().to_json());
                       data.insert("server".to_owned(), format!("{}:{}", req.url.host, WS_PORT).to_json());
@@ -431,8 +446,8 @@ fn flow(tx: mpsc::Sender<CmdFrom>, flows: Arc<RwLock<Vec<Flow>>>) -> Box<Handler
                               "start" | "continue" => {
                                   let mut locked_flows = flows.write().unwrap();
                                   if let Some(found) = locked_flows.iter_mut().find(|f| f.name == flow) {
-                                      found.run(ParkState::metermaid().unwrap(), mtx.lock().unwrap().deref(), wsid);
-                                      Response::with((status::Ok, format!("{} \"{}\" flow", if found.active { "Continuing" } else { "Starting" }, flow)))
+                                      let contour = found.run(ParkState::metermaid().unwrap(), mtx.lock().unwrap().deref(), wsid);
+                                      Response::with((status::Ok, format!("{:?} \"{}\" flow", contour, flow)))
                                   } else {
                                       Response::with((status::BadRequest, format!("Could not find \"{}\" flow", flow)))
                                   }
@@ -517,15 +532,6 @@ guilty!{
 
         fn setup(tx: mpsc::Sender<CmdFrom>, _: Option<String>) -> Web {
             let flows = vec! {
-                Flow::new("Test flow",
-                          vec! {
-                              FlowState::new("One", None, vec! {
-                                  FlowCmd::Message("Please insert Tab A into Slot B"),
-                              }),
-                              FlowState::new("Two", None, vec! {
-                                  FlowCmd::Message("Now fold Tab C on top of Tab D"),
-                              }),
-                          }),
                 Flow::new("Episode",
                           vec! {
                               // TODO shutdown button
@@ -554,32 +560,32 @@ guilty!{
                               }),
 
                               FlowState::new("BioTac capture", Some(ParkState::BioTac), vec! {
-                                  FlowCmd::Start("biotac"), FlowCmd::Start("stb"),
+                                  FlowCmd::Start("biotac"), FlowCmd::Start("teensy"),
                                   FlowCmd::Message("Recording from BioTac!"),
                               }),
                               FlowState::new("BioTac finish", None, vec! {
                                   FlowCmd::Message("Writing to disk, please wait..."),
-                                  FlowCmd::Stop("biotac"), FlowCmd::Stop("stb"),
+                                  FlowCmd::Stop("biotac"), FlowCmd::Stop("teensy"),
                                   FlowCmd::Message("Done!"),
                               }),
 
                               FlowState::new("OptoForce capture", Some(ParkState::OptoForce), vec! {
-                                  FlowCmd::Start("optoforce"), FlowCmd::Start("stb"),
+                                  FlowCmd::Start("optoforce"), FlowCmd::Start("teensy"),
                                   FlowCmd::Message("Recording from OptoForce!"),
                               }),
                               FlowState::new("OptoForce finish", None, vec! {
                                   FlowCmd::Message("Writing to disk, please wait..."),
-                                  FlowCmd::Stop("optoforce"), FlowCmd::Stop("stb"),
+                                  FlowCmd::Stop("optoforce"), FlowCmd::Stop("teensy"),
                                   FlowCmd::Message("Done!"),
                               }),
 
                               FlowState::new("Rigid stick capture", Some(ParkState::Stick), vec! {
-                                  FlowCmd::Start("stb"),
+                                  FlowCmd::Start("teensy"),
                                   FlowCmd::Message("Recording from rigid stick!"),
                               }),
                               FlowState::new("Rigid stick finish", None, vec! {
                                   FlowCmd::Message("Writing to disk, please wait..."),
-                                  FlowCmd::Stop("stb"),
+                                  FlowCmd::Stop("teensy"),
                                   FlowCmd::Message("Done!"),
                               }),
 
@@ -591,6 +597,15 @@ guilty!{
                                   FlowCmd::int("slipperiness", (1, 5)),
                                   FlowCmd::int("warmness",     (1, 5)),
                                   FlowCmd::Message("Done!"),
+                              }),
+                          }),
+                Flow::new("Test flow",
+                          vec! {
+                              FlowState::new("One", None, vec! {
+                                  FlowCmd::Message("Please insert Tab A into Slot B"),
+                              }),
+                              FlowState::new("Two", None, vec! {
+                                  FlowCmd::Message("Now fold Tab C on top of Tab D"),
                               }),
                           }),
             };

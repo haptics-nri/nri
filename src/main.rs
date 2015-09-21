@@ -130,7 +130,7 @@ macro_rules! prof {
 mod scribe;
 mod cli;
 mod web;
-mod stb;
+mod teensy;
 mod optoforce;
 mod structure;
 mod bluefox;
@@ -147,7 +147,7 @@ use web::Web;
 use structure::Structure;
 use bluefox::Bluefox;
 use optoforce::Optoforce;
-use stb::STB;
+use teensy::Teensy;
 
 #[macro_use]
 extern crate log;
@@ -318,7 +318,7 @@ fn main() {
 
         let (reply_tx, reply_rx) = channel();
 
-        let mut services = rxspawn!(reply_tx; CLI, Web, Structure, Bluefox, Optoforce, STB);
+        let mut services = rxspawn!(reply_tx; CLI, Web, Structure, Bluefox, Optoforce, Teensy);
         let mut timers = HashMap::new();
 
         thread::sleep_ms(500); // wait for threads to start
