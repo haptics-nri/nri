@@ -3,13 +3,13 @@
         <li>
             {{#if active}}
                 {{#if almostdone}}
-                    <div style="float: right">
+                    <div style="float: right; margin-top: -0.5em">
                         <button formaction="/flow/{{name}}/continue"
                                 type="submit"
                                 class="btn btn-success">Finish</button>
                     </div>
                 {{else}}
-                    <div style="float: right">
+                    <div style="float: right; margin-top: -0.5em">
                         <button formaction="/flow/{{name}}/continue"
                                 type="submit"
                                 class="btn btn-success">Next</button>
