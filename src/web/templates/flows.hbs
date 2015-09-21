@@ -26,15 +26,15 @@
                     {{/each}}
                 </ol>
             {{else}}
-                <div style="float: right">
+                <div style="float: right; margin-top: -0.5em">
                     <button formaction="/flow/{{name}}/start"
                             type="submit"
                             class="btn btn-success">Start</button>
                 </div>
                 {{name}}
             {{/if}}
-            <br/><br/><br/>
         </li>
+        <hr/>
     {{/each}}
 </ul>
 
