@@ -136,7 +136,7 @@ group_attr!{
                         Err(_) => Some(super::ParkState::Multiple)
                     }
                 },
-                Err(e)         => {
+                Err(..)         => {
                     None
                 }
             }
