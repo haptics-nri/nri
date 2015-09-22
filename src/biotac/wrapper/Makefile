@@ -1,9 +1,9 @@
-LIBS = cheetah.so biotac.so
-GENS = $(LIBS:.so=.rs)
+GENS = cheetah.rs biotac.rs
+LIBS = $(addprefix lib, $(GENS:.rs=.so))
 
 all: $(LIBS) $(GENS)
 
-%.so: %.c %.h
+lib%.so: %.c %.h
 	gcc -shared -fPIC -o $@ $<
 
 %.rs: %.h

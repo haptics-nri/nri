@@ -106,6 +106,7 @@ pub type Enum_CheetahSpiBitorder = ::libc::c_uint;
 pub const CH_SPI_BITORDER_MSB: ::libc::c_uint = 0;
 pub const CH_SPI_BITORDER_LSB: ::libc::c_uint = 1;
 pub type CheetahSpiBitorder = Enum_CheetahSpiBitorder;
+#[link(name = "cheetah")]
 extern "C" {
     pub fn ch_find_devices(num_devices: ::libc::c_int, devices: *mut _u16)
      -> ::libc::c_int;

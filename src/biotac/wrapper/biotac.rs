@@ -225,6 +225,9 @@ impl ::std::default::Default for Struct_Unnamed7 {
     fn default() -> Self { unsafe { ::std::mem::zeroed() } }
 }
 pub type bt_info = Struct_Unnamed5;
+pub type bt_info_frame = Struct_Unnamed6;
+pub type bt_info_batch = Struct_Unnamed7;
+#[link(name = "biotac")]
 extern "C" {
     pub fn ch_find_devices(num_devices: ::libc::c_int, devices: *mut _u16)
      -> ::libc::c_int;
