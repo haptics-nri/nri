@@ -159,7 +159,7 @@ macro_rules! stub {
     ($t:ident) => {
         pub struct $t;
 
-        use super::comms::{Controllable, Block, CmdFrom};
+        use ::comms::{Controllable, Block, CmdFrom};
         guilty!{
             impl Controllable for $t {
                 const NAME: &'static str = stringify!($t),

@@ -134,6 +134,7 @@ mod teensy;
 mod optoforce;
 mod structure;
 mod bluefox;
+mod biotac;
 
 use std::{fs, process};
 use std::io::{Write, BufRead};
@@ -144,10 +145,11 @@ use std::collections::HashMap;
 use comms::{Controllable, CmdTo, CmdFrom, Power};
 use cli::CLI;
 use web::Web;
+use teensy::Teensy;
+use optoforce::Optoforce;
 use structure::Structure;
 use bluefox::Bluefox;
-use optoforce::Optoforce;
-use teensy::Teensy;
+use biotac::Biotac;
 
 #[macro_use]
 extern crate log;
@@ -318,7 +320,7 @@ fn main() {
 
         let (reply_tx, reply_rx) = channel();
 
-        let mut services = rxspawn!(reply_tx; CLI, Web, Structure, Bluefox, Optoforce, Teensy);
+        let mut services = rxspawn!(reply_tx; CLI, Web, Teensy, Optoforce, Structure, Bluefox, Optoforce, Biotac);
         let mut timers = HashMap::new();
 
         thread::sleep_ms(500); // wait for threads to start
