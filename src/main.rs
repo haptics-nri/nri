@@ -99,6 +99,7 @@ macro_rules! group_attr {
 
 #[macro_use]
 extern crate guilt_by_association;
+extern crate libc;
 
 // TODO move this profiling stuff to a mod
 use std::cell::RefCell;
