@@ -131,14 +131,12 @@ group_attr!{
             let mut buf = [0u8; 1];
             match port.read_exact_shim(&mut buf) {
                 Ok(())         => {
-                    println!("DBG meter maid says {:b}", buf[0]);
                     match super::ParkState::try_from(!(buf[0] | 0b1111_1000)) {
                         Ok(ps) => Some(ps),
                         Err(_) => Some(super::ParkState::Multiple)
                     }
                 },
                 Err(e)         => {
-                    println!("DBG meter maid error {:?}", e);
                     None
                 }
             }
