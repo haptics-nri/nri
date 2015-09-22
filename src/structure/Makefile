@@ -9,7 +9,7 @@ openni2/Bin/x64-Release/libOpenNI2.so: openni2/Makefile
 	make -C openni2
 
 libOpenNI2_adapter.so: adapter.cpp
-	g++ -shared -fPIC -o libOpenNI2_adapter.so $^ $(CXXFLAGS) $(LDFLAGS)
+	g++ -shared -fPIC -o $@ $^ $(CXXFLAGS) $(LDFLAGS)
 
 clean:
 	rm libOpenNI2_adapter.so
