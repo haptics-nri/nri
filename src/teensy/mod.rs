@@ -109,7 +109,7 @@ group_attr!{
     }
 
     fn serialport() -> Box<StaticReadWrite> {
-        let mut port = serial::open("/dev/ttyTeensy").unwrap();
+        let mut port = serial::open("/dev/ttyTEENSY").unwrap();
         port.reconfigure(&|settings| {
             try!(settings.set_baud_rate(serial::Baud115200));
             Ok(())

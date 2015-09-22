@@ -2,6 +2,6 @@
 # then reload the system: sudo udevadm control --reload-rules
 # to find values, run e.g. udevadm info --query=all --name=/dev/ttyACM0
 
-SUBSYSTEM=="tty", ATTRS{idVendor}=="16c0", ATTRS{idProduct}=="0483", ATTRS{serial}=="953530", SYMLINK+="ttySTB"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="16c0", ATTRS{idProduct}=="0483", ATTRS{serial}=="953530", SYMLINK+="ttyTEENSY"
 SUBSYSTEM=="tty", ATTRS{idVendor}=="04d8", ATTRS{idProduct}=="000a", SYMLINK+="ttyOPTO"
 
