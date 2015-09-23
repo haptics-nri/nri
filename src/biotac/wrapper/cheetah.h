@@ -95,7 +95,7 @@ typedef signed   __int64  s64;
 | DEBUG
  ========================================================================*/
 /* Set the following macro to '1' for debugging */
-#define CH_DEBUG 0
+#define CH_DEBUG 1
 
 
 /*=========================================================================

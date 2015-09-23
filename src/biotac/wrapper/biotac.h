@@ -155,7 +155,7 @@ typedef int			 									BOOL;
 #define BT_UNABLE_TO_OPEN_CHEETAH           -6
 #define BT_UNABLE_TO_OPEN_FILE              -7
 
-#define PRINT_ON                             0
+#define PRINT_ON                             1
 
 //================
 // Necessary Includes
