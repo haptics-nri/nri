@@ -60,9 +60,53 @@
 //! 9. Deactivate and reactivate Wi-Fi. Then you should be able to select the new SSID to
 //!    "connect" (meaning broadcast). And then you should be able to connect from other devices!
 //!
-//! Note that (obviously) when the NUC is running as a hotspot, it has no internet connection. I
-//! tried to get DNS running, but I failed, so for now you have to use an IP address to access the
-//! NUC. You can see what it chose by running <code>hostname -I</code> -- it seems to like 10.42.0.1.
+//! Note that (obviously) when the NUC is running as a hotspot, it has no internet connection. The
+//! NUC's IP address is 10.42.0.1 (though I was unable to _set_ this because NetworkManager sucks,
+//! so let's hope it never changes its mind).
+//!
+//! Set up DHCP and DNS as follows:
+//!
+//! 1. Install the packages: <code>sudo apt-get install isc-dhcp-server hostapd bind9</code>
+//! 2. Add the following lines to <code>/etc/bind/named.conf.local</code>:
+//! <pre>
+//! zone "nri" {
+//!     type master;
+//!     file "/etc/bind/db.nri";
+//! };
+//! </pre>
+//! 3. Create the file <code>/etc/bind/db.nri</code> with the following contents:
+//! <pre>
+//! $TTL	604800
+//! @	IN	SOA	nri. root.nri. (
+//! 			      2		; Serial
+//! 			 604800		; Refresh
+//! 			  86400		; Retry
+//! 			2419200		; Expire
+//! 			 604800 )	; Negative Cache TTL
+//! ;
+//! @	IN	NS	nri.
+//! @	IN	A	127.0.0.1
+//! @	IN	A	10.42.0.1
+//! @	IN	AAAA	::1
+//! </pre>
+//! 4. Open <code>/etc/default/isc-dhcp-server</code> and change the line
+//!    <code>INTERFACES=""</code> to <code>INTERFACES="wlan0"</code>.
+//! 5. Add the following lines to <code>/etc/dhcp/dhcpd.conf</code>:
+//! <pre>
+//! subnet 10.42.0.0 netmask 255.255.255.0 {
+//!     range 10.42.0.2 10.42.0.200;
+//!     option domain-name-servers 10.42.0.1;
+//!     option routers 10.42.0.1;
+//! }
+//! </pre>
+//! 6. Restart the services bind9, isc-dhcp-server, and hostapd.
+//!
+//! Lastly, the server runs on port 3000. The following iptables rules will forward port 80 to port
+//! 3000 so that you can simply type "http://nri" (from another computer connected to the Wi-Fi
+//!      hotspot) or "http://localhost" (from the NUC itself):
+//!
+//! 1. <code>sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3000</code>
+//! 2. <code>sudo iptables -t nat -I OUTPUT -p tcp -d 127.0.0.1 --dport 80 -j REDIRECT --to-port 3000</code>
 
 #![cfg_attr(not(target_os = "linux"), allow(dead_code))]
 #![cfg_attr(feature = "nightly", feature(const_fn, read_exact, core_intrinsics))]
