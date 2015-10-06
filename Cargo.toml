@@ -32,6 +32,7 @@ uuid = "*"
 threadpool = "*"
 abort_on_panic = "*"
 dbus = "*"
+notify = "*"
 
 # stuff that I wrote
 guilt-by-association = "*"

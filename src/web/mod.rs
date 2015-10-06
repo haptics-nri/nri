@@ -14,6 +14,7 @@ extern crate rustc_serialize as serialize;
 extern crate websocket as ws;
 extern crate uuid;
 extern crate time;
+extern crate notify;
 
 use std::ops::Deref;
 use std::path::Path;
@@ -43,6 +44,7 @@ use self::hyper::mime::{Mime, TopLevel, SubLevel};
 use self::ws::Sender as WebsocketSender;
 use self::ws::Receiver as WebsocketReceiver;
 use self::uuid::Uuid;
+use self::notify::{Watcher, RecommendedWatcher};
 
 static HTTP_PORT: u16 = 3000;
 static WS_PORT: u16   = 3001;
@@ -315,23 +317,49 @@ fn relpath(path: &str) -> String {
     String::from(Path::new(file!()).parent().unwrap().join(path).to_str().unwrap())
 }
 
+lazy_static! {
+    static ref TEMPLATES: RwLock<Handlebars> = {
+        const PATH: &'static str = "src/web/templates";
+
+        fn update(hbs: &mut Handlebars) {
+            let root = Path::new(PATH);
+            fs::read_dir(root).unwrap()
+                .take_while(Result::is_ok).map(Result::unwrap)
+                .map(   |f|    f.path())
+                .filter(|p|    match p.extension() { Some(ext) if ext == "hbs" => true, _ => false })
+                .map(   |path| {
+                    let mut source = String::from("");
+                    File::open(&path).unwrap().read_to_string(&mut source).unwrap();
+
+                    hbs.register_template_string(path.file_stem().unwrap().to_str().unwrap(), source.into()).ok().unwrap();
+                }).count();
+        }
+
+        let mut hbs = Handlebars::new();
+        update(&mut hbs);
+
+        thread::spawn(move || {
+            let (tx, rx) = mpsc::channel();
+            let mut w: RecommendedWatcher = Watcher::new(tx).unwrap();
+            w.watch(PATH).unwrap();
+
+            for evt in rx {
+                if evt.path.as_ref().unwrap().extension().unwrap() == "hbs" {
+                    print!("Updating templates... ({:?} {:?})", evt.path.unwrap().file_name().unwrap(), evt.op.unwrap());
+                    let mut hbs = TEMPLATES.write().unwrap();
+                    update(&mut hbs);
+                    println!(" done.");
+                }
+            }
+        });
+
+        RwLock::new(hbs)
+    };
+}
+
 /// Render a template with the data we always use
 fn render(template: &str, data: BTreeMap<String, Json>) -> String {
-    let mut hbs = Handlebars::new();
-
-    let root = Path::new("src/web/templates");
-    fs::read_dir(root).unwrap()
-        .take_while(Result::is_ok).map(Result::unwrap)
-        .map(   |f|    f.path())
-        .filter(|p|    match p.extension() { Some(ext) if ext == "hbs" => true, _ => false })
-        .map(   |path| {
-            let mut source = String::from("");
-            File::open(&path).unwrap().read_to_string(&mut source).unwrap();
-
-            hbs.register_template_string(path.file_stem().unwrap().to_str().unwrap(), source.into()).ok().unwrap();
-        }).count();
-
-    hbs.render(template, &data).unwrap()
+    TEMPLATES.read().unwrap().render(template, &data).unwrap()
 }
 
 /// Handler for the main page of the web interface
