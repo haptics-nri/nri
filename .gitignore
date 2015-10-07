@@ -1,4 +1,6 @@
 target
+target-beta
+target-nightly
 *.so
 *.swp
 *.swo
