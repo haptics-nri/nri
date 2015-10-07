@@ -152,11 +152,15 @@ lazy_static! {
             w.watch(PATH).unwrap();
 
             for evt in rx {
-                if evt.path.as_ref().unwrap().extension().unwrap() == "hbs" {
-                    print!("Updating templates... ({:?} {:?})", evt.path.unwrap().file_name().unwrap(), evt.op.unwrap());
-                    let mut hbs = TEMPLATES.write().unwrap();
-                    update(&mut hbs);
-                    println!(" done.");
+                if let Some(path) = evt.path {
+                    if let Some(ext) = path.extension() {
+                        if ext == "hbs" {
+                            print!("Updating templates... ({:?} {:?})", path.file_name().unwrap(), evt.op.unwrap());
+                            let mut hbs = TEMPLATES.write().unwrap();
+                            update(&mut hbs);
+                            println!(" done.");
+                        }
+                    }
                 }
             }
         });
@@ -189,11 +193,15 @@ lazy_static! {
             w.watch(PATH).unwrap();
 
             for evt in rx {
-                if evt.path.as_ref().unwrap().extension().unwrap() == "flow" {
-                    print!("Updating flows... ({:?} {:?})", evt.path.unwrap().file_name().unwrap(), evt.op.unwrap());
-                    let mut flows = FLOWS.write().unwrap();
-                    update(&mut flows);
-                    println!(" done.");
+                if let Some(path) = evt.path {
+                    if let Some(ext) = path.extension() {
+                        if ext == "flow" {
+                            print!("Updating flows... ({:?} {:?})", path.file_name().unwrap(), evt.op.unwrap());
+                            let mut flows = FLOWS.write().unwrap();
+                            update(&mut flows);
+                            println!(" done.");
+                        }
+                    }
                 }
             }
         });
