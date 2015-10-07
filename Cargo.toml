@@ -3,7 +3,7 @@ name = "nri"
 version = "0.1.0"
 authors = ["Alex Burka <aburka@seas.upenn.edu>"]
 build = "build.rs"
-exclude = ["src/web/templates/*", "src/web/bootstrap/*", "data/*", "keepalive"] # TODO take this out before packaging
+exclude = ["src/web/templates/*", "src/web/bootstrap/*", "src/web/flows/*", "data/*", "keepalive"] # TODO take this out before packaging
 
 [profile.dev]
 opt-level = 3

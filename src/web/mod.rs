@@ -10,19 +10,17 @@ extern crate router;
 extern crate urlencoded;
 extern crate url;
 extern crate hyper;
-extern crate rustc_serialize as serialize;
 extern crate websocket as ws;
-extern crate uuid;
-extern crate time;
+extern crate rustc_serialize as serialize;
 extern crate notify;
 
 use std::ops::Deref;
 use std::path::Path;
-use std::sync::{Arc, Mutex, RwLock, mpsc};
+use std::sync::{Mutex, RwLock, mpsc};
 use std::thread;
 use std::thread::JoinHandle;
 use std::collections::{HashMap, BTreeMap};
-use std::io::{self, Read};
+use std::io::{self, Read, BufReader};
 use std::fs::{self, File};
 use super::comms::{Controllable, CmdFrom, Power, Block};
 use super::teensy::ParkState;
@@ -32,7 +30,6 @@ use self::iron::middleware::{Handler, AfterMiddleware};
 use self::iron::headers::Connection;
 use self::iron::modifiers::Header;
 use self::hbs::Handlebars;
-use self::serialize::json::{ToJson, Json};
 use self::staticfile::Static;
 use self::mount::Mount;
 use self::router::Router;
@@ -43,8 +40,22 @@ use self::hyper::header::ContentType;
 use self::hyper::mime::{Mime, TopLevel, SubLevel};
 use self::ws::Sender as WebsocketSender;
 use self::ws::Receiver as WebsocketReceiver;
-use self::uuid::Uuid;
+use self::serialize::json::{ToJson, Json};
 use self::notify::{Watcher, RecommendedWatcher};
+
+macro_rules! jsonize {
+    ($map:ident, $selph:ident, $var:ident) => {{
+        $map.insert(stringify!($var).to_owned(), $selph.$var.to_json())
+    }};
+    ($map:ident, $selph:ident; $($var:ident),+) => {{
+        $(jsonize!($map, $selph, $var));+
+    }}
+}
+
+mod flow;
+mod parse;
+
+use self::flow::Flow;
 
 static HTTP_PORT: u16 = 3000;
 static WS_PORT: u16   = 3001;
@@ -73,119 +84,11 @@ impl Service {
     }
 }
 
-#[derive(Debug)]
-enum EventContour {
-    Starting,
-    Continuing,
-    Finishing
-}
-
-/// Descriptor of a data collection flow
-struct Flow {
-    /// Name of the flow
-    name: &'static str,
-    /// States in the flow
-    states: Vec<FlowState>,
-    /// Is this the active flow?
-    active: bool,
-    /// All states done but one?
-    almostdone: bool,
-
-    stamp: Option<time::Timespec>,
-    id: Option<uuid::Uuid>,
-}
-
-/// One state in a data collection flow
-struct FlowState {
-    /// Name of the flow state
-    name: &'static str,
-    /// State of parking lot that allows this state (if applicable)
-    park: Option<ParkState>,
-    /// Commands to run for this state
-    script: Vec<FlowCmd>,
-    /// Has this state been completed?
-    done: bool,
-}
-
-/// Different actions that a flow can perform at each state
-#[derive(Debug)]
-enum FlowCmd {
-    Message(&'static str),
-    Str {
-        prompt: &'static str,
-        data: Option<String>,
-    },
-    Int {
-        prompt: &'static str,
-        limits: (i32, i32),
-        data: Option<i32>,
-    },
-    Start(&'static str),
-    Stop(&'static str),
-    Send(&'static str),
-    StopSensors,
-}
-
-impl Flow {
-    fn new(name: &'static str, states: Vec<FlowState>) -> Flow {
-        Flow { name: name, active: false, almostdone: false, states: states, stamp: None, id: None }
-    }
-
-    fn run(&mut self, park: ParkState, tx: &mpsc::Sender<CmdFrom>, wsid: usize) -> EventContour {
-        let mut ret = EventContour::Continuing;
-
-        // are we just starting the flow now?
-        if !self.active {
-            println!("Beginning flow {}!", self.name);
-
-            // need a timestamp and ID
-            self.stamp = Some(time::get_time());
-            self.id = Some(uuid::Uuid::new_v4());
-            self.active = true;
-
-            ret = EventContour::Starting;
-        }
-
-        // find the next eligible state
-        if let Some(state) = self.states.iter_mut().find(|s| !s.done && s.park.as_ref().map_or(true, |p| *p == park)) {
-            println!("Executing state {}", state.name);
-            state.run(tx, wsid);
-            println!("Finished executing state {}", state.name);
-        }
-
-        let almostdone = match self.states.last() {
-            Some(state) if state.done => true,
-            _ => false,
-        };
-        if almostdone {
-            if self.almostdone {
-                // the flow is over! clear everything!
-
-                self.active = false;
-                self.almostdone = false;
-                self.states.iter_mut().map(|s| { s.done = false; }).count();
-
-                ret = EventContour::Finishing;
-            } else {
-                self.almostdone = true;
-            }
-        }
-
-        ret
-    }
-}
-
-impl FlowState {
-    fn new(name: &'static str, park: Option<ParkState>, script: Vec<FlowCmd>) -> FlowState {
-        FlowState { name: name, park: park, script: script, done: false }
-    }
-
-    fn run(&mut self, tx: &mpsc::Sender<CmdFrom>, wsid: usize) {
-        assert!(!self.done);
-        for c in &mut self.script {
-            c.run(&tx, wsid);
-        }
-        self.done = true;
+impl ToJson for Service {
+    fn to_json(&self) -> Json {
+        let mut m: BTreeMap<String, Json> = BTreeMap::new();
+        jsonize!(m, self; name, shortname, extra);
+        m.to_json()
     }
 }
 
@@ -214,101 +117,6 @@ fn ws_rpc<T, F: Fn(String) -> Result<T, String>>(wsid: usize, prompt: String, va
                 answer = go(&format!("{} {}", admonish, prompt));
             }
         }
-    }
-}
-
-impl FlowCmd {
-    fn str(prompt: &'static str) -> FlowCmd {
-        FlowCmd::Str { prompt: prompt, data: None }
-    }
-
-    fn int(prompt: &'static str, limits: (i32, i32)) -> FlowCmd {
-        FlowCmd::Int { prompt: prompt, limits: limits, data: None }
-    }
-
-    fn run(&mut self, tx: &mpsc::Sender<CmdFrom>, wsid: usize) {
-        match *self {
-            FlowCmd::Message(msg) => ws_send(wsid, format!("msg {}", msg)),
-            FlowCmd::Str { prompt, ref mut data } => {
-                assert!(data.is_none());
-                *data = Some(ws_rpc(wsid,
-                                    format!("Please enter {}: <form><input type=\"text\" name=\"{}\"/></form>",
-                                            prompt, prompt),
-                                    |x| {
-                                        if x.is_empty() {
-                                            Err("That's an empty string!".to_owned())
-                                        } else {
-                                            Ok(x)
-                                        }
-                                    }));
-            }
-            FlowCmd::Int { prompt, limits: (low, high), ref mut data } => {
-                assert!(data.is_none());
-                *data = Some(ws_rpc(wsid,
-                                    format!("Please select {} ({}-{} scale): <form><input type=\"text\" name=\"{}\"/></form>",
-                                            prompt, low, high, prompt),
-                                    |x| {
-                                        match x.parse() {
-                                            Ok(i) if i >= low && i <= high => {
-                                                Ok(i)
-                                            }
-                                            Ok(_) => {
-                                                Err("Out of range!".to_owned())
-                                            }
-                                            Err(_) => {
-                                                Err("Not an integer!".to_owned())
-                                            }
-                                        }
-                                    }));
-            }
-            FlowCmd::Start(service) => {
-                assert!(rpc!(tx, CmdFrom::Start, service.to_owned()).unwrap());
-            }
-            FlowCmd::Stop(service) => {
-                assert!(rpc!(tx, CmdFrom::Stop, service.to_owned()).unwrap());
-            }
-            FlowCmd::Send(string) => {
-                tx.send(CmdFrom::Data(string.to_owned())).unwrap();
-            }
-            FlowCmd::StopSensors => {
-                for &svc in &["bluefox", "structure", "biotac", "optoforce", "teensy"] {
-                    assert!(rpc!(tx, CmdFrom::Stop, svc.to_owned()).unwrap());
-                }
-            }
-        }
-    }
-}
-
-macro_rules! jsonize {
-    ($map:ident, $selph:ident, $var:ident) => {{
-        $map.insert(stringify!($var).to_owned(), $selph.$var.to_json())
-    }};
-    ($map:ident, $selph:ident; $($var:ident),+) => {{
-        $(jsonize!($map, $selph, $var));+
-    }}
-}
-
-impl ToJson for Service {
-    fn to_json(&self) -> Json {
-        let mut m: BTreeMap<String, Json> = BTreeMap::new();
-        jsonize!(m, self; name, shortname, extra);
-        m.to_json()
-    }
-}
-
-impl ToJson for Flow {
-    fn to_json(&self) -> Json {
-        let mut m: BTreeMap<String, Json> = BTreeMap::new();
-        jsonize!(m, self; name, states, active, almostdone);
-        m.to_json()
-    }
-}
-
-impl ToJson for FlowState {
-    fn to_json(&self) -> Json {
-        let mut m: BTreeMap<String, Json> = BTreeMap::new();
-        jsonize!(m, self; name, done);
-        m.to_json()
     }
 }
 
@@ -355,6 +163,43 @@ lazy_static! {
 
         RwLock::new(hbs)
     };
+
+    static ref FLOWS: RwLock<Vec<Flow>> = {
+        const PATH: &'static str = "src/web/flows";
+
+        fn update(flows: &mut Vec<Flow>) {
+            flows.clear();
+
+            let root = Path::new(PATH);
+            fs::read_dir(root).unwrap()
+                .take_while(Result::is_ok).map(Result::unwrap)
+                .map(   |f|    f.path())
+                .filter(|p|    match p.extension() { Some(ext) if ext == "flow" => true, _ => false })
+                .map(   |path| {
+                    flows.push(parse::parse(BufReader::new(File::open(&path).unwrap())).unwrap());
+                }).count();
+        }
+
+        let mut flows = vec![];
+        update(&mut flows);
+
+        thread::spawn(move || {
+            let (tx, rx) = mpsc::channel();
+            let mut w: RecommendedWatcher = Watcher::new(tx).unwrap();
+            w.watch(PATH).unwrap();
+
+            for evt in rx {
+                if evt.path.as_ref().unwrap().extension().unwrap() == "flow" {
+                    print!("Updating flows... ({:?} {:?})", evt.path.unwrap().file_name().unwrap(), evt.op.unwrap());
+                    let mut flows = FLOWS.write().unwrap();
+                    update(&mut flows);
+                    println!(" done.");
+                }
+            }
+        });
+
+        RwLock::new(flows)
+    };
 }
 
 /// Render a template with the data we always use
@@ -363,7 +208,7 @@ fn render(template: &str, data: BTreeMap<String, Json>) -> String {
 }
 
 /// Handler for the main page of the web interface
-fn index(flows: Arc<RwLock<Vec<Flow>>>) -> Box<Handler> {
+fn index() -> Box<Handler> {
     Box::new(move |req: &mut Request| -> IronResult<Response> {
                       let mut data = BTreeMap::<String, Json>::new();
                       data.insert("services".to_owned(), vec![
@@ -373,7 +218,7 @@ fn index(flows: Arc<RwLock<Vec<Flow>>>) -> Box<Handler> {
                                   Service::new("SynTouch BioTac" , "biotac"    , ""),
                                   Service::new("Teensy"          , "teensy"    , ""),
                       ].to_json());
-                      data.insert("flows".to_owned(), flows.read().unwrap().to_json());
+                      data.insert("flows".to_owned(), FLOWS.read().unwrap().to_json());
                       data.insert("server".to_owned(), format!("{}:{}", req.url.host, WS_PORT).to_json());
 
                       let mut resp = Response::new();
@@ -461,7 +306,7 @@ fn control(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
 }
 
 /// Handler for starting/continuing a flow
-fn flow(tx: mpsc::Sender<CmdFrom>, flows: Arc<RwLock<Vec<Flow>>>) -> Box<Handler> {
+fn flow(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
     let mtx = Mutex::new(tx);
     Box::new(move |req: &mut Request| -> IronResult<Response> {
                       params!(req => [URL flow, action]
@@ -471,7 +316,7 @@ fn flow(tx: mpsc::Sender<CmdFrom>, flows: Arc<RwLock<Vec<Flow>>>) -> Box<Handler
 
                       let resp = Ok(match &*action {
                               "start" | "continue" => {
-                                  let mut locked_flows = flows.write().unwrap();
+                                  let mut locked_flows = FLOWS.write().unwrap();
                                   if let Some(found) = locked_flows.iter_mut().find(|f| f.name == flow) {
                                       let contour = found.run(ParkState::metermaid().unwrap(), mtx.lock().unwrap().deref(), wsid);
                                       Response::with((status::Ok, format!("{:?} \"{}\" flow", contour, flow)))
@@ -483,7 +328,7 @@ fn flow(tx: mpsc::Sender<CmdFrom>, flows: Arc<RwLock<Vec<Flow>>>) -> Box<Handler
                           });
 
                       let mut data = BTreeMap::<String, Json>::new();
-                      data.insert("flows".to_owned(), flows.read().unwrap().to_json());
+                      data.insert("flows".to_owned(), FLOWS.read().unwrap().to_json());
                       ws_send(wsid, String::from("flow ") + &render("flows", data));
 
                       resp
@@ -558,85 +403,6 @@ guilty!{
         const BLOCK: Block = Block::Infinite,
 
         fn setup(tx: mpsc::Sender<CmdFrom>, _: Option<String>) -> Web {
-            let flows = vec! {
-                Flow::new("Episode",
-                          vec! {
-                              // TODO shutdown button
-                              FlowState::new("Begin", None, vec! {
-                                  FlowCmd::StopSensors,
-                                  FlowCmd::Message("Starting new episode!"),
-                              }),
-                              // TODO generate unique ID and overall timestamp (+ timestamp for each step)
-
-                              FlowState::new("Camera aiming", Some(ParkState::None), vec! {
-                                  FlowCmd::StopSensors,
-                                  FlowCmd::Start("bluefox"), FlowCmd::Start("structure"),
-                                  FlowCmd::Message("Use the Refresh button to get the cameras aimed well"),
-                              }),
-                              FlowState::new("Camera capture", None, vec! {
-                                  FlowCmd::Send("bluefox disk start"),
-                                  FlowCmd::Send("structure disk start"),
-                                  FlowCmd::Message("Now recording! Pan the rig around to get images from various angles"),
-                              }),
-                              FlowState::new("Camera finish", None, vec! {
-                                  FlowCmd::Send("bluefox disk stop"),
-                                  FlowCmd::Send("structure disk stop"),
-                                  FlowCmd::Message("Writing to disk, please wait..."),
-                                  FlowCmd::Stop("bluefox"), FlowCmd::Stop("structure"),
-                                  FlowCmd::Message("Done!"),
-                              }),
-
-                              FlowState::new("BioTac capture", Some(ParkState::BioTac), vec! {
-                                  FlowCmd::Start("biotac"), FlowCmd::Start("teensy"),
-                                  FlowCmd::Message("Recording from BioTac!"),
-                              }),
-                              FlowState::new("BioTac finish", None, vec! {
-                                  FlowCmd::Message("Writing to disk, please wait..."),
-                                  FlowCmd::Stop("biotac"), FlowCmd::Stop("teensy"),
-                                  FlowCmd::Message("Done!"),
-                              }),
-
-                              FlowState::new("OptoForce capture", Some(ParkState::OptoForce), vec! {
-                                  FlowCmd::Start("optoforce"), FlowCmd::Start("teensy"),
-                                  FlowCmd::Message("Recording from OptoForce!"),
-                              }),
-                              FlowState::new("OptoForce finish", None, vec! {
-                                  FlowCmd::Message("Writing to disk, please wait..."),
-                                  FlowCmd::Stop("optoforce"), FlowCmd::Stop("teensy"),
-                                  FlowCmd::Message("Done!"),
-                              }),
-
-                              FlowState::new("Rigid stick capture", Some(ParkState::Stick), vec! {
-                                  FlowCmd::Start("teensy"),
-                                  FlowCmd::Message("Recording from rigid stick!"),
-                              }),
-                              FlowState::new("Rigid stick finish", None, vec! {
-                                  FlowCmd::Message("Writing to disk, please wait..."),
-                                  FlowCmd::Stop("teensy"),
-                                  FlowCmd::Message("Done!"),
-                              }),
-
-                              FlowState::new("Wrap up", Some(ParkState::None), vec! {
-                                  FlowCmd::str("episode name"),
-                                  // TODO more questions here?
-                                  FlowCmd::int("hardness",     (1, 5)),
-                                  FlowCmd::int("roughness",    (1, 5)),
-                                  FlowCmd::int("slipperiness", (1, 5)),
-                                  FlowCmd::int("warmness",     (1, 5)),
-                                  FlowCmd::Message("Done!"),
-                              }),
-                          }),
-                Flow::new("Test flow",
-                          vec! {
-                              FlowState::new("One", None, vec! {
-                                  FlowCmd::Message("Please insert Tab A into Slot B"),
-                              }),
-                              FlowState::new("Two", None, vec! {
-                                  FlowCmd::Message("Now fold Tab C on top of Tab D"),
-                              }),
-                          }),
-            };
-
             let (wstx, wsrx) = mpsc::channel();
             let ctx = tx.clone();
             let thread = thread::spawn(move || {
@@ -728,13 +494,11 @@ guilty!{
                 marshal.join().unwrap();
             });
 
-            let shared_flows = Arc::new(RwLock::new(flows));
-
             let mut router = Router::new();
-            router.get("/", index(shared_flows.clone()));
+            router.get("/", index());
             router.post("/nuc/:action", nuc(tx.clone()));
             router.post("/control/:service/:action", control(tx.clone()));
-            router.post("/flow/:flow/:action", flow(tx.clone(), shared_flows.clone()));
+            router.post("/flow/:flow/:action", flow(tx.clone()));
 
             let mut mount = Mount::new();
             for p in &["css", "fonts", "js"] {
