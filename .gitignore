@@ -2,6 +2,7 @@ target
 *.so
 *.swp
 *.swo
+*.swn
 Session.vim
 *.dat
 *.png
