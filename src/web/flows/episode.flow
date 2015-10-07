@@ -45,8 +45,8 @@ Episode
 
 - => Wrap up
     > "episode name"
-    > "hardness"     1..5
-    > "roughness"    1..5
-    > "slipperiness" 1..5
-    > "warmness"     1..5
+    > "hardness"     (1..5)
+    > "roughness"    (1..5)
+    > "slipperiness" (1..5)
+    > "warmness"     (1..5)
 
