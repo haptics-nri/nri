@@ -6,13 +6,15 @@ Vicon-assisted calibration
 
 - Stick => Collecting
     "Please start STB and Vicon capture"
-    start structure teensy
+    start structure bluefox teensy
     : structure disk start
+    : bluefox disk start
 - Finish
     "Please stop STB and Vicon capture"
     "Writing to disk, please wait..."
+    : bluefox disk stop
     : structure disk stop
-    stop structure teensy
+    stop structure bluefox teensy
     "Done!"
     > "surface"
 
