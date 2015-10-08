@@ -43,7 +43,7 @@ group_attr!{
     guilty!{
         impl Controllable for Bluefox {
             const NAME: &'static str = "bluefox",
-            const BLOCK: Block = Block::Immediate,
+            const BLOCK: Block = Block::Period(100_000_000),
 
             fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Bluefox {
                 let device = wrapper::Device::new().unwrap();
