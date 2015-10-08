@@ -1,6 +1,6 @@
 #[macro_use] extern crate lazy_static;
 extern crate csv;
-extern crate image;
+extern crate lodepng;
 
 #[macro_use] mod common;
 
@@ -8,11 +8,10 @@ use std::{env, process, fmt, mem, slice};
 use std::io::{Read, Write};
 use std::fs::File;
 use std::path::Path;
-use self::image::{ImageBuffer, ColorType};
-use self::image::png::PNGEncoder;
+use lodepng::{encode_file, ColorType};
 
 struct Row {
-    pixels: [[u8; 3]; 1200]
+    pixels: [[u8; 3]; 1600]
 }
 
 impl fmt::Debug for Row {
@@ -41,14 +40,14 @@ fn main() {
         indentln!("parsing {} into {}", dat, png);
         let rows = common::do_binary::<Row>("", (dat, None));
         indentln!("have {} rows", rows.len());
-        let mut pngfile = File::create(png).unwrap();
-        PNGEncoder::new(&mut pngfile).encode(
-            unsafe {
-                slice::from_raw_parts::<u8>(&rows[0] as *const Row as *const u8,
-                                            rows.len()*1200*3)
-            },
-            rows.len() as u32, 1200u32,
-            ColorType::RGB(8)).unwrap();
+        let mut pixels = Vec::with_capacity(1200*3*rows.len());
+        for i in 0..rows.len() {
+            for j in 0..1600 {
+                pixels.push(rows[i].pixels[j]);
+            }
+        }
+        println!("{} pixels!", pixels.len());
+        attempt!(encode_file(png, &pixels, 1600, rows.len(), ColorType::LCT_RGB, 8));
     }
     indentln!("finished {} frames", i);
 
