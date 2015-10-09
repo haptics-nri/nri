@@ -1,6 +1,7 @@
 use std::{env, process, mem, ptr};
 use std::io::{Read, Write};
 use std::fs::File;
+use std::path::Path;
 use std::fmt::Debug;
 
 /// Semiautomatically-indenting `println!` replacement
@@ -84,15 +85,20 @@ macro_rules! attempt {
 pub fn parse_inout_args<I>(args: &mut I) -> (String, String)
         where I: ExactSizeIterator<Item=String>
 {
-    if args.len() != 3 {
+    if args.len() != 2 && args.len() != 3 {
         errorln!("Failed to parse command line arguments.");
-        errorln!("Usage: {} [binary input file] [csv output file]", args.next().unwrap());
+        errorln!("Usage: {} <binary input file> [<csv output file>]", args.next().unwrap());
         process::exit(1);
     }
     else {
         args.next().unwrap();
     }
-    let (inname, outname) = (parse_in_arg(args), parse_out_arg(args));
+    let inname = parse_in_arg(args);
+    let outname = if args.peekable().peek().is_some() {
+        parse_out_arg(args)
+    } else {
+        Path::new(&inname).with_extension("csv").to_str().unwrap().to_owned()
+    };
     indentln!("in = {}, out = {}", inname, outname);
     (inname, outname)
 }
