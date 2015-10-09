@@ -437,6 +437,7 @@ fn main() {
                         match &*words.next().unwrap() {
                             "send" => { send_to(&services, "web".to_owned(), CmdTo::Data(d[5..].to_owned())); },
                             "kick" => { send_to(&services, words.next().unwrap().to_owned(), CmdTo::Data("kick".to_owned())); },
+                            "to"   => { send_to(&services, words.next().unwrap().to_owned(), CmdTo::Data(words.collect::<Vec<_>>().join(" "))); },
                             _      => { errorln!("Strange message {} received from a service", d); }
                         }
                     },

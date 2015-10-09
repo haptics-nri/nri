@@ -37,6 +37,7 @@ group_attr!{
 
         /// Number of frames captured since setup() was last called (used for calculating frame rates)
         i: usize,
+        writing: bool,
 
         /// PNG writer/sender
         png: RestartableThread<PngStuff>,
@@ -88,6 +89,7 @@ group_attr!{
                     ir: ir,
                     start: time::now(),
                     i: 0,
+                    writing: false,
 
                     png: RestartableThread::new("Structure PNG thread", move |(i, unencoded, do_resize, (h, w), bd)| {
                         let mut encoded = Vec::with_capacity((w*h) as usize);
@@ -113,6 +115,18 @@ group_attr!{
             fn step(&mut self, cmd: Option<String>) {
                 self.i += 1;
 
+                match cmd.as_ref().map(|s| s as &str) {
+                    Some("disk start") => {
+                        println!("Started Structure recording.");
+                        self.writing = true;
+                    },
+                    Some("disk stop") => {
+                        println!("Stopped Structure recording.");
+                        self.writing = false;
+                    },
+                    _ => {},
+                }
+
                 if self.depth.is_running() {
                     prof!("depth", {
                         let frame = prof!("readFrame", self.depth.read_frame().unwrap());
@@ -129,9 +143,11 @@ group_attr!{
                             }
                         });
 
-                        let stamp = time::get_time();
-                        self.writer.write(&data);
-                        self.stampfile.write(format!("{},structure{}.dat,{:.9}\n", self.i, self.i, stamp.sec as f64 + stamp.nsec as f64 / 1_000_000_000f64).as_bytes());
+                        if self.writing {
+                            let stamp = time::get_time();
+                            self.writer.write(&data);
+                            self.stampfile.write(format!("{},structure{}.dat,{:.9}\n", self.i, self.i, stamp.sec as f64 + stamp.nsec as f64 / 1_000_000_000f64).as_bytes());
+                        }
                         match cmd.as_ref().map(|s| s as &str) {
                             Some("kick") => {
                                 prof!("send to thread", self.png.send((self.i, data, false, (frame.height, frame.width), ColorType::Gray(16))).unwrap());
@@ -146,9 +162,11 @@ group_attr!{
                         let frame = prof!("readFrame", self.ir.read_frame().unwrap());
                         let data: &[u8] = prof!(frame.data());
 
-                        let stamp = time::get_time();
-                        self.writer.write(data);
-                        self.stampfile.write(format!("{},structure{}.dat,{:.9}\n", self.i, self.i, stamp.sec as f64 + stamp.nsec as f64 / 1_000_000_000f64).as_bytes());
+                        if self.writing {
+                            let stamp = time::get_time();
+                            self.writer.write(data);
+                            self.stampfile.write(format!("{},structure{}.dat,{:.9}\n", self.i, self.i, stamp.sec as f64 + stamp.nsec as f64 / 1_000_000_000f64).as_bytes());
+                        }
                         match cmd.as_ref().map(|s| s as &str) {
                             Some("kick") => {
                                 prof!("send to thread", self.png.send((self.i, data.into(), true, (frame.height, frame.width), ColorType::RGB(8))).unwrap());

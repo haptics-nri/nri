@@ -30,6 +30,7 @@ group_attr!{
 
         /// Number of frames captured since setup() was last called (used for calculating frame rates)
         i: usize,
+        writing: bool,
 
         /// PNG writer rebootable thread
         png: RestartableThread<PngStuff>,
@@ -58,6 +59,7 @@ group_attr!{
                 Bluefox {
                     device: device,
                     i: 0,
+                    writing: false,
                     start: time::now(),
 
                     png: RestartableThread::new("Bluefox PNG thread",
@@ -99,15 +101,17 @@ group_attr!{
 
                 let image = self.device.request().unwrap();
 
-                let stamp = time::get_time();
-                self.writer.write(image.data());
-                self.stampfile.write(format!("{},bluefox{}.dat,{:.9}\n",
-                                             self.i,
-                                             self.i,
-                                             (stamp.sec as f64
-                                              + stamp.nsec as f64
-                                              / 1_000_000_000f64))
-                                     .as_bytes());
+                if self.writing {
+                    let stamp = time::get_time();
+                    self.writer.write(image.data());
+                    self.stampfile.write(format!("{},bluefox{}.dat,{:.9}\n",
+                                                 self.i,
+                                                 self.i,
+                                                 (stamp.sec as f64
+                                                  + stamp.nsec as f64
+                                                  / 1_000_000_000f64))
+                                         .as_bytes());
+                }
                 match data.as_ref().map(|s| s as &str) {
                     Some("kick") => {
                         //self.device.set_reverse_x(!self.device.get_reverse_x().unwrap());
@@ -119,6 +123,14 @@ group_attr!{
                                              image.size(),
                                              ColorType::RGB(8)))
                               .unwrap())
+                    },
+                    Some("disk start") => {
+                        println!("Started Bluefox recording.");
+                        self.writing = true;
+                    },
+                    Some("disk stop") => {
+                        println!("Stopped Bluefox recording.");
+                        self.writing = false;
                     },
                     Some(_) | None => ()
                 }

@@ -75,8 +75,8 @@ guilty!{
                         "poweroff" => {
                             self.tx.send(CmdFrom::Power(Power::PowerOff)).unwrap();
                         }
-                        "websend" => {
-                            self.tx.send(CmdFrom::Data("send test".to_owned())).unwrap();
+                        "data" => {
+                            self.tx.send(CmdFrom::Data(words.collect::<Vec<_>>().join(" "))).unwrap();
                         },
                         _ => println!("Unknown command!")
                     }
