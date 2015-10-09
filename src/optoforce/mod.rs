@@ -49,23 +49,30 @@ group_attr!{
 
     extern crate time;
 
-    use ::comms::{Controllable, CmdFrom, Block};
-    use std::sync::mpsc::Sender;
-    use std::default::Default;
     use std::thread;
     use std::io::Write;
-    use std::fs::File;
-    use std::{mem, slice};
-
+    use std::default::Default;
+    use std::sync::mpsc::Sender;
+    use ::comms::{Controllable, CmdFrom, Block};
+    use ::scribe::{Writer, Writable};
 
     mod wrapper;
 
     pub struct Optoforce {
         device: wrapper::Device,
         i: usize,
-        file: File,
+        file: Writer<Packet>,
         start: time::Tm
     }
+
+    #[repr(packed)]
+    #[allow(dead_code)]
+    struct Packet {
+        stamp: time::Timespec,
+        xyz  : wrapper::XYZ,
+    }
+
+    unsafe impl Writable for Packet {}
 
     guilty!{
         impl Controllable for Optoforce {
@@ -80,17 +87,15 @@ group_attr!{
                         .set_speed(wrapper::settings::Speed::Hz1000)
                        );
                 println!("Optoforce settings: {:?}", dev.get().unwrap());
-                Optoforce { device: dev, i: 0, file: File::create("data/optoforce.dat").unwrap(), start: time::now() }
+                Optoforce { device: dev, i: 0, file: Writer::with_file("data/optoforce.dat"), start: time::now() }
             }
 
             fn step(&mut self, _: Option<String>) {
-                let xyz = self.device.read();
-                self.file.write_all(unsafe { slice::from_raw_parts(&time::get_time() as *const _ as *const _, mem::size_of::<time::Timespec>()) }).unwrap();
-                self.file.write_all(unsafe { slice::from_raw_parts(&xyz as *const _ as *const _, mem::size_of_val(&xyz)) }).unwrap();
+                self.file.write(Packet {
+                    stamp: time::get_time(),
+                    xyz: self.device.read()
+                });
                 self.i += 1;
-                if (self.i % 100) == 0 {
-                    println!("Optoforce #{} {:?}", self.i, xyz);
-                }
             }
 
             fn teardown(&mut self) {
