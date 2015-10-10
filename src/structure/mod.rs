@@ -107,8 +107,8 @@ group_attr!{
                         prof!("send", mtx.lock().unwrap().send(CmdFrom::Data(format!("send kick structure {} data:image/png;base64,{}", i, encoded.to_base64(base64::STANDARD)))).unwrap());
                     }),
 
-                    stampfile: Writer::with_file("data/structure_times.csv"),
-                    writer: Writer::with_files("data/structure{}.dat"),
+                    stampfile: Writer::with_file("structure_times.csv"),
+                    writer: Writer::with_files("structure{}.dat"),
                 }
             }
 

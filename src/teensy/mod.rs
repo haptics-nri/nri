@@ -2,7 +2,7 @@
 
 custom_derive! {
     /// Which end effector is in use (i.e. not parked)
-    #[derive(Eq, PartialEq, Debug, TryFrom(u8))]
+    #[derive(Copy, Clone, Eq, PartialEq, Debug, TryFrom(u8))]
     pub enum ParkState {
         /// All end effectors parked
         None = 0,
@@ -116,7 +116,7 @@ group_attr!{
         }).unwrap();
         port.set_timeout(Duration::milliseconds(100)).unwrap();
         if false {
-            Box::new(port.coffee(File::create("data/teensydump.dat").unwrap()))
+            Box::new(port.coffee(File::create("teensydump.dat").unwrap()))
         } else {
             Box::new(port)
         }
@@ -254,7 +254,7 @@ group_attr!{
                 let mut port = serialport();
                 port.write_all(&['1' as u8]).unwrap();
 
-                Teensy { port: port, file: Writer::with_file("data/teensy.dat"), i: 0, start: time::now() }
+                Teensy { port: port, file: Writer::with_file("teensy.dat"), i: 0, start: time::now() }
             }
 
             fn step(&mut self, _: Option<String>) {

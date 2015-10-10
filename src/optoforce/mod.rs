@@ -87,7 +87,7 @@ group_attr!{
                         .set_speed(wrapper::settings::Speed::Hz1000)
                        );
                 println!("Optoforce settings: {:?}", dev.get().unwrap());
-                Optoforce { device: dev, i: 0, file: Writer::with_file("data/optoforce.dat"), start: time::now() }
+                Optoforce { device: dev, i: 0, file: Writer::with_file("optoforce.dat"), start: time::now() }
             }
 
             fn step(&mut self, _: Option<String>) {

@@ -91,8 +91,8 @@ group_attr!{
                                 .unwrap());
                     }),
 
-                    stampfile: Writer::with_file("data/bluefox_times.csv"),
-                    writer: Writer::with_files("data/bluefox{}.dat"),
+                    stampfile: Writer::with_file("bluefox_times.csv"),
+                    writer: Writer::with_files("bluefox{}.dat"),
                 }
             }
 

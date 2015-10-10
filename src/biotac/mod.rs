@@ -85,7 +85,7 @@ group_attr! {
                     assert!(0 == wrapper::biotac::bt_cheetah_configure_batch(cheetah, &mut info, 44));
                 }
 
-                Biotac { cheetah: cheetah, info: info, finger: finger, file: Writer::with_file("data/biotac.dat"), i: 0, start: time::now() }
+                Biotac { cheetah: cheetah, info: info, finger: finger, file: Writer::with_file("biotac.dat"), i: 0, start: time::now() }
             }
 
             fn step(&mut self, _: Option<String>) {

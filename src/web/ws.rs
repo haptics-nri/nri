@@ -19,15 +19,17 @@ pub fn send(wsid: usize, msg: String) {
 }
 
 pub fn rpc<T, F: Fn(String) -> Result<T, String>>(wsid: usize, prompt: String, validator: F) -> T {
-    let mut locked_senders = WS_SENDERS.lock().unwrap();
-    let mut locked_rpcs = RPC_SENDERS.lock().unwrap();
-
-    let mut go = |prompt: &str| -> String {
-                     let (tx, rx) = mpsc::channel();
-                     locked_rpcs.insert(wsid, tx);
-                     locked_senders[wsid].send_message(ws::Message::Text(prompt.to_owned())).unwrap();
-                     rx.recv().unwrap()
-                 };
+    let go = |prompt: &str| -> String {
+        let (tx, rx) = mpsc::channel();
+        println!("Waiting on RPC from WSID {}", wsid);
+        {
+            let mut locked_senders = WS_SENDERS.lock().unwrap();
+            let mut locked_rpcs = RPC_SENDERS.lock().unwrap();
+            locked_rpcs.insert(wsid, tx);
+            locked_senders[wsid].send_message(ws::Message::Text(prompt.to_owned())).unwrap();
+        }
+        rx.recv().unwrap()
+    };
 
     let mut answer = go(&prompt);
     loop {
@@ -104,13 +106,15 @@ pub fn spawn(ctx: mpsc::Sender<CmdFrom>, wsrx: mpsc::Receiver<Message>) -> threa
                             return;
                         },
                         ws::Message::Text(text) => {
+                            println!("Received WS text {}", text);
                             if text.starts_with("RPC") {
                                 let space = text.find(' ').unwrap();
                                 let id = text[3..space].parse::<usize>().unwrap();
-                                let msg = text[space..].to_owned();
+                                let msg = text[space+1..].to_owned();
 
                                 let mut locked_senders = WS_SENDERS.lock().unwrap();
                                 let locked_rpcs = RPC_SENDERS.lock().unwrap();
+                                println!("Received RPC for WSID {}: {}", wsid, msg);
                                 if let Some(rpc) = locked_rpcs.get(&id) {
                                     rpc.send(msg).unwrap();
                                 } else {

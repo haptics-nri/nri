@@ -151,7 +151,9 @@ lazy_static! {
                                                             Path::new(config::FLOW_PATH),
                                                             "flow",
                                                             |flows, path| {
-        let flow = Flow::parse(BufReader::new(File::open(&path).unwrap())).unwrap();
+        let flow = Flow::parse(path.file_stem().unwrap().to_str().unwrap().to_owned(),
+                               BufReader::new(File::open(&path).unwrap()))
+                        .unwrap();
         flows.insert(flow.name.clone(), flow);
     });
 }
