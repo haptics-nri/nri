@@ -259,7 +259,8 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
                 Ok(cmd) => match cmd {
                     CmdTo::Start => break 'hatching,      // let's go!
                     CmdTo::Data(_) => continue 'hatching, // sorry, not listening yet
-                    CmdTo::Stop | CmdTo::Quit => break 'alive,
+                    CmdTo::Stop => continue 'hatching,
+                    CmdTo::Quit => break 'alive,
                 },
                 Err(_) => return, // main thread exploded?
             }
