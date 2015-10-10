@@ -29,6 +29,21 @@
                 $("#confirm #no").unbind('click.confirm').bind('click.confirm', thenno);
                 $("#confirm").modal("show");
             }
+            function prompt(text, thenok, thencancel) {
+                thenok = thenok || function (s) { console.log("prompt modal dismissed by clicking OK, contents \"" + s + "\""); };
+                thencancel = thencancel || function () { console.log("prompt modal cancelled"); };
+
+                $("#prompt #text").html(text);
+                $("#prompt #input").val("");
+                $("#prompt #ok").unbind('click.prompt').bind('click.prompt', function () { return thenok($("#prompt #input").val()); });
+                $("#prompt #cancel").unbind('click.prompt').bind('click.prompt', thencancel);
+                $("#prompt").modal("show");
+            }
+
+            function send(s) {
+                console.log("send " + s);
+                window.socket.send(s);
+            }
 
             window.socket = new WebSocket("ws://{{server}}", "rust-websocket");
             window.socket.onmessage = function (event) {
@@ -36,10 +51,14 @@
                 words = event.data.split(' ');
                 switch (words[0]) {
                     case "hello":
+                        window.wsid = words[1];
                         $(".wsid").each(function () { this.value = words[1]; });
                         break;
                     case "msg":
                         alert(event.data.slice(event.data.indexOf(" ")));
+                        break;
+                    case "prompt":
+                        prompt(event.data.slice(event.data.indexOf(" ")), function (s) { send("RPC" + window.wsid + " " + s); });
                         break;
                     case "kick":
                         $("." + words[1] + ".framenum").each(function () { this.innerHTML = words[2]; });
@@ -194,6 +213,27 @@
                     <div class="modal-footer">
                         <a href="#" class="btn btn-primary" data-dismiss="modal" id="yes">Yes</a>
                         <a href="#" class="btn btn-primary" data-dismiss="modal" id="no">No</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal fade" id="prompt">
+            <div class"modal-dialog" style="position: fixed;
+                                            top: 25%;
+                                            left: 10%;
+                                            width: 80%;
+                                            background: white;
+                                            border: 1px solid black">
+                <div class"modal-content">
+                    <div class="modal-body">
+                        <div id="text"></div>
+                        <form>
+                            <input type="text" id="input"/>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <a href="#" class="btn btn-primary" data-dismiss="modal" id="ok">OK</a>
+                        <a href="#" class="btn btn-primary" data-dismiss="modal" id="cancel">Cancel</a>
                     </div>
                 </div>
             </div>
