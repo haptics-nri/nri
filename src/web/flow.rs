@@ -325,7 +325,7 @@ impl FlowCmd {
                 assert!(rpc!(tx, CmdFrom::Stop, service.clone()).unwrap());
             }
             FlowCmd::Send(ref string) => {
-                tx.send(CmdFrom::Data(string.clone())).unwrap();
+                tx.send(CmdFrom::Data(String::from("to ") + string)).unwrap();
             }
             FlowCmd::StopSensors => {
                 for &svc in &["bluefox", "structure", "biotac", "optoforce", "teensy"] {
