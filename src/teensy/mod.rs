@@ -108,6 +108,10 @@ group_attr!{
         to.write(from).unwrap()
     }
 
+    lazy_static! {
+        static ref PORT: Box<StaticReadWrite> = serialport();
+    }
+
     fn serialport() -> Box<StaticReadWrite> {
         let mut port = serial::open("/dev/ttyTEENSY").unwrap();
         port.reconfigure(&|settings| {
@@ -124,12 +128,10 @@ group_attr!{
 
     impl super::ParkState {
         pub fn metermaid() -> Option<super::ParkState> {
-            let mut port = serialport();
-
-            port.write_all(&['4' as u8]).unwrap();
+            PORT.write_all(&['4' as u8]).unwrap();
 
             let mut buf = [0u8; 1];
-            match port.read_exact_shim(&mut buf) {
+            match PORT.read_exact_shim(&mut buf) {
                 Ok(())         => {
                     match super::ParkState::try_from(!(buf[0] | 0b1111_1000)) {
                         Ok(ps) => Some(ps),
@@ -144,10 +146,10 @@ group_attr!{
     }
 
     pub struct Teensy {
-        port: Box<StaticReadWrite>,
         file: Writer<Packet>,
         i: usize,
         start: time::Tm,
+        running: bool
     }
 
     #[repr(packed)]
@@ -251,10 +253,9 @@ group_attr!{
             fn setup(_: Sender<CmdFrom>, _: Option<String>) -> Teensy {
                 assert_eq!(mem::size_of::<Packet>(), u8::MAX as usize + mem::size_of::<time::Timespec>());
 
-                let mut port = serialport();
-                port.write_all(&['1' as u8]).unwrap();
+                PORT.write_all(&['1' as u8]).unwrap();
 
-                Teensy { port: port, file: Writer::with_file("teensy.dat"), i: 0, start: time::now() }
+                Teensy { file: Writer::with_file("teensy.dat"), i: 0, start: time::now() }
             }
 
             fn step(&mut self, _: Option<String>) {
@@ -265,7 +266,7 @@ group_attr!{
                 self.port.read_exact_shim(&mut b).err().map(|e| println!("Teensy read error {:?}", e));
                 */
                 let mut size_buf = [0u8; 4];
-                let packet_size = match self.port.read_exact_shim(&mut size_buf) {
+                let packet_size = match PORT.read_exact_shim(&mut size_buf) {
                     Ok(()) => {
                         if &size_buf[..3] == b"aaa" {
                             size_buf[3] as usize
@@ -274,14 +275,14 @@ group_attr!{
                             let mut scanning = [0u8; 1];
                             let mut count = 0;
                             while count < 3 {
-                                self.port.read_exact_shim(&mut scanning).unwrap();
+                                PORT.read_exact_shim(&mut scanning).unwrap();
                                 if scanning[0] == 'a' as u8 {
                                     count += 1;
                                 } else {
                                     count = 0;
                                 }
                             }
-                            self.port.read_exact_shim(&mut scanning).unwrap();
+                            PORT.read_exact_shim(&mut scanning).unwrap();
                             scanning[0] as usize
                         }
                     },
@@ -291,7 +292,7 @@ group_attr!{
                     }
                 };
                 let mut buf = vec![0u8; packet_size];
-                match self.port.read_exact_shim(&mut buf[..]) {
+                match PORT.read_exact_shim(&mut buf[..]) {
                     Ok(()) => {
                         let packet = match unsafe { Packet::new(&buf) } {
                             Ok(p) => p,
@@ -307,7 +308,7 @@ group_attr!{
             }
 
             fn teardown(&mut self) {
-                self.port.write_all(&['2' as u8]).unwrap();
+                PORT.write_all(&['2' as u8]).unwrap();
                 let end = time::now();
                 let millis = (end - self.start).num_milliseconds() as f64;
                 println!("{} Teensy packets grabbed in {} s ({} FPS)!", self.i, millis/1000.0, 1000.0*(self.i as f64)/millis);
