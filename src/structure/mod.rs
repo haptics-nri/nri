@@ -147,6 +147,8 @@ group_attr!{
                             let stamp = time::get_time();
                             self.writer.write(&data);
                             self.stampfile.write(format!("{},structure{}.dat,{:.9}\n", self.i, self.i, stamp.sec as f64 + stamp.nsec as f64 / 1_000_000_000f64).as_bytes());
+                        } else {
+                            self.writer.decoy();
                         }
                         match cmd.as_ref().map(|s| s as &str) {
                             Some("kick") => {
@@ -166,6 +168,8 @@ group_attr!{
                             let stamp = time::get_time();
                             self.writer.write(data);
                             self.stampfile.write(format!("{},structure{}.dat,{:.9}\n", self.i, self.i, stamp.sec as f64 + stamp.nsec as f64 / 1_000_000_000f64).as_bytes());
+                        } else {
+                            self.writer.decoy();
                         }
                         match cmd.as_ref().map(|s| s as &str) {
                             Some("kick") => {

@@ -111,6 +111,8 @@ group_attr!{
                                                   + stamp.nsec as f64
                                                   / 1_000_000_000f64))
                                          .as_bytes());
+                } else {
+                    self.writer.decoy();
                 }
                 match data.as_ref().map(|s| s as &str) {
                     Some("kick") => {

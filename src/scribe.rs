@@ -72,6 +72,10 @@ lazy_static! {
                             indices.insert(h, i + 1);
                             File::create(patterns[&h].replace("{}", &i.to_string())).unwrap().write_all(&data).unwrap();
                         },
+                        Message::Decoy(h) => {
+                            let i = indices[&h] + 1;
+                            indices.insert(h, i + 1);
+                        },
                     }
                 }
             })),
@@ -85,6 +89,7 @@ lazy_static! {
     };
 }
 
+#[derive(PartialEq)]
 enum Destination {
     Name,
     Pattern,
@@ -98,6 +103,7 @@ pub enum Message {
     Register(String, mpsc::Sender<Handle>),
     Unregister(Handle),
     Packet(Handle, Box<[u8]>),
+    Decoy(Handle),
 }
 
 pub unsafe trait Writable {}
@@ -128,6 +134,12 @@ impl<T: ?Sized> Writer<T> {
             handle: rx.recv().unwrap(),
             dst: Destination::Pattern,
             _ghost: PhantomData
+        }
+    }
+
+    pub fn decoy(&mut self) {
+        if self.dst == Destination::Pattern {
+            send(Message::Decoy(self.handle));
         }
     }
 }
