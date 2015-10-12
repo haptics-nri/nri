@@ -49,6 +49,8 @@ group_attr!{
             fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Bluefox {
                 let device = wrapper::Device::new().unwrap();
                 //device.request_reset();
+                
+                // TODO set desired properties (height, width, pixel format, frame rate)
 
                 println!("height = {}\nwidth = {}\npixel format = {:?}",
                          device.get_height().unwrap(),

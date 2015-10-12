@@ -430,20 +430,22 @@ impl Device {
     getset!(get_height,        set_height,        HOBJ(0x840005), i64);
     getset!(get_offset_x,      set_offset_x,      HOBJ(0x840006), i64);
     getset!(get_offset_y,      set_offset_y,      HOBJ(0x840007), i64);
-    getset!(get_reverse_x,     set_reverse_x,     HOBJ(0x84000E), b: bool => if b { 1 } else { 0 }, i: i32 => i == 1);
-    getset!(get_reverse_y,     set_reverse_y,     HOBJ(0x84000F), b: bool => if b { 1 } else { 0 }, i: i32 => i == 1);
+    getset!(get_reverse_x,     set_reverse_x,     HOBJ(0x84000E), b: bool => b as i32, i: i32 => i == 1);
+    getset!(get_reverse_y,     set_reverse_y,     HOBJ(0x84000F), b: bool => b as i32, i: i32 => i == 1);
     getset!(get_bin_x,         set_bin_x,         HOBJ(0x84000A), i64);
     getset!(get_bin_y,         set_bin_y,         HOBJ(0x84000B), i64);
     getset!(get_decimate_x,    set_decimate_x,    HOBJ(0x84000C), i64);
     getset!(get_decimate_y,    set_decimate_y,    HOBJ(0x84000D), i64);
     getset!(get_pixel_format,  set_pixel_format,  HOBJ(0x840008), settings::PixelFormat       as i64 as from_i64);
-    getset!(get_afr_enabled,   set_afr_enabled,   HOBJ(0x850017), b: bool => if b { 1 } else { 0 }, i: i64 => i == 1);
+    getset!(get_afr_enabled,   set_afr_enabled,   HOBJ(0x850017), b: bool => b as i64, i: i64 => i == 1);
     getset!(get_afr,           set_afr,           HOBJ(0x850018), f64);
     getset!(get_color_proc,    set_color_proc,    HOBJ(0x5e0008), settings::ColorProc         as i32 as from_i32);
-    getset!(get_scale_enabled, set_scale_enabled, HOBJ(0x800001), b: bool => if b { 1 } else { 0 }, i: i32 => i == 1);
+    getset!(get_scale_enabled, set_scale_enabled, HOBJ(0x800001), b: bool => b as i32, i: i32 => i == 1);
     getset!(get_scale_mode,    set_scale_mode,    HOBJ(0x800002), settings::InterpolationMode as i32 as from_i32);
     getset!(get_scale_width,   set_scale_width,   HOBJ(0x800003), i32);
     getset!(get_scale_height,  set_scale_height,  HOBJ(0x800004), i32);
+    getset!(get_acq_fr_enable, set_acq_fr_enable, HOBJ(0x850017), b: bool => b as i64, i: i64 => i == 1);
+    getset!(get_acq_fr,        set_acq_fr,        HOBJ(0x850018), i64);
 
     fn set_prop<T: ObjProp>(&self, prop: HOBJ, value: T, index: c_int) -> Result<(), TPROPHANDLING_ERROR> {
         prop_status2result!(unsafe { T::set(prop, value, index) })
