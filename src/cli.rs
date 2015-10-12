@@ -1,7 +1,7 @@
 //! CLI interface to view and control running services
 
 use super::comms::{Controllable, CmdFrom, Power, Block};
-use std::thread;
+use std::{env, thread};
 use std::io::{self, BufRead, Write};
 use std::process::Command;
 use std::sync::mpsc::Sender;
@@ -35,6 +35,7 @@ guilty!{
                     let mut words = command.trim().split(" ");
                     match words.next().unwrap_or("") {
                         "" => {},
+                        "cd" => { env::set_current_dir(words.next().unwrap()).unwrap(); },
                         "sleep" => {
                             if let Some(ms_str) = words.next() {
                                 if let Ok(ms) = ms_str.parse::<u32>() {
