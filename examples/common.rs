@@ -1,5 +1,6 @@
 extern crate csv;
 extern crate lodepng;
+extern crate libc;
 
 use std::{env, process, mem, ptr, thread};
 use std::io::{Read, Write};
@@ -163,7 +164,7 @@ pub trait Pixels<T> {
     fn pixel(&self, i: usize) -> T;
 }
 
-pub fn do_camera<T, Data: Debug + Pixels<T>>(width: usize, height: usize, channels: usize) {
+pub fn do_camera<T, Data: Debug + Pixels<T>>(width: usize, height: usize, channels: usize, color: ColorType, depth: libc::c_uint) {
     let inname = parse_in_arg(&mut env::args().skip(1));
 
     let mut csvfile = attempt!(File::open(&inname));
@@ -190,7 +191,7 @@ pub fn do_camera<T, Data: Debug + Pixels<T>>(width: usize, height: usize, channe
                             pixels.push(rows[i].pixel(j));
                         }
                     }
-                    attempt!(encode_file(png, &pixels, width, rows.len(), ColorType::LCT_RGB, 8));
+                    attempt!(encode_file(png, &pixels, width, rows.len(), color, depth));
                 }
             }),
             tx

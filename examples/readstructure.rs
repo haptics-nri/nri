@@ -1,7 +1,9 @@
 #[macro_use] extern crate lazy_static;
 #[macro_use] mod common;
+extern crate lodepng;
 
 use std::fmt;
+use lodepng::ColorType;
 
 struct Row {
     pixels: [u16; 640]
@@ -24,6 +26,6 @@ impl common::Pixels<u16> for Row {
 }
 
 fn main() {
-    common::do_camera::<u16, Row>(640, 480, 1);
+    common::do_camera::<u16, Row>(640, 480, 1, ColorType::LCT_GREY, 16);
 }
 
