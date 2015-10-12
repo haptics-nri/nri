@@ -1,8 +1,13 @@
-use std::{env, process, mem, ptr};
+extern crate csv;
+extern crate lodepng;
+
+use std::{env, process, mem, ptr, thread};
 use std::io::{Read, Write};
 use std::fs::File;
-use std::path::Path;
 use std::fmt::Debug;
+use std::sync::mpsc;
+use std::path::{Path, PathBuf};
+use self::lodepng::{encode_file, ColorType};
 
 /// Semiautomatically-indenting `println!` replacement
 ///
@@ -152,6 +157,67 @@ pub fn do_binary<Data: Debug>(header: &str, (inname, outname): (String, Option<S
 pub fn read_binary<Data: Debug>(header: &str) -> Vec<Data> {
     let (inname, outname) = parse_inout_args(&mut env::args());
     do_binary::<Data>(header, (inname, Some(outname)))
+}
+
+pub trait Pixels<T> {
+    fn pixel(&self, i: usize) -> T;
+}
+
+pub fn do_camera<T, Data: Debug + Pixels<T>>(width: usize, height: usize, channels: usize) {
+    let inname = parse_in_arg(&mut env::args().skip(1));
+
+    let mut csvfile = attempt!(File::open(&inname));
+    let mut csvrdr = csv::Reader::from_reader(csvfile).has_headers(false);
+    let mut csvwtr = csv::Writer::from_memory();
+    csvwtr.encode(("Frame number", "Filename", "Unix timestamp"));
+
+    const N_THREADS: usize = 4;
+    print!("Creating {} threads...", N_THREADS);
+    let mut threads = Vec::with_capacity(N_THREADS);
+    unsafe { threads.set_len(N_THREADS); }
+    for i in 0..N_THREADS {
+        print!("{}...", i);
+        let (tx, rx) = mpsc::channel::<PathBuf>();
+        threads[i] = Some((
+            thread::spawn(move || {
+                for dat_path in rx {
+                    let dat = dat_path.to_str().unwrap().to_string();
+                    let png = dat_path.with_extension("png").to_str().unwrap().to_string();
+                    let rows = do_binary::<Data>("", (dat, None));
+                    let mut pixels = Vec::with_capacity(height*channels*rows.len());
+                    for i in 0..rows.len() {
+                        for j in 0..width {
+                            pixels.push(rows[i].pixel(j));
+                        }
+                    }
+                    attempt!(encode_file(png, &pixels, width, rows.len(), ColorType::LCT_RGB, 8));
+                }
+            }),
+            tx
+        ));
+    }
+    println!("done!");
+
+    let mut i = 0;
+    let mut t = 0;
+    for row in csvrdr.decode() {
+        println!("reading frame {}...", i);
+        let (num, fname, stamp): (usize, String, f64) = row.ok().expect(&format!("failed to parse row {} of {}", i, inname));
+        csvwtr.encode((num, Path::new(&fname).with_extension("png").to_str().unwrap().to_string(), stamp));
+        i += 1;
+        let dat_path = Path::new(&inname).with_file_name(fname);
+        threads[t].as_ref().unwrap().1.send(dat_path);
+        t = (t + 1) % 4;
+    }
+    println!("finished {} frames", i);
+
+    for t in 0..N_THREADS {
+        let present = threads[t].take().unwrap(); // unwrap the present
+        drop(present.1); // drop Sender causing the thread to stop looping
+        attempt!(present.0.join()); // now safe to join the thread
+    }
+
+    attempt!(File::create(&inname)).write_all(csvwtr.as_bytes());
 }
 
 
