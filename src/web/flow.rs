@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use std::io::{Write, BufRead};
 use std::fs::{self, File};
 use std::path::PathBuf;
-use std::{fmt, env};
+use std::{fmt, env, thread};
 use ::teensy::ParkState;
 use ::comms::CmdFrom;
 use super::ws;
@@ -319,7 +319,11 @@ impl FlowCmd {
                                     }));
             }
             FlowCmd::Start(ref service) => {
+                println!("Flow starting service {}", service);
                 assert!(rpc!(tx, CmdFrom::Start, service.clone()).unwrap());
+                println!("Flow waiting for service {} to start", service);
+                thread::sleep_ms(2000);
+                println!("Flow done waiting for service {}", service);
             }
             FlowCmd::Stop(ref service) => {
                 assert!(rpc!(tx, CmdFrom::Stop, service.clone()).unwrap());
