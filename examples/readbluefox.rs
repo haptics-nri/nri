@@ -31,7 +31,8 @@ fn main() {
 
     const N_THREADS: usize = 4;
     print!("Creating {} threads...", N_THREADS);
-    let mut threads: [Option<(thread::JoinHandle<()>, mpsc::Sender<PathBuf>)>; N_THREADS] = unsafe { mem::uninitialized() };
+    let mut threads = Vec::with_capacity(N_THREADS);
+    unsafe { threads.set_len(N_THREADS); }
     for i in 0..N_THREADS {
         print!("{}...", i);
         let (tx, rx) = mpsc::channel::<PathBuf>();
