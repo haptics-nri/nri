@@ -72,13 +72,14 @@ macro_rules! errorln {
 /// Just like try!, but kills the process on Err
 macro_rules! attempt {
     ($e:expr) => {
-        match $e {
+        /*match $e {
             Ok(val) => val,
             Err(err) => {
                 errorln!("Error: {:?}", err);
                 process::exit(1);
             }
-        }
+        }*/
+        $e.unwrap()
     }
 }
 
