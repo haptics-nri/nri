@@ -10,7 +10,7 @@ use std::ffi::CString;
 use std::cell::Cell;
 use std::ops::Deref;
 use std::slice;
-use std::time::Duration;
+//use std::time::Duration;
 
 custom_derive! {
     #[repr(C)]
