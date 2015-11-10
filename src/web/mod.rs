@@ -297,10 +297,10 @@ pub struct Web {
     listening: Listening,
 
     /// Private handle to the websocket server thread
-    websocket: JoinHandle<()>,
+    websocket: Option<JoinHandle<()>>,
 
     /// Private channel for sending events to WebSocket clients
-    wstx: mpsc::Sender<ws::Message<'static>>,
+    wstx: Option<mpsc::Sender<ws::Message<'static>>>,
 }
 
 guilty!{
@@ -332,18 +332,19 @@ guilty!{
 
             let listening = Iron::new(chain).http(("0.0.0.0", config::HTTP_PORT)).unwrap();
 
-            Web { listening: listening, websocket: thread, wstx: wstx }
+            Web { listening: listening, websocket: Some(thread), wstx: Some(wstx) }
         }
 
         fn step(&mut self, data: Option<String>) {
             if let Some(d) = data {
-                self.wstx.send(ws::Message::text(d)).unwrap();
+                self.wstx.as_ref().unwrap().send(ws::Message::text(d)).unwrap();
             }
         }
 
         fn teardown(&mut self) {
             self.listening.close().unwrap(); // FIXME this does not do anything (known bug in hyper)
-            // TODO send a message to the websocket thread telling it to shut down
+            drop(self.wstx.take()); // close the channel
+            self.websocket.take().unwrap().join().unwrap(); // safe to join since wstx was just shut down
         }
     }
 }

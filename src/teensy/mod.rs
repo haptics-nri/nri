@@ -29,6 +29,7 @@ group_attr!{
 
     extern crate serial;
     extern crate time;
+    extern crate conv;
     use ::comms::{Controllable, CmdFrom, Block};
     use ::scribe::{Writer, Writable};
     use std::io::{self, Read, Write};
@@ -36,9 +37,9 @@ group_attr!{
     use std::sync::mpsc::Sender;
     use std::{u8, ptr, mem, ops};
     use std::fmt::{self, Display, Debug, Formatter};
+    use std::time::Duration;
     use self::serial::prelude::*;
-    use self::time::Duration;
-    use custom_derive::TryFrom;
+    use self::conv::TryFrom;
 
     trait RFC980: Read {
         fn read_exact_shim(&mut self, buf: &mut [u8]) -> io::Result<()> {
@@ -114,7 +115,7 @@ group_attr!{
             try!(settings.set_baud_rate(serial::Baud115200));
             Ok(())
         }).unwrap();
-        port.set_timeout(Duration::milliseconds(100)).unwrap();
+        port.set_timeout(Duration::from_millis(100)).unwrap();
         if false {
             Box::new(port.coffee(File::create("teensydump.dat").unwrap()))
         } else {

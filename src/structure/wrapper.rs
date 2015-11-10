@@ -1,7 +1,9 @@
 #![allow(dead_code)]
 
 extern crate libc;
+extern crate conv;
 use self::libc::{c_void, c_char, c_int};
+use self::conv::TryFrom;
 use std::ptr;
 use std::mem;
 use std::ffi::CString;
@@ -9,17 +11,25 @@ use std::cell::Cell;
 use std::ops::Deref;
 use std::slice;
 
-#[repr(C)]
-#[derive(PartialEq, Debug)]
-enum OniStatus {
-    Ok             = 0,
-    Error          = 1,
-    NotImplemented = 2,
-    NotSupported   = 3,
-    BadParameter   = 4,
-    OutOfFlow      = 5,
-    NoDevice       = 6,
-    TimeOut        = 102,
+custom_derive! {
+    #[repr(C)]
+    #[derive(PartialEq, Debug, TryFrom(i32))]
+    enum OniStatus {
+        Ok             = 0,
+        Error          = 1,
+        NotImplemented = 2,
+        NotSupported   = 3,
+        BadParameter   = 4,
+        OutOfFlow      = 5,
+        NoDevice       = 6,
+        TimeOut        = 102,
+    }
+}
+
+impl OniStatus {
+    fn into_err(self) -> OniError {
+        unsafe { mem::transmute::<OniStatus, OniError>(self) }
+    }
 }
 
 #[repr(C)]
@@ -233,13 +243,13 @@ macro_rules! status2result {
     ($code:expr, $ret:expr) => {
         match $code {
             OniStatus::Ok => Ok($ret),
-            other => Err(unsafe { mem::transmute(other) }) // TODO make this safe
+            other => Err(TryFrom::try_from(other).unwrap_or(OniStatus::Error).into_err())
         }
     }
 }
 
 pub fn initialize() -> Result<(), OniError> {
-    /*
+    /* TODO it'd be real nice if we could reset it without unplugging it
     match ioctl::usbdevfs_reset("/dev/bus/usb/002/002") {
         Ok(_) => println!("Device reset succeeded"),
         Err(rc) => {

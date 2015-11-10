@@ -1,8 +1,9 @@
 #![allow(dead_code)]
 
 extern crate libc;
+extern crate conv;
 use self::libc::{c_void, c_int, c_uint, c_char, c_double};
-use num::FromPrimitive;
+use self::conv::TryFrom;
 use std::slice;
 use std::mem;
 use std::ptr;
@@ -12,7 +13,7 @@ macro_rules! dmr_status2result {
     ($code:expr, $ret:expr) => {
         match $code {
             TDMR_ERROR::DMR_NO_ERROR => Ok($ret),
-            other => Err(unsafe { mem::transmute(other) }) // TODO make this safe
+            other => Err(TryFrom::try_from(other).unwrap_or(TDMR_ERROR::DMR_LAST_VALID_ERROR_CODE)),
         }
     }
 }
@@ -22,7 +23,7 @@ macro_rules! prop_status2result {
     ($code:expr, $ret:expr) => {
         match $code {
             TPROPHANDLING_ERROR::PROPHANDLING_NO_ERROR => Ok($ret),
-            other => Err(unsafe { mem::transmute(other) }) // TODO make this safe
+            other => Err(TryFrom::try_from(other).unwrap_or(TPROPHANDLING_ERROR::PROPHANDLING_LAST_VALID_ERROR_CODE)),
         }
     }
 }
@@ -56,107 +57,111 @@ impl HOBJ {
     }
 }
 
-#[repr(C)]
-#[derive(Debug)]
-pub enum TDMR_ERROR {
-    DMR_NO_ERROR                             = 0,
-    DMR_DEV_NOT_FOUND                        = -2100,
-    DMR_INIT_FAILED                          = -2101,
-    DMR_DRV_ALREADY_IN_USE                   = -2102,
-    DMR_DEV_CANNOT_OPEN                      = -2103,
-    DMR_NOT_INITIALIZED                      = -2104,
-    DMR_DRV_CANNOT_OPEN                      = -2105,
-    DMR_DEV_REQUEST_QUEUE_EMPTY              = -2106,
-    DMR_DEV_REQUEST_CREATION_FAILED          = -2107,
-    DMR_INVALID_PARAMETER                    = -2108,
-    DMR_EXPORTED_SYMBOL_NOT_FOUND            = -2109,
-    DEV_UNKNOWN_ERROR                        = -2110,
-    DEV_HANDLE_INVALID                       = -2111,
-    DEV_INPUT_PARAM_INVALID                  = -2112,
-    DEV_WRONG_INPUT_PARAM_COUNT              = -2113,
-    DEV_CREATE_SETTING_FAILED                = -2114,
-    DEV_REQUEST_CANT_BE_UNLOCKED             = -2115,
-    DEV_INVALID_REQUEST_NUMBER               = -2116,
-    DEV_LOCKED_REQUEST_IN_QUEUE              = -2117,
-    DEV_NO_FREE_REQUEST_AVAILABLE            = -2118,
-    DEV_WAIT_FOR_REQUEST_FAILED              = -2119,
-    DEV_UNSUPPORTED_PARAMETER                = -2120,
-    DEV_INVALID_RTC_NUMBER                   = -2121,
-    DMR_INTERNAL_ERROR                       = -2122,
-    DMR_INPUT_BUFFER_TOO_SMALL               = -2123,
-    DEV_INTERNAL_ERROR                       = -2124,
-    DMR_LIBRARY_NOT_FOUND                    = -2125,
-    DMR_FUNCTION_NOT_IMPLEMENTED             = -2126,
-    DMR_FEATURE_NOT_AVAILABLE                = -2127,
-    DMR_EXECUTION_PROHIBITED                 = -2128,
-    DMR_FILE_NOT_FOUND                       = -2129,
-    DMR_INVALID_LICENCE                      = -2130,
-    DEV_SENSOR_TYPE_ERROR                    = -2131,
-    DMR_CAMERA_DESCRIPTION_INVALID           = -2132,
-    DMR_NEWER_LIBRARY_REQUIRED               = -2133,
-    DMR_TIMEOUT                              = -2134,
-    DMR_WAIT_ABANDONED                       = -2135,
-    DMR_EXECUTION_FAILED                     = -2136,
-    DEV_REQUEST_ALREADY_IN_USE               = -2137,
-    DEV_REQUEST_BUFFER_INVALID               = -2138,
-    DEV_REQUEST_BUFFER_MISALIGNED            = -2139,
-    DEV_ACCESS_DENIED                        = -2140,
-    DMR_PRELOAD_CHECK_FAILED                 = -2141,
-    DMR_CAMERA_DESCRIPTION_INVALID_PARAMETER = -2142,
-    DMR_FILE_ACCESS_ERROR                    = -2143,
-    DMR_INVALID_QUEUE_SELECTION              = -2144,
-    DMR_ACQUISITION_ENGINE_BUSY              = -2145,
-    //DMR_PSEUDO_LAST_ASSIGNED_ERROR_CODE,
-    //DMR_LAST_ASSIGNED_ERROR_CODE           = DMR_PSEUDO_LAST_ASSIGNED_ERROR_CODE - 2,
-    DMR_LAST_VALID_ERROR_CODE                = -2199,
+custom_derive! {
+    #[repr(C)]
+    #[derive(Debug, TryFrom(i32))]
+    pub enum TDMR_ERROR {
+        DMR_NO_ERROR                             = 0,
+        DMR_DEV_NOT_FOUND                        = -2100,
+        DMR_INIT_FAILED                          = -2101,
+        DMR_DRV_ALREADY_IN_USE                   = -2102,
+        DMR_DEV_CANNOT_OPEN                      = -2103,
+        DMR_NOT_INITIALIZED                      = -2104,
+        DMR_DRV_CANNOT_OPEN                      = -2105,
+        DMR_DEV_REQUEST_QUEUE_EMPTY              = -2106,
+        DMR_DEV_REQUEST_CREATION_FAILED          = -2107,
+        DMR_INVALID_PARAMETER                    = -2108,
+        DMR_EXPORTED_SYMBOL_NOT_FOUND            = -2109,
+        DEV_UNKNOWN_ERROR                        = -2110,
+        DEV_HANDLE_INVALID                       = -2111,
+        DEV_INPUT_PARAM_INVALID                  = -2112,
+        DEV_WRONG_INPUT_PARAM_COUNT              = -2113,
+        DEV_CREATE_SETTING_FAILED                = -2114,
+        DEV_REQUEST_CANT_BE_UNLOCKED             = -2115,
+        DEV_INVALID_REQUEST_NUMBER               = -2116,
+        DEV_LOCKED_REQUEST_IN_QUEUE              = -2117,
+        DEV_NO_FREE_REQUEST_AVAILABLE            = -2118,
+        DEV_WAIT_FOR_REQUEST_FAILED              = -2119,
+        DEV_UNSUPPORTED_PARAMETER                = -2120,
+        DEV_INVALID_RTC_NUMBER                   = -2121,
+        DMR_INTERNAL_ERROR                       = -2122,
+        DMR_INPUT_BUFFER_TOO_SMALL               = -2123,
+        DEV_INTERNAL_ERROR                       = -2124,
+        DMR_LIBRARY_NOT_FOUND                    = -2125,
+        DMR_FUNCTION_NOT_IMPLEMENTED             = -2126,
+        DMR_FEATURE_NOT_AVAILABLE                = -2127,
+        DMR_EXECUTION_PROHIBITED                 = -2128,
+        DMR_FILE_NOT_FOUND                       = -2129,
+        DMR_INVALID_LICENCE                      = -2130,
+        DEV_SENSOR_TYPE_ERROR                    = -2131,
+        DMR_CAMERA_DESCRIPTION_INVALID           = -2132,
+        DMR_NEWER_LIBRARY_REQUIRED               = -2133,
+        DMR_TIMEOUT                              = -2134,
+        DMR_WAIT_ABANDONED                       = -2135,
+        DMR_EXECUTION_FAILED                     = -2136,
+        DEV_REQUEST_ALREADY_IN_USE               = -2137,
+        DEV_REQUEST_BUFFER_INVALID               = -2138,
+        DEV_REQUEST_BUFFER_MISALIGNED            = -2139,
+        DEV_ACCESS_DENIED                        = -2140,
+        DMR_PRELOAD_CHECK_FAILED                 = -2141,
+        DMR_CAMERA_DESCRIPTION_INVALID_PARAMETER = -2142,
+        DMR_FILE_ACCESS_ERROR                    = -2143,
+        DMR_INVALID_QUEUE_SELECTION              = -2144,
+        DMR_ACQUISITION_ENGINE_BUSY              = -2145,
+        //DMR_PSEUDO_LAST_ASSIGNED_ERROR_CODE,
+        //DMR_LAST_ASSIGNED_ERROR_CODE           = DMR_PSEUDO_LAST_ASSIGNED_ERROR_CODE - 2,
+        DMR_LAST_VALID_ERROR_CODE                = -2199,
+    }
 }
 
-#[repr(C)]
-#[derive(Debug)]
-pub enum TPROPHANDLING_ERROR {
-    PROPHANDLING_NO_ERROR                           = 0,
-    PROPHANDLING_NOT_A_LIST                         = -2000,
-    PROPHANDLING_NOT_A_PROPERTY                     = -2001,
-    PROPHANDLING_NOT_A_METHOD                       = -2002,
-    PROPHANDLING_NO_READ_RIGHTS                     = -2003,
-    PROPHANDLING_NO_WRITE_RIGHTS                    = -2004,
-    PROPHANDLING_NO_MODIFY_SIZE_RIGHTS              = -2005,
-    PROPHANDLING_INCOMPATIBLE_COMPONENTS            = -2006,
-    PROPHANDLING_NO_USER_ALLOCATED_MEMORY           = -2007,
-    PROPHANDLING_UNSUPPORTED_PARAMETER              = -2008,
-    PROPHANDLING_SIZE_MISMATCH                      = -2009,
-    PROPHANDLING_IMPLEMENTATION_MISSING             = -2010,
-    PROPHANDLING_ACCESSTOKEN_CREATION_FAILED        = -2011,
-    PROPHANDLING_INVALID_PROP_VALUE                 = -2012,
-    PROPHANDLING_PROP_TRANSLATION_TABLE_CORRUPTED   = -2013,
-    PROPHANDLING_PROP_VAL_ID_OUT_OF_BOUNDS          = -2014,
-    PROPHANDLING_PROP_TRANSLATION_TABLE_NOT_DEFINED = -2015,
-    PROPHANDLING_INVALID_PROP_VALUE_TYPE            = -2016,
-    PROPHANDLING_PROP_VAL_TOO_LARGE                 = -2017,
-    PROPHANDLING_PROP_VAL_TOO_SMALL                 = -2018,
-    PROPHANDLING_COMPONENT_NOT_FOUND                = -2019,
-    PROPHANDLING_LIST_ID_INVALID                    = -2020,
-    PROPHANDLING_COMPONENT_ID_INVALID               = -2021,
-    PROPHANDLING_LIST_ENTRY_OCCUPIED                = -2022,
-    PROPHANDLING_COMPONENT_HAS_OWNER_ALREADY        = -2023,
-    PROPHANDLING_COMPONENT_ALREADY_REGISTERED       = -2024,
-    PROPHANDLING_LIST_CANT_ACCESS_DATA              = -2025,
-    PROPHANDLING_METHOD_PTR_INVALID                 = -2026,
-    PROPHANDLING_METHOD_INVALID_PARAM_LIST          = -2027,
-    PROPHANDLING_SWIG_ERROR                         = -2028,
-    PROPHANDLING_INVALID_INPUT_PARAMETER            = -2029,
-    PROPHANDLING_COMPONENT_NO_CALLBACK_REGISTERED   = -2030,
-    PROPHANDLING_INPUT_BUFFER_TOO_SMALL             = -2031,
-    PROPHANDLING_WRONG_PARAM_COUNT                  = -2032,
-    PROPHANDLING_UNSUPPORTED_OPERATION              = -2033,
-    PROPHANDLING_CANT_SERIALIZE_DATA                = -2034,
-    PROPHANDLING_INVALID_FILE_CONTENT               = -2035,
-    PROPHANDLING_CANT_ALLOCATE_LIST                 = -2036,
-    PROPHANDLING_CANT_REGISTER_COMPONENT            = -2037,
-    PROPHANDLING_PROP_VALIDATION_FAILED             = -2038,
-    //PROPHANDLING_PSEUDO_LAST_ASSIGNED_ERROR_CODE,
-    //PROPHANDLING_LAST_ASSIGNED_ERROR_CODE         = PROPHANDLING_PSEUDO_LAST_ASSIGNED_ERROR_CODE - 2,
-    PROPHANDLING_LAST_VALID_ERROR_CODE              = -2099,
+custom_derive! {
+    #[repr(C)]
+    #[derive(Debug, TryFrom(i32))]
+    pub enum TPROPHANDLING_ERROR {
+        PROPHANDLING_NO_ERROR                           = 0,
+        PROPHANDLING_NOT_A_LIST                         = -2000,
+        PROPHANDLING_NOT_A_PROPERTY                     = -2001,
+        PROPHANDLING_NOT_A_METHOD                       = -2002,
+        PROPHANDLING_NO_READ_RIGHTS                     = -2003,
+        PROPHANDLING_NO_WRITE_RIGHTS                    = -2004,
+        PROPHANDLING_NO_MODIFY_SIZE_RIGHTS              = -2005,
+        PROPHANDLING_INCOMPATIBLE_COMPONENTS            = -2006,
+        PROPHANDLING_NO_USER_ALLOCATED_MEMORY           = -2007,
+        PROPHANDLING_UNSUPPORTED_PARAMETER              = -2008,
+        PROPHANDLING_SIZE_MISMATCH                      = -2009,
+        PROPHANDLING_IMPLEMENTATION_MISSING             = -2010,
+        PROPHANDLING_ACCESSTOKEN_CREATION_FAILED        = -2011,
+        PROPHANDLING_INVALID_PROP_VALUE                 = -2012,
+        PROPHANDLING_PROP_TRANSLATION_TABLE_CORRUPTED   = -2013,
+        PROPHANDLING_PROP_VAL_ID_OUT_OF_BOUNDS          = -2014,
+        PROPHANDLING_PROP_TRANSLATION_TABLE_NOT_DEFINED = -2015,
+        PROPHANDLING_INVALID_PROP_VALUE_TYPE            = -2016,
+        PROPHANDLING_PROP_VAL_TOO_LARGE                 = -2017,
+        PROPHANDLING_PROP_VAL_TOO_SMALL                 = -2018,
+        PROPHANDLING_COMPONENT_NOT_FOUND                = -2019,
+        PROPHANDLING_LIST_ID_INVALID                    = -2020,
+        PROPHANDLING_COMPONENT_ID_INVALID               = -2021,
+        PROPHANDLING_LIST_ENTRY_OCCUPIED                = -2022,
+        PROPHANDLING_COMPONENT_HAS_OWNER_ALREADY        = -2023,
+        PROPHANDLING_COMPONENT_ALREADY_REGISTERED       = -2024,
+        PROPHANDLING_LIST_CANT_ACCESS_DATA              = -2025,
+        PROPHANDLING_METHOD_PTR_INVALID                 = -2026,
+        PROPHANDLING_METHOD_INVALID_PARAM_LIST          = -2027,
+        PROPHANDLING_SWIG_ERROR                         = -2028,
+        PROPHANDLING_INVALID_INPUT_PARAMETER            = -2029,
+        PROPHANDLING_COMPONENT_NO_CALLBACK_REGISTERED   = -2030,
+        PROPHANDLING_INPUT_BUFFER_TOO_SMALL             = -2031,
+        PROPHANDLING_WRONG_PARAM_COUNT                  = -2032,
+        PROPHANDLING_UNSUPPORTED_OPERATION              = -2033,
+        PROPHANDLING_CANT_SERIALIZE_DATA                = -2034,
+        PROPHANDLING_INVALID_FILE_CONTENT               = -2035,
+        PROPHANDLING_CANT_ALLOCATE_LIST                 = -2036,
+        PROPHANDLING_CANT_REGISTER_COMPONENT            = -2037,
+        PROPHANDLING_PROP_VALIDATION_FAILED             = -2038,
+        //PROPHANDLING_PSEUDO_LAST_ASSIGNED_ERROR_CODE,
+        //PROPHANDLING_LAST_ASSIGNED_ERROR_CODE         = PROPHANDLING_PSEUDO_LAST_ASSIGNED_ERROR_CODE - 2,
+        PROPHANDLING_LAST_VALID_ERROR_CODE              = -2099,
+    }
 }
 
 #[repr(C)]
@@ -406,8 +411,8 @@ macro_rules! getset {
         getter!($get, $prop, $typ);
         setter!($set, $prop, $typ);
     };
-    ($get:ident, $set:ident, $prop:expr, $rty:ty as $cty:ty as $from:ident) => {
-        getset!($get, $set, $prop, r: $rty => r as $cty, c: $cty => FromPrimitive::$from(c).unwrap());
+    ($get:ident, $set:ident, $prop:expr, $rty:ty as $cty:ty) => {
+        getset!($get, $set, $prop, r: $rty => r as $cty, c: $cty => TryFrom::try_from(c).unwrap());
     };
     ($get:ident, $set:ident, $prop:expr, $rvar:ident : $rty:ty => $r2c:expr, $cvar:ident : $cty:ty => $c2r:expr) => {
         getter!($get, $prop, $rty, $cvar: $cty => $c2r);
@@ -436,12 +441,12 @@ impl Device {
     getset!(get_bin_y,         set_bin_y,         HOBJ(0x84000B), i64);
     getset!(get_decimate_x,    set_decimate_x,    HOBJ(0x84000C), i64);
     getset!(get_decimate_y,    set_decimate_y,    HOBJ(0x84000D), i64);
-    getset!(get_pixel_format,  set_pixel_format,  HOBJ(0x840008), settings::PixelFormat       as i64 as from_i64);
+    getset!(get_pixel_format,  set_pixel_format,  HOBJ(0x840008), settings::PixelFormat       as i64);
     getset!(get_afr_enabled,   set_afr_enabled,   HOBJ(0x850017), b: bool => b as i64, i: i64 => i == 1);
     getset!(get_afr,           set_afr,           HOBJ(0x850018), f64);
-    getset!(get_color_proc,    set_color_proc,    HOBJ(0x5e0008), settings::ColorProc         as i32 as from_i32);
+    getset!(get_color_proc,    set_color_proc,    HOBJ(0x5e0008), settings::ColorProc         as i32);
     getset!(get_scale_enabled, set_scale_enabled, HOBJ(0x800001), b: bool => b as i32, i: i32 => i == 1);
-    getset!(get_scale_mode,    set_scale_mode,    HOBJ(0x800002), settings::InterpolationMode as i32 as from_i32);
+    getset!(get_scale_mode,    set_scale_mode,    HOBJ(0x800002), settings::InterpolationMode as i32);
     getset!(get_scale_width,   set_scale_width,   HOBJ(0x800003), i32);
     getset!(get_scale_height,  set_scale_height,  HOBJ(0x800004), i32);
     getset!(get_acq_fr_enable, set_acq_fr_enable, HOBJ(0x850017), b: bool => b as i64, i: i64 => i == 1);
