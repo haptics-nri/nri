@@ -8,6 +8,7 @@ use std::io::{Write, BufRead};
 use std::fs::{self, File};
 use std::path::PathBuf;
 use std::{fmt, env, thread};
+use std::time::Duration;
 use ::teensy::ParkState;
 use ::comms::CmdFrom;
 use super::ws;
@@ -322,7 +323,7 @@ impl FlowCmd {
                 println!("Flow starting service {}", service);
                 assert!(rpc!(tx, CmdFrom::Start, service.clone()).unwrap());
                 println!("Flow waiting for service {} to start", service);
-                thread::sleep_ms(2000);
+                thread::sleep(Duration::from_millis(2000));
                 println!("Flow done waiting for service {}", service);
             }
             FlowCmd::Stop(ref service) => {

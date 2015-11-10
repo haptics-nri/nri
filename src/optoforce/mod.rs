@@ -53,6 +53,7 @@ group_attr!{
     use std::io::Write;
     use std::default::Default;
     use std::sync::mpsc::Sender;
+    use std::time::Duration;
     use ::comms::{Controllable, CmdFrom, Block};
     use ::scribe::{Writer, Writable};
 
@@ -82,7 +83,7 @@ group_attr!{
             fn setup(_: Sender<CmdFrom>, _: Option<String>) -> Optoforce {
                 let dev = wrapper::Device::new(Default::default());
                 dev.connect(wrapper::ConnectOptions { path: "/dev/ttyOPTO", ..Default::default() }).unwrap();
-                thread::sleep_ms(100);
+                thread::sleep(Duration::from_millis(100));
                 dev.set(wrapper::Settings::new()
                         .set_speed(wrapper::settings::Speed::Hz1000)
                        );

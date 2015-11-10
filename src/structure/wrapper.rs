@@ -10,6 +10,7 @@ use std::ffi::CString;
 use std::cell::Cell;
 use std::ops::Deref;
 use std::slice;
+use std::time::Duration;
 
 custom_derive! {
     #[repr(C)]
@@ -257,7 +258,7 @@ pub fn initialize() -> Result<(), OniError> {
             return Err(OniError::Error);
         },
     }
-    thread::sleep_ms(5000);
+    thread::sleep(Duration::from_millis(5000));
     */
     status2result!(unsafe { oniInitialize(2) })
 }
