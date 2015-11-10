@@ -5,6 +5,7 @@ target-nightly
 *.swp
 *.swo
 *.swn
+*.swm
 Session.vim
 *.dat
 *.png
