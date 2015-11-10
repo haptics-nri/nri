@@ -10,64 +10,38 @@ opt-level = 3
 debug = true
 
 [features]
-default = ["watch"]
-watch = ["handlebars-iron/watch"]
 nightly = []
 
 [dependencies]
-log = "*"
-env_logger = "*"
-libc = "*"
-enum_primitive = "*"
-#lazy_static = "*"
-time = "*"
-chrono = "*"
-image = "*"
-hprof = "*"
-#ioctl-rs = "*"
-num = "*"
-serial = "*"
-csv = "*"
-uuid = "*"
-threadpool = "*"
-abort_on_panic = "*"
-dbus = "*"
-notify = "*"
+log = "0.3"
+env_logger = "0.3"
+libc = "0.2"
+lazy_static = "0.1"
+custom_derive = "0.1"
+conv = "0.3"
+time = "0.1"
+chrono = "0.2"
+image = "0.4"
+hprof = "0.1"
+serial = "0.3"
+csv = "0.14"
+uuid = "0.1"
+abort_on_panic = "1.0"
+notify = "2.4"
 
 # stuff that I wrote
-guilt-by-association = "*"
+guilt-by-association = "0.2"
 
 # iron deps
-iron = "*"
-handlebars-iron = "*"
-handlebars = "*"
-staticfile = { version = "*", default-features = false }
-mount = "*"
-hyper = "*"
-router = "*"
-urlencoded = "*"
-url = "*"
-rustc-serialize = "*"
-websocket = "*"
-
-#[dependencies.guilt-by-association]
-#path = "/Users/alex/Programming/rust/guilt-by-association"
-
-#[dependencies.websocket] # take this out once reem bumps iron to hyper 0.6
-#git = "git://github.com/haptics-nri/rust-websocket"
-
-#[dependencies.ioctl-rs]
-#git = "git://github.com/haptics-nri/ioctl-rs"
-#branch = "usbdevfs"
-
-[dependencies.lodepng] # waiting for cargo publish
-git = "git://github.com/durka/lodepng-rust"
-branch = "stabilize"
-
-[dependencies.lazy_static] # waiting for cargo publish
-git = "git://github.com/kimundi/lazy-static.rs"
-
-[dependencies.custom_derive] # waiting for PR accept
-git = "git://github.com/durka/rust-custom-derive"
-branch = "export-tryfrom"
+iron = "0.2"
+handlebars-iron = "0.9"
+handlebars = "0.11"
+staticfile = { version = "0.0.6", default-features = false }
+mount = "0.0.9"
+hyper = "0.6"
+router = "0.0.15"
+urlencoded = "0.2"
+url = "0.2"
+rustc-serialize = "0.3" # TODO migrate to serde
+websocket = "0.13"
 
