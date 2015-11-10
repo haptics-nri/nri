@@ -196,17 +196,11 @@ use structure::Structure;
 use bluefox::Bluefox;
 use biotac::Biotac;
 
-#[macro_use]
-extern crate log;
-#[macro_use]
-extern crate enum_primitive;
-#[macro_use]
-extern crate custom_derive;
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate abort_on_panic;
-extern crate num;
+#[macro_use] extern crate log;
+#[macro_use] extern crate custom_derive;
+#[macro_use] extern crate conv;
+#[macro_use] extern crate lazy_static;
+#[macro_use] extern crate abort_on_panic;
 extern crate env_logger;
 extern crate hprof;
 extern crate chrono;

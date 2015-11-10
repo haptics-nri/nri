@@ -2,10 +2,11 @@ extern crate websocket as ws;
 
 use std::collections::HashMap;
 use std::sync::{mpsc, Mutex};
-use std::thread;
+use std::{thread, str};
 use ::comms::CmdFrom;
 use super::config;
 pub use self::ws::{Sender, Receiver, Message};
+use self::ws::message::Type as MsgType;
 
 lazy_static! {
     pub static ref RPC_SENDERS: Mutex<HashMap<usize, mpsc::Sender<String>>>                         = Mutex::new(HashMap::new());
@@ -15,7 +16,7 @@ lazy_static! {
 pub fn send(wsid: usize, msg: String) {
     let mut locked_senders = WS_SENDERS.lock().unwrap();
 
-    locked_senders[wsid].send_message(ws::Message::Text(msg)).unwrap();
+    locked_senders[wsid].send_message(&Message::text(msg)).unwrap();
 }
 
 pub fn rpc<T, F: Fn(String) -> Result<T, String>>(wsid: usize, prompt: String, validator: F) -> T {
@@ -26,7 +27,7 @@ pub fn rpc<T, F: Fn(String) -> Result<T, String>>(wsid: usize, prompt: String, v
             let mut locked_senders = WS_SENDERS.lock().unwrap();
             let mut locked_rpcs = RPC_SENDERS.lock().unwrap();
             locked_rpcs.insert(wsid, tx);
-            locked_senders[wsid].send_message(ws::Message::Text(prompt.to_owned())).unwrap();
+            locked_senders[wsid].send_message(&Message::text(prompt.to_owned())).unwrap();
         }
         rx.recv().unwrap()
     };
@@ -42,7 +43,7 @@ pub fn rpc<T, F: Fn(String) -> Result<T, String>>(wsid: usize, prompt: String, v
     }
 }
 
-pub fn spawn(ctx: mpsc::Sender<CmdFrom>, wsrx: mpsc::Receiver<Message>) -> thread::JoinHandle<()> {
+pub fn spawn(ctx: mpsc::Sender<CmdFrom>, wsrx: mpsc::Receiver<Message<'static>>) -> thread::JoinHandle<()> {
     thread::spawn(move || {
         let ws = ws::Server::bind(("0.0.0.0", config::WS_PORT)).unwrap();
 
@@ -52,14 +53,14 @@ pub fn spawn(ctx: mpsc::Sender<CmdFrom>, wsrx: mpsc::Receiver<Message>) -> threa
             // relay messages from above to all WS threads
             while let Ok(msg) = wsrx.recv() {
                 WS_SENDERS.lock().unwrap().iter_mut().map(|ref mut s| {
-                    s.send_message(ws::Message::clone(&msg)).unwrap(); // FIXME why is the typechecker so confused here
+                    s.send_message(&Message::clone(&msg)).unwrap(); // FIXME why is the typechecker so confused here
                 }).count();
             }
 
             println!("web: shutting down websocket servers");
             // kill all WS threads now
             WS_SENDERS.lock().unwrap().iter_mut().map(|ref mut s| {
-                s.send_message(ws::Message::Close(None)).unwrap();
+                s.send_message(&Message::close()).unwrap();
             }).count();
         });
 
@@ -90,8 +91,7 @@ pub fn spawn(ctx: mpsc::Sender<CmdFrom>, wsrx: mpsc::Receiver<Message>) -> threa
             let mut locked_senders = WS_SENDERS.lock().unwrap();
             let wsid = locked_senders.len();
 
-            let message = ws::Message::Text(format!("hello {}", wsid));
-            client.send_message(message).unwrap();
+            client.send_message(&Message::text(format!("hello {}", wsid))).unwrap();
 
             let (sender, mut receiver) = client.split();
             locked_senders.push(sender);
@@ -101,13 +101,14 @@ pub fn spawn(ctx: mpsc::Sender<CmdFrom>, wsrx: mpsc::Receiver<Message>) -> threa
                     let message = message.unwrap();
 
                     match message {
-                        ws::Message::Close(_) => {
+                        Message { opcode: MsgType::Close, .. } => {
                             println!("Websocket client {} disconnected", ip);
                             return;
                         },
-                        ws::Message::Text(text) => {
-                            println!("Received WS text {}", text);
-                            if text.starts_with("RPC") {
+                        Message { opcode: MsgType::Text, payload: text, .. } => {
+                            println!("Received WS text {:?}", str::from_utf8(&text).unwrap_or(&*format!("{:?}", text)));
+                            if text.starts_with(b"RPC") {
+                                let text = str::from_utf8(&text).unwrap();
                                 let space = text.find(' ').unwrap();
                                 let id = text[3..space].parse::<usize>().unwrap();
                                 let msg = text[space+1..].to_owned();
@@ -118,10 +119,10 @@ pub fn spawn(ctx: mpsc::Sender<CmdFrom>, wsrx: mpsc::Receiver<Message>) -> threa
                                 if let Some(rpc) = locked_rpcs.get(&id) {
                                     rpc.send(msg).unwrap();
                                 } else {
-                                    locked_senders[id].send_message(ws::Message::Text("RPC ERROR: nobody listening".to_owned())).unwrap();
+                                    locked_senders[id].send_message(&Message::text("RPC ERROR: nobody listening".to_owned())).unwrap();
                                 }
                             } else {
-                                cctx.send(CmdFrom::Data(text)).unwrap();
+                                cctx.send(CmdFrom::Data(str::from_utf8(&text).unwrap().to_owned())).unwrap();
                             }
                         },
                         _ => ()

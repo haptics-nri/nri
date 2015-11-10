@@ -300,7 +300,7 @@ pub struct Web {
     websocket: JoinHandle<()>,
 
     /// Private channel for sending events to WebSocket clients
-    wstx: mpsc::Sender<ws::Message>,
+    wstx: mpsc::Sender<ws::Message<'static>>,
 }
 
 guilty!{
@@ -337,7 +337,7 @@ guilty!{
 
         fn step(&mut self, data: Option<String>) {
             if let Some(d) = data {
-                self.wstx.send(ws::Message::Text(d)).unwrap();
+                self.wstx.send(ws::Message::text(d)).unwrap();
             }
         }
 

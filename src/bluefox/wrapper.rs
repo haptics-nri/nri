@@ -204,9 +204,9 @@ pub enum PixelFormat {
 }
 
 pub mod settings {
-    enum_from_primitive! {
+    custom_derive! {
         #[repr(C)]
-        #[derive(Copy, Clone, Debug)]
+        #[derive(Copy, Clone, Debug, TryFrom(i64))]
         pub enum PixelFormat {
             BayerGR8      = 17301512,
             BayerGR10     = 17825804,
@@ -223,9 +223,9 @@ pub mod settings {
         }
     }
 
-    enum_from_primitive! {
+    custom_derive! {
         #[repr(C)]
-        #[derive(Copy, Clone, Debug)]
+        #[derive(Copy, Clone, Debug, TryFrom(i32))]
         pub enum ColorProc {
             Auto             = 0,
             Raw              = 1,
@@ -235,9 +235,9 @@ pub mod settings {
         }
     }
 
-    enum_from_primitive! {
+    custom_derive! {
         #[repr(C)]
-        #[derive(Copy, Clone, Debug)]
+        #[derive(Copy, Clone, Debug, TryFrom(i32))]
         pub enum InterpolationMode {
             NearestNeighbor = 0,
             Linear          = 1,
