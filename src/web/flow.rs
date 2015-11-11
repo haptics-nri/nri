@@ -151,7 +151,7 @@ impl Flow {
                                .map(|s| s.trim_right().to_owned())
                                .peekable();
                           
-        let name = try!(lines.find(|s| s.len() > 0).ok_or((0, "Empty file")));
+        let name = try!(lines.find(|s| !s.is_empty()).ok_or((0, "Empty file")));
         let mut states = vec![];
         
         let mut i = 0;
@@ -159,7 +159,7 @@ impl Flow {
             i += 1;
             let header = lines.next().unwrap();
             
-            if header.len() == 0 { continue; }
+            if header.is_empty() { continue; }
             let header = header.split("=>").collect::<Vec<_>>();
             if header.len() > 2 { return Err((i, "too many arrows")); }
             
