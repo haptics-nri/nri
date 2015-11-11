@@ -83,9 +83,10 @@ impl Device {
     }
 
     pub fn connect(&self, opt: ConnectOptions) -> Result<(), ()> {
-        match unsafe { lofa_sensor_connect(self.pdev, c_str!(opt.path), opt.baud) } {
-            true => Ok(()),
-            false => Err(()),
+        if unsafe { lofa_sensor_connect(self.pdev, c_str!(opt.path), opt.baud) } {
+            Ok(())
+        } else {
+            Err(())
         }
     }
 

@@ -187,6 +187,7 @@ use std::thread;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{channel, Sender};
 use std::collections::HashMap;
+use std::time::Duration;
 use comms::{Controllable, CmdTo, CmdFrom, Power};
 use cli::CLI;
 use web::Web;
@@ -362,7 +363,7 @@ fn main() {
         let mut services = rxspawn!(reply_tx; CLI, Web, Teensy, Optoforce, Structure, Bluefox, Optoforce, Biotac);
         let mut timers = HashMap::new();
 
-        thread::sleep_ms(500); // wait for threads to start
+        thread::sleep(Duration::from_millis(500)); // wait for threads to start
 
         start(&services, "cli".to_owned());
         start(&services, "web".to_owned());

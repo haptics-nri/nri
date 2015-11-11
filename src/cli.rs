@@ -5,6 +5,7 @@ use std::{env, thread};
 use std::io::{self, BufRead, Write};
 use std::process::Command;
 use std::sync::mpsc::Sender;
+use std::time::Duration;
 
 /// Controllable struct for the CLI
 pub struct CLI {
@@ -38,8 +39,8 @@ guilty!{
                         "cd" => { env::set_current_dir(words.next().unwrap()).unwrap(); },
                         "sleep" => {
                             if let Some(ms_str) = words.next() {
-                                if let Ok(ms) = ms_str.parse::<u32>() {
-                                    thread::sleep_ms(ms);
+                                if let Ok(ms) = ms_str.parse::<u64>() {
+                                    thread::sleep(Duration::from_millis(ms));
                                 } else {
                                     errorln!("Invalid millisecond value");
                                 }

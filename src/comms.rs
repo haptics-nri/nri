@@ -51,7 +51,7 @@ pub enum CmdFrom {
     /// Schedule the sending thread to be killed in x ms
     Timeout {
         thread: &'static str,
-        ms: u32,
+        ms: u64,
     },
     /// Cancel a killing scheduled with Timeout
     Timein {
