@@ -1,0 +1,495 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?><RegisterDescription MajorVersion="6" MinorVersion="0" ModelName="mvGenTL_DataStream" ProductGuid="1B7148A1-2EA9-48F5-A3D1-2BF80B7EAC11" SchemaMajorVersion="1" SchemaMinorVersion="1" SchemaSubMinorVersion="0" StandardNameSpace="GEV" SubMinorVersion="0" ToolTip="MATRIX VISION GenICam GenTL data stream interface" VendorName="MATRIX_VISION" VersionGuid="FC3B6BCC-778B-47C0-93BC-3BBB11B316C0">
+  <!-- =================================================================================
+       == Categories                                                                  ==
+       ================================================================================= -->
+  <Category Name="Root" NameSpace="Standard">
+    <ToolTip>Provides the Root of the GenICam features tree.</ToolTip>
+    <Description>Provides the Root of the GenICam features tree.</Description>
+    <DisplayName>Root</DisplayName>
+    <pFeature>DataStream</pFeature>
+  <IsFeature>Yes</IsFeature></Category>
+  <Category Name="DataStream" NameSpace="Standard">
+    <ToolTip>Category that contains items that belong to the data stream module of the transport layer.</ToolTip>
+    <Description>The DataStream category contains items that belong to the data stream module of the transport layer.</Description>
+    <DisplayName>Data Stream</DisplayName>
+    <pFeature>StreamID</pFeature>
+    <pFeature>StreamAnnouncedBufferCount</pFeature>
+    <pFeature>StreamBufferHandlingMode</pFeature>
+    <pFeature>StreamAnnounceBufferMinimum</pFeature>
+    <pFeature>mvStreamAnnounceBufferMaximum</pFeature>
+    <pFeature>StreamType</pFeature>
+    <pFeature>mvStreamDriverTechnology</pFeature>
+    <pFeature>mvPacketResend</pFeature>
+  <pDependent>Root</pDependent><IsFeature>Yes</IsFeature></Category>
+  <Category Name="mvPacketResend" NameSpace="Custom">
+    <ToolTip>Contains MATRIX VISION specific features to control GigE Vision data resend behaviour.</ToolTip>
+    <Description>This category contains MATRIX VISION specific features to control GigE Vision data resend behaviour.</Description>
+    <DisplayName>mv Packet Resend</DisplayName>
+    <Visibility>Expert</Visibility>
+    <pFeature>mvResendActive</pFeature>
+    <pFeature>mvResendMode</pFeature>
+    <pFeature>mvResendBatchingActive</pFeature>
+    <pFeature>mvResendCaptureWindowSize</pFeature>
+    <pFeature>mvResendThreshold</pFeature>
+    <pFeature>mvResendRequestMax</pFeature>
+    <pFeature>mvResendRequestCredits</pFeature>
+    <pFeature>mvResendResponseTimeout</pFeature>
+    <pFeature>mvResendsPerTimeout</pFeature>
+    <pFeature>mvResendFeaturesLocked</pFeature>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><IsFeature>Yes</IsFeature></Category>
+  <!-- =================================================================================
+       == Registers                                                                   ==
+       ================================================================================= -->
+  <IntReg Name="mvResendResponseTimeout_InqMin" NameSpace="Custom">
+    <Visibility>Invisible</Visibility>
+    <Address>0x02000000</Address>
+    <Length>4</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>StreamPort</pPort>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pDependent>mvResendResponseTimeout</pDependent><pTerminal>mvResendResponseTimeout_InqMin</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <IntReg Name="mvResendResponseTimeout_InqMax" NameSpace="Custom">
+    <Visibility>Invisible</Visibility>
+    <Address>0x02000004</Address>
+    <Length>4</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>StreamPort</pPort>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pDependent>mvResendResponseTimeout</pDependent><pTerminal>mvResendResponseTimeout_InqMax</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <StringReg Name="StreamID" NameSpace="Standard">
+    <ToolTip>Device wide unique ID for this stream.</ToolTip>
+    <Description>This is a read only element. It is a string that indicates a device wide unique identifier for this stream.</Description>
+    <DisplayName>Stream ID</DisplayName>
+    <Address>0x02000008</Address>
+    <Length>128</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>StreamPort</pPort>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pTerminal>StreamID</pTerminal><IsFeature>Yes</IsFeature></StringReg>
+  <IntReg Name="StreamAnnouncedBufferCount_CtrlValue" NameSpace="Custom">
+    <ToolTip>Number of announced (known) buffers on this stream. This value is volatile. It may change if additional buffers are announced and/or buffers are revoked by the GenTL Consumer.</ToolTip>
+    <Description>This is a read-only feature. It indicates the number of announced (known) buffers on this stream. This value is volatile. It may change if additional buffers are announced and/or buffers are revoked by the GenTL Consumer.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x02000088</Address>
+    <Length>4</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>StreamPort</pPort>
+    <Cachable>NoCache</Cachable>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>StreamAnnouncedBufferCount</pDependent><pTerminal>StreamAnnouncedBufferCount_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Integer Name="StreamAnnouncedBufferCount" NameSpace="Standard">
+    <ToolTip>Number of announced (known) buffers on this stream. This value is volatile. It may change if additional buffers are announced and/or buffers are revoked by the GenTL Consumer.</ToolTip>
+    <Description>This is a read-only feature. It indicates the number of announced (known) buffers on this stream. This value is volatile. It may change if additional buffers are announced and/or buffers are revoked by the GenTL Consumer.</Description>
+    <DisplayName>Stream Announced Buffer Count</DisplayName>
+    <pValue>StreamAnnouncedBufferCount_CtrlValue</pValue>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pTerminal>StreamAnnouncedBufferCount_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Integer>
+  <IntReg Name="StreamBufferHandlingMode_CtrlValue" NameSpace="Custom">
+    <ToolTip>Allows to select the buffer handling mode for the stream.</ToolTip>
+    <Description>This enumeration allows the selection of the buffer handling mode for the stream.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x01000000</Address>
+    <Length>4</Length>
+    <AccessMode>RW</AccessMode>
+    <pPort>StreamPort</pPort>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>StreamBufferHandlingMode</pDependent><pTerminal>StreamBufferHandlingMode_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <EnumEntry Name="EnumEntry_StreamBufferHandlingMode_OldestFirst" NameSpace="Standard">
+      <ToolTip>Indicates that this stream is using the default acquisition mode.</ToolTip>
+      <Description>This enumeration value indicates that this stream is using the default acquisition mode.</Description>
+      <DisplayName>OldestFirst</DisplayName>
+      <Value>0</Value>
+    <Symbolic>OldestFirst</Symbolic>
+<pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>StreamBufferHandlingMode</pDependent><pTerminal>EnumEntry_StreamBufferHandlingMode_OldestFirst</pTerminal><IsFeature>No</IsFeature></EnumEntry>
+<Enumeration Name="StreamBufferHandlingMode" NameSpace="Standard">
+    <ToolTip>Allows to select the buffer handling mode for the stream.</ToolTip>
+    <Description>This enumeration allows the selection of the buffer handling mode for the stream.</Description>
+    <DisplayName>StreamBufferHandlingMode</DisplayName>
+    <pEnumEntry>EnumEntry_StreamBufferHandlingMode_OldestFirst</pEnumEntry>
+    <pValue>StreamBufferHandlingMode_CtrlValue</pValue>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pTerminal>StreamBufferHandlingMode_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Enumeration>
+  <IntReg Name="StreamAnnounceBufferMinimum_CtrlValue" NameSpace="Custom">
+    <ToolTip>Minimal number of buffers to announce to enable selected acquisition mode.</ToolTip>
+    <Description>This feature indicates the minimal number of buffers to announce to enable selected acquisition mode.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x0200008c</Address>
+    <Length>4</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>StreamPort</pPort>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>StreamAnnounceBufferMinimum</pDependent><pTerminal>StreamAnnounceBufferMinimum_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Integer Name="StreamAnnounceBufferMinimum" NameSpace="Standard">
+    <ToolTip>Minimal number of buffers to announce to enable selected acquisition mode.</ToolTip>
+    <Description>This feature indicates the minimal number of buffers to announce to enable selected acquisition mode.</Description>
+    <DisplayName>Stream Announce Buffer Minimum</DisplayName>
+    <pValue>StreamAnnounceBufferMinimum_CtrlValue</pValue>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pTerminal>StreamAnnounceBufferMinimum_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Integer>
+  <IntReg Name="mvStreamAnnounceBufferMaximum_CtrlValue" NameSpace="Custom">
+    <ToolTip>Maximal number of buffers to announce to enable selected acquisition mode.</ToolTip>
+    <Description>This feature indicates the maximal number of buffers to announce to enable selected acquisition mode.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x02000090</Address>
+    <Length>4</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>StreamPort</pPort>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvStreamAnnounceBufferMaximum</pDependent><pTerminal>mvStreamAnnounceBufferMaximum_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Integer Name="mvStreamAnnounceBufferMaximum" NameSpace="Custom">
+    <ToolTip>Maximal number of buffers to announce to enable selected acquisition mode.</ToolTip>
+    <Description>This feature indicates the maximal number of buffers to announce to enable selected acquisition mode.</Description>
+    <DisplayName>mv Stream Announce Buffer Maximum</DisplayName>
+    <pValue>mvStreamAnnounceBufferMaximum_CtrlValue</pValue>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pTerminal>mvStreamAnnounceBufferMaximum_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Integer>
+  <IntReg Name="StreamType_CtrlValue" NameSpace="Custom">
+    <ToolTip>Identifies the stream technology of the GenTL Producer implementation.</ToolTip>
+    <Description>This is a read only feature. This enumeration provides a value that indicates stream technology of the GenTL Producer implementation.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x02000094</Address>
+    <Length>4</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>StreamPort</pPort>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>StreamType</pDependent><pTerminal>StreamType_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <EnumEntry Name="EnumEntry_StreamType_Custom" NameSpace="Standard">
+      <ToolTip>Indicates that this is a device for a custom protocol.</ToolTip>
+      <Description>This enumeration value indicates that this is a device for a custom protocol.</Description>
+      <DisplayName>Custom</DisplayName>
+      <Value>1</Value>
+    <Symbolic>Custom</Symbolic>
+<pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>StreamType</pDependent><pTerminal>EnumEntry_StreamType_Custom</pTerminal><IsFeature>No</IsFeature></EnumEntry>
+<EnumEntry Name="EnumEntry_StreamType_GEV" NameSpace="Standard">
+      <ToolTip>Indicates that this is a stream for the GigE Vision protocol.</ToolTip>
+      <Description>This enumeration value indicates that this is a stream for the GigE Vision protocol.</Description>
+      <DisplayName>GigE Vision</DisplayName>
+      <Value>2</Value>
+    <Symbolic>GEV</Symbolic>
+<pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>StreamType</pDependent><pTerminal>EnumEntry_StreamType_GEV</pTerminal><IsFeature>No</IsFeature></EnumEntry>
+<EnumEntry Name="EnumEntry_StreamType_U3V" NameSpace="Standard">
+      <ToolTip>Indicates that this is a stream for the USB3 Vision protocol.</ToolTip>
+      <Description>This enumeration value indicates that this is a stream for the USB3 Vision protocol.</Description>
+      <DisplayName>USB3 Vision</DisplayName>
+      <Value>8</Value>
+    <Symbolic>U3V</Symbolic>
+<pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>StreamType</pDependent><pTerminal>EnumEntry_StreamType_U3V</pTerminal><IsFeature>No</IsFeature></EnumEntry>
+<Enumeration Name="StreamType" NameSpace="Standard">
+    <ToolTip>Identifies the stream technology of the GenTL Producer implementation.</ToolTip>
+    <Description>This is a read only feature. This enumeration provides a value that indicates stream technology of the GenTL Producer implementation.</Description>
+    <DisplayName>Stream Type</DisplayName>
+    <pEnumEntry>EnumEntry_StreamType_Custom</pEnumEntry>
+    <pEnumEntry>EnumEntry_StreamType_GEV</pEnumEntry>
+    <pEnumEntry>EnumEntry_StreamType_U3V</pEnumEntry>
+    <pValue>StreamType_CtrlValue</pValue>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pTerminal>StreamType_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Enumeration>
+  <StringReg Name="mvStreamDriverTechnology" NameSpace="Custom">
+    <ToolTip>The underlying driver technology used by this stream.</ToolTip>
+    <Description>This is a read only element. It is a string that contains the underlying driver technology used by this stream.</Description>
+    <DisplayName>mv Stream Driver Technology</DisplayName>
+    <Visibility>Expert</Visibility>
+    <Address>0x02000098</Address>
+    <Length>32</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>StreamPort</pPort>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pTerminal>mvStreamDriverTechnology</pTerminal><IsFeature>Yes</IsFeature></StringReg>
+  <IntReg Name="mvResendActive_CtrlValue" NameSpace="Custom">
+    <ToolTip>This feature controls if the stream will issue packet resend requests.</ToolTip>
+    <Description>This feature controls if the stream will issue packet resend requests.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x01000004</Address>
+    <Length>4</Length>
+    <AccessMode>RW</AccessMode>
+    <pPort>StreamPort</pPort>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pDependent>mvResendActive</pDependent><pTerminal>mvResendActive_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Boolean Name="mvResendActive" NameSpace="Custom">
+    <ToolTip>This feature controls if the stream will issue packet resend requests.</ToolTip>
+    <Description>This feature controls if the stream will issue packet resend requests.</Description>
+    <DisplayName>mv Resend Active</DisplayName>
+    <Visibility>Expert</Visibility>
+    <pIsImplemented>mvResendActive_InqPresence</pIsImplemented>
+    <pValue>mvResendActive_CtrlValue</pValue>
+    <OnValue>1</OnValue>
+    <OffValue>0</OffValue>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pTerminal>mvResendActive_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Boolean>
+  <IntReg Name="mvResendMode_CtrlValue" NameSpace="Custom">
+    <ToolTip>Indicates the mode the internal resend algorithm is working in.</ToolTip>
+    <Description>This feature indicates the mode the internal resend algorithm is working in.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x01000008</Address>
+    <Length>4</Length>
+    <AccessMode>RW</AccessMode>
+    <pPort>StreamPort</pPort>
+    <Sign>Signed</Sign>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pDependent>mvResendMode</pDependent><pTerminal>mvResendMode_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Integer Name="mvResendMode" NameSpace="Custom">
+    <ToolTip>Indicates the mode the internal resend algorithm is working in.</ToolTip>
+    <Description>This feature indicates the mode the internal resend algorithm is working in.</Description>
+    <DisplayName>mv Resend Mode</DisplayName>
+    <Visibility>Expert</Visibility>
+    <pIsImplemented>mvResendMode_InqPresence</pIsImplemented>
+    <pIsLocked>mvResendFeaturesLocked</pIsLocked>
+    <pValue>mvResendMode_CtrlValue</pValue>
+    <Representation>HexNumber</Representation>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pTerminal>mvResendMode_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Integer>
+  <IntReg Name="mvResendBatchingActive_CtrlValue" NameSpace="Custom">
+    <ToolTip>This feature controls if the stream will issue batched packet resend requests if it detects several consecutive missing packets.</ToolTip>
+    <Description>This feature controls if the stream will issue batched packet resend requests if it detects several consecutive missing packets.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x0100000c</Address>
+    <Length>4</Length>
+    <AccessMode>RW</AccessMode>
+    <pPort>StreamPort</pPort>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>mvResendBatchingActive</pDependent><pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pTerminal>mvResendBatchingActive_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Boolean Name="mvResendBatchingActive" NameSpace="Custom">
+    <ToolTip>This feature controls if the stream will issue batched packet resend requests if it detects several consecutive missing packets.</ToolTip>
+    <Description>This feature controls if the stream will issue batched packet resend requests if it detects several consecutive missing packets.</Description>
+    <DisplayName>mv Resend Batching Active</DisplayName>
+    <Visibility>Expert</Visibility>
+    <pIsImplemented>mvResendBatchingActive_InqPresence</pIsImplemented>
+    <pIsLocked>mvResendFeaturesLocked</pIsLocked>
+    <pValue>mvResendBatchingActive_CtrlValue</pValue>
+    <OnValue>1</OnValue>
+    <OffValue>0</OffValue>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pTerminal>mvResendBatchingActive_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Boolean>
+  <IntReg Name="mvResendCaptureWindowSize_CtrlValue" NameSpace="Custom">
+    <ToolTip>Indicates the width of the capture window.</ToolTip>
+    <Description>This feature indicates the width of the capture window in packets.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x01000010</Address>
+    <Length>4</Length>
+    <AccessMode>RW</AccessMode>
+    <pPort>StreamPort</pPort>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>mvResendCaptureWindowSize</pDependent><pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pTerminal>mvResendCaptureWindowSize_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Integer Name="mvResendCaptureWindowSize" NameSpace="Custom">
+    <ToolTip>Indicates the width of the capture window.</ToolTip>
+    <Description>This feature indicates the width of the capture window in packets.</Description>
+    <DisplayName>mv Resend Capture Window Size</DisplayName>
+    <Visibility>Expert</Visibility>
+    <pIsImplemented>mvResendCaptureWindowSize_InqPresence</pIsImplemented>
+    <pValue>mvResendCaptureWindowSize_CtrlValue</pValue>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pTerminal>mvResendCaptureWindowSize_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Integer>
+  <IntReg Name="mvResendThreshold_CtrlValue" NameSpace="Custom">
+    <ToolTip>Indicates the resend threshold within the capture window.</ToolTip>
+    <Description>This feature indicates the resend threshold within the capture window. If current packet ID and first missing packet ID are mvResendThreshold IDs apart the stream will issue a resend request.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x01000014</Address>
+    <Length>4</Length>
+    <AccessMode>RW</AccessMode>
+    <pPort>StreamPort</pPort>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>mvResendThreshold</pDependent><pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pTerminal>mvResendThreshold_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Integer Name="mvResendThreshold" NameSpace="Custom">
+    <ToolTip>Indicates the resend threshold within the capture window.</ToolTip>
+    <Description>This feature indicates the resend threshold within the capture window. If current packet ID and first missing packet ID are mvResendThreshold IDs apart the stream will issue a resend request.</Description>
+    <DisplayName>mv Resend Threshold</DisplayName>
+    <Visibility>Expert</Visibility>
+    <pIsImplemented>mvResendThreshold_InqPresence</pIsImplemented>
+    <pValue>mvResendThreshold_CtrlValue</pValue>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pTerminal>mvResendThreshold_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Integer>
+  <IntReg Name="mvResendRequestMax_CtrlValue" NameSpace="Custom">
+    <ToolTip>Indicates the maximum number of resend requests per packet to send to the device until the packet is considered as lost.</ToolTip>
+    <Description>This feature indicates the maximum number of resend requests per packet to send to the device until the packet is considered as lost.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x01000018</Address>
+    <Length>4</Length>
+    <AccessMode>RW</AccessMode>
+    <pPort>StreamPort</pPort>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>mvResendRequestMax</pDependent><pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pTerminal>mvResendRequestMax_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Integer Name="mvResendRequestMax" NameSpace="Custom">
+    <ToolTip>Indicates the maximum number of resend requests per packet to send to the device until the packet is considered as lost.</ToolTip>
+    <Description>This feature indicates the maximum number of resend requests per packet to send to the device until the packet is considered as lost.</Description>
+    <DisplayName>mv Resend Request Max</DisplayName>
+    <Visibility>Expert</Visibility>
+    <pIsImplemented>mvResendRequestMax_InqPresence</pIsImplemented>
+    <pValue>mvResendRequestMax_CtrlValue</pValue>
+    <Min>1</Min>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pTerminal>mvResendRequestMax_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Integer>
+  <FloatReg Name="mvResendRequestCredits_CtrlValue" NameSpace="Custom">
+    <ToolTip>Indicates the maximum number of resend requests in percent of payload packets per buffer to send to the device until the packet is considered as lost.</ToolTip>
+    <Description>This feature indicates the maximum number of resend requests in percent of payload packets per buffer to send to the device until the packet is considered as lost.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x0100001c</Address>
+    <Length>4</Length>
+    <AccessMode>RW</AccessMode>
+    <pPort>StreamPort</pPort>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pDependent>mvResendRequestCredits</pDependent><pTerminal>mvResendRequestCredits_CtrlValue</pTerminal><IsFeature>No</IsFeature></FloatReg>
+  <Float Name="mvResendRequestCredits" NameSpace="Custom">
+    <ToolTip>Indicates the maximum number of resend requests in percent of payload packets per buffer to send to the device until the packet is considered as lost.</ToolTip>
+    <Description>This feature indicates the maximum number of resend requests in percent of payload packets per buffer to send to the device until the packet is considered as lost.</Description>
+    <DisplayName>mv Resend Request Credits</DisplayName>
+    <Visibility>Expert</Visibility>
+    <pIsImplemented>mvResendRequestCredits_InqPresence</pIsImplemented>
+    <pValue>mvResendRequestCredits_CtrlValue</pValue>
+    <Min>1</Min>
+    <Max>500</Max>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pTerminal>mvResendRequestCredits_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Float>
+  <IntReg Name="mvResendResponseTimeout_CtrlValue" NameSpace="Custom">
+    <ToolTip>This feature controls the resend response timeout in milliseconds.</ToolTip>
+    <Description>This float value sets the resend response timeout in milliseconds. Whenever a requested packet does not arive wirthin this timer period it will be requested again until mvResendRequestMax resend requests for this packet have been issued.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x01000020</Address>
+    <Length>4</Length>
+    <AccessMode>RW</AccessMode>
+    <pPort>StreamPort</pPort>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pDependent>mvResendResponseTimeout</pDependent><pTerminal>mvResendResponseTimeout_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Integer Name="mvResendResponseTimeout" NameSpace="Custom">
+    <ToolTip>This feature controls the resend response timeout in milliseconds.</ToolTip>
+    <Description>This float value sets the resend response timeout in milliseconds. Whenever a requested packet does not arive wirthin this timer period it will be requested again until mvResendRequestMax resend requests for this packet have been issued.</Description>
+    <DisplayName>mv Resend Response Timeout</DisplayName>
+    <Visibility>Expert</Visibility>
+    <pIsImplemented>mvResendResponseTimeout_InqPresence</pIsImplemented>
+    <pValue>mvResendResponseTimeout_CtrlValue</pValue>
+    <pMin>mvResendResponseTimeout_InqMin</pMin>
+    <pMax>mvResendResponseTimeout_InqMax</pMax>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pTerminal>mvResendResponseTimeout_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Integer>
+  <IntReg Name="mvResendsPerTimeout_CtrlValue" NameSpace="Custom">
+    <ToolTip>Indicates the number of packets to be requested whenever the resend response timeout elapses.</ToolTip>
+    <Description>This feature indicates the number of packets to be requested whenever the resend response timeout elapses.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x01000024</Address>
+    <Length>4</Length>
+    <AccessMode>RW</AccessMode>
+    <pPort>StreamPort</pPort>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pDependent>mvResendsPerTimeout</pDependent><pTerminal>mvResendsPerTimeout_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Integer Name="mvResendsPerTimeout" NameSpace="Custom">
+    <ToolTip>Indicates the number of packets to be requested whenever the resend response timeout elapses.</ToolTip>
+    <Description>This feature indicates the number of packets to be requested whenever the resend response timeout elapses.</Description>
+    <DisplayName>mv Resends Per Timeout</DisplayName>
+    <Visibility>Expert</Visibility>
+    <pIsImplemented>mvResendsPerTimeout_InqPresence</pIsImplemented>
+    <pValue>mvResendsPerTimeout_CtrlValue</pValue>
+  <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pTerminal>mvResendsPerTimeout_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Integer>
+  <IntReg Name="mvResendFeaturesLocked_CtrlValue" NameSpace="Custom">
+    <ToolTip>Used by the driver to lock critical resend related parameters during the acquisition.</ToolTip>
+    <Description>Used by the driver to lock critical resend related parameters during the acquisition.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x020000b8</Address>
+    <Length>4</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>StreamPort</pPort>
+    <Sign>Signed</Sign>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>mvResendBatchingActive</pDependent><pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pDependent>mvResendMode</pDependent><pDependent>mvResendFeaturesLocked</pDependent><pTerminal>mvResendFeaturesLocked_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Integer Name="mvResendFeaturesLocked" NameSpace="Custom">
+    <ToolTip>Used by the driver to lock critical resend related parameters during the acquisition.</ToolTip>
+    <Description>Used by the driver to lock critical resend related parameters during the acquisition.</Description>
+    <DisplayName>mv Resend Features Locked</DisplayName>
+    <Visibility>Invisible</Visibility>
+    <pIsImplemented>mvResendFeaturesLocked_InqPresence</pIsImplemented>
+    <pValue>mvResendFeaturesLocked_CtrlValue</pValue>
+  <pDependent>mvResendBatchingActive</pDependent><pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pDependent>mvResendMode</pDependent><pTerminal>mvResendFeaturesLocked_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Integer>
+  <!-- =================================================================================
+       == IsImplemented nodes                                                         ==
+       ================================================================================= -->
+  <MaskedIntReg Name="mvResendActive_InqPresence" NameSpace="Custom">
+<Visibility>Invisible</Visibility>
+<Address>0x80000000</Address>
+<Length>4</Length>
+<AccessMode>RO</AccessMode>
+<pPort>StreamPort</pPort>
+<Endianess>LittleEndian</Endianess>
+      <LSB>0</LSB>
+<MSB>0</MSB>
+    <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pDependent>mvResendActive</pDependent><pTerminal>mvResendActive_InqPresence</pTerminal><IsFeature>No</IsFeature></MaskedIntReg>
+<MaskedIntReg Name="mvResendMode_InqPresence" NameSpace="Custom">
+<Visibility>Invisible</Visibility>
+<Address>0x80000000</Address>
+<Length>4</Length>
+<AccessMode>RO</AccessMode>
+<pPort>StreamPort</pPort>
+<Endianess>LittleEndian</Endianess>
+      <LSB>1</LSB>
+<MSB>1</MSB>
+    <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pDependent>mvResendMode</pDependent><pTerminal>mvResendMode_InqPresence</pTerminal><IsFeature>No</IsFeature></MaskedIntReg>
+<MaskedIntReg Name="mvResendBatchingActive_InqPresence" NameSpace="Custom">
+<Visibility>Invisible</Visibility>
+<Address>0x80000000</Address>
+<Length>4</Length>
+<AccessMode>RO</AccessMode>
+<pPort>StreamPort</pPort>
+<Endianess>LittleEndian</Endianess>
+      <LSB>2</LSB>
+<MSB>2</MSB>
+    <pDependent>mvResendBatchingActive</pDependent><pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pTerminal>mvResendBatchingActive_InqPresence</pTerminal><IsFeature>No</IsFeature></MaskedIntReg>
+<MaskedIntReg Name="mvResendCaptureWindowSize_InqPresence" NameSpace="Custom">
+<Visibility>Invisible</Visibility>
+<Address>0x80000000</Address>
+<Length>4</Length>
+<AccessMode>RO</AccessMode>
+<pPort>StreamPort</pPort>
+<Endianess>LittleEndian</Endianess>
+      <LSB>3</LSB>
+<MSB>3</MSB>
+    <pDependent>mvResendCaptureWindowSize</pDependent><pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pTerminal>mvResendCaptureWindowSize_InqPresence</pTerminal><IsFeature>No</IsFeature></MaskedIntReg>
+<MaskedIntReg Name="mvResendThreshold_InqPresence" NameSpace="Custom">
+<Visibility>Invisible</Visibility>
+<Address>0x80000000</Address>
+<Length>4</Length>
+<AccessMode>RO</AccessMode>
+<pPort>StreamPort</pPort>
+<Endianess>LittleEndian</Endianess>
+      <LSB>4</LSB>
+<MSB>4</MSB>
+    <pDependent>mvResendThreshold</pDependent><pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pTerminal>mvResendThreshold_InqPresence</pTerminal><IsFeature>No</IsFeature></MaskedIntReg>
+<MaskedIntReg Name="mvResendRequestMax_InqPresence" NameSpace="Custom">
+<Visibility>Invisible</Visibility>
+<Address>0x80000000</Address>
+<Length>4</Length>
+<AccessMode>RO</AccessMode>
+<pPort>StreamPort</pPort>
+<Endianess>LittleEndian</Endianess>
+      <LSB>5</LSB>
+<MSB>5</MSB>
+    <pDependent>mvResendRequestMax</pDependent><pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pTerminal>mvResendRequestMax_InqPresence</pTerminal><IsFeature>No</IsFeature></MaskedIntReg>
+<MaskedIntReg Name="mvResendRequestCredits_InqPresence" NameSpace="Custom">
+<Visibility>Invisible</Visibility>
+<Address>0x80000000</Address>
+<Length>4</Length>
+<AccessMode>RO</AccessMode>
+<pPort>StreamPort</pPort>
+<Endianess>LittleEndian</Endianess>
+      <LSB>6</LSB>
+<MSB>6</MSB>
+    <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pDependent>mvResendRequestCredits</pDependent><pTerminal>mvResendRequestCredits_InqPresence</pTerminal><IsFeature>No</IsFeature></MaskedIntReg>
+<MaskedIntReg Name="mvResendResponseTimeout_InqPresence" NameSpace="Custom">
+<Visibility>Invisible</Visibility>
+<Address>0x80000000</Address>
+<Length>4</Length>
+<AccessMode>RO</AccessMode>
+<pPort>StreamPort</pPort>
+<Endianess>LittleEndian</Endianess>
+      <LSB>7</LSB>
+<MSB>7</MSB>
+    <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pDependent>mvResendResponseTimeout</pDependent><pTerminal>mvResendResponseTimeout_InqPresence</pTerminal><IsFeature>No</IsFeature></MaskedIntReg>
+<MaskedIntReg Name="mvResendsPerTimeout_InqPresence" NameSpace="Custom">
+<Visibility>Invisible</Visibility>
+<Address>0x80000000</Address>
+<Length>4</Length>
+<AccessMode>RO</AccessMode>
+<pPort>StreamPort</pPort>
+<Endianess>LittleEndian</Endianess>
+      <LSB>8</LSB>
+<MSB>8</MSB>
+    <pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pDependent>mvResendsPerTimeout</pDependent><pTerminal>mvResendsPerTimeout_InqPresence</pTerminal><IsFeature>No</IsFeature></MaskedIntReg>
+<MaskedIntReg Name="mvResendFeaturesLocked_InqPresence" NameSpace="Custom">
+<Visibility>Invisible</Visibility>
+<Address>0x80000000</Address>
+<Length>4</Length>
+<AccessMode>RO</AccessMode>
+<pPort>StreamPort</pPort>
+<Endianess>LittleEndian</Endianess>
+      <LSB>9</LSB>
+<MSB>9</MSB>
+    <pDependent>mvResendBatchingActive</pDependent><pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>mvPacketResend</pDependent><pDependent>mvResendMode</pDependent><pDependent>mvResendFeaturesLocked</pDependent><pTerminal>mvResendFeaturesLocked_InqPresence</pTerminal><IsFeature>No</IsFeature></MaskedIntReg>
+  <!-- =================================================================================
+       == Ports                                                                       ==
+       ================================================================================= -->
+  <Port Name="StreamPort" NameSpace="Standard">
+    <ToolTip>Port giving access to the data stream module of the transport layer.</ToolTip>
+    <Description>Port giving access to the data stream module of the transport layer.</Description>
+  <pDependent>mvResendBatchingActive</pDependent><pDependent>mvResendCaptureWindowSize_CtrlValue</pDependent><pDependent>mvResendCaptureWindowSize</pDependent><pDependent>mvResendThreshold_CtrlValue</pDependent><pDependent>mvResendThreshold</pDependent><pDependent>mvResendRequestMax_CtrlValue</pDependent><pDependent>mvResendRequestMax</pDependent><pDependent>Root</pDependent><pDependent>DataStream</pDependent><pDependent>StreamType</pDependent><pDependent>mvPacketResend</pDependent><pDependent>mvResendResponseTimeout_InqMin</pDependent><pDependent>mvResendResponseTimeout_InqMax</pDependent><pDependent>StreamID</pDependent><pDependent>StreamAnnouncedBufferCount_CtrlValue</pDependent><pDependent>mvStreamDriverTechnology</pDependent><pDependent>mvResendActive_CtrlValue</pDependent><pDependent>mvResendActive</pDependent><pDependent>mvResendMode_CtrlValue</pDependent><pDependent>mvResendMode</pDependent><pDependent>mvResendBatchingActive_CtrlValue</pDependent><pDependent>mvStreamAnnounceBufferMaximum_CtrlValue</pDependent><pDependent>mvStreamAnnounceBufferMaximum</pDependent><pDependent>StreamType_CtrlValue</pDependent><pDependent>mvResendRequestCredits_CtrlValue</pDependent><pDependent>mvResendRequestCredits</pDependent><pDependent>mvResendResponseTimeout_CtrlValue</pDependent><pDependent>mvResendResponseTimeout</pDependent><pDependent>mvResendsPerTimeout_CtrlValue</pDependent><pDependent>mvResendsPerTimeout</pDependent><pDependent>mvResendFeaturesLocked_CtrlValue</pDependent><pDependent>mvResendFeaturesLocked</pDependent><pDependent>mvResendActive_InqPresence</pDependent><pDependent>StreamAnnouncedBufferCount</pDependent><pDependent>StreamBufferHandlingMode_CtrlValue</pDependent><pDependent>StreamBufferHandlingMode</pDependent><pDependent>StreamAnnounceBufferMinimum_CtrlValue</pDependent><pDependent>StreamAnnounceBufferMinimum</pDependent><pDependent>mvResendMode_InqPresence</pDependent><pDependent>mvResendBatchingActive_InqPresence</pDependent><pDependent>mvResendCaptureWindowSize_InqPresence</pDependent><pDependent>mvResendThreshold_InqPresence</pDependent><pDependent>mvResendRequestMax_InqPresence</pDependent><pDependent>mvResendRequestCredits_InqPresence</pDependent><pDependent>mvResendResponseTimeout_InqPresence</pDependent><pDependent>mvResendsPerTimeout_InqPresence</pDependent><pDependent>mvResendFeaturesLocked_InqPresence</pDependent><IsFeature>No</IsFeature></Port>
+</RegisterDescription>

@@ -1,0 +1,19 @@
+[package]
+name    = "teensy"
+version = "0.1.0"
+authors = ["Alex Burka <aburka@seas.upenn.edu>"]
+
+[profile.dev]
+opt-level = 3
+debug     = true
+
+[dependencies]
+utils                = { path = "../../utils"       }
+comms                = { path = "../../back/comms"  }
+scribe               = { path = "../../back/scribe" }
+guilt-by-association = "0.2"
+custom_derive        = "0.1"
+conv                 = "0.3"
+time                 = "0.1"
+serial               = "0.3"
+

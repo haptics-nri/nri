@@ -1,0 +1,15 @@
+[package]
+name    = "cli"
+version = "0.1.0"
+authors = ["Alex Burka <aburka@seas.upenn.edu>"]
+
+[profile.dev]
+opt-level = 3
+debug     = true
+
+[dependencies]
+utils                = { path = "../../utils"          }
+comms                = { path = "../../back/comms"     }
+teensy               = { path = "../../drivers/teensy" }
+guilt-by-association = "0.2"
+

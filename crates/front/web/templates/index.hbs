@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <title>NRI Sensing Rig Control Panel</title>
+
+        <link href="/css/bootstrap.min.css" rel="stylesheet">
+        <link href="/css/bootstrap-theme.min.css" rel="stylesheet">
+        <script src="/js/jquery.min.js"></script>
+        <script src="/js/bootstrap.min.js"></script>
+    </head>
+    <body>
+        <script type="text/javascript">
+            function alert(text, then) {
+                then = then || function () { console.log("alert modal dismissed by clicking OK"); };
+
+                $("#alert .modal-body").html(text);
+                $("#alert #ok").unbind('click.alert').bind('click.alert', then);
+                $("#alert").modal("show");
+            }
+            function confirm(text, thenyes, thenno) {
+                thenyes = thenyes || function () { console.log("confirm modal dismissed by clicking Yes"); };
+                thenno = thenno || function () { console.log("confirm modal dismissed by clicking No"); };
+
+                $("#confirm .modal-body").html(text);
+                $("#confirm #yes").unbind('click.confirm').bind('click.confirm', thenyes);
+                $("#confirm #no").unbind('click.confirm').bind('click.confirm', thenno);
+                $("#confirm").modal("show");
+            }
+            function prompt(text, thenok, thencancel) {
+                thenok = thenok || function (s) { console.log("prompt modal dismissed by clicking OK, contents \"" + s + "\""); };
+                thencancel = thencancel || function () { console.log("prompt modal cancelled"); };
+
+                $("#prompt #text").html(text);
+                $("#prompt #input").val("");
+                $("#prompt #ok").unbind('click.prompt').bind('click.prompt', function () { return thenok($("#prompt #input").val()); });
+                $("#prompt #cancel").unbind('click.prompt').bind('click.prompt', thencancel);
+                $("#prompt").modal("show");
+            }
+
+            function send(s) {
+                console.log("send " + s);
+                window.socket.send(s);
+            }
+
+            window.socket = new WebSocket("ws://{{server}}", "rust-websocket");
+            window.socket.onmessage = function (event) {
+                console.log(event.data.slice(0, 50).replace(/\n+/g, ''));
+                words = event.data.split(' ');
+                switch (words[0]) {
+                    case "hello":
+                        window.wsid = words[1];
+                        $(".wsid").each(function () { this.value = words[1]; });
+                        break;
+                    case "msg":
+                        alert(event.data.slice(event.data.indexOf(" ")));
+                        break;
+                    case "prompt":
+                        prompt(event.data.slice(event.data.indexOf(" ")), function (s) { send("RPC" + window.wsid + " " + s); });
+                        break;
+                    case "kick":
+                        $("." + words[1] + ".framenum").each(function () { this.innerHTML = words[2]; });
+                        $("." + words[1] + ".latest")  .each(function () { this.src       = words[3]; });
+                        break;
+                    case "panic":
+                        alert("The " + words[1] + " thread crashed! (" + words.slice(2).join(" ") + ")\n\nIf it was running, you may want to click Start again.");
+                        break;
+                    case "flow":
+                        $("#flows").html(event.data.slice(event.data.indexOf(" ")));
+                        break;
+                }
+            };
+            window.socket.onopen = function (event) {
+                console.log("Server connection ready!");
+            };
+            window.socket.onclose = function (event) {
+                console.log("Server connection lost!");
+            };
+            window.socket.onerror = function (event) {
+                console.log("Server connection error!");
+            };
+        </script>
+
+        <div class="container theme-showcase" role="main">
+            <div class="jumbotron" style="padding-left: 2em">
+                <h1>Control Panel</h1>
+
+                <div>
+                    <form id="poweroff"
+                          action="/nuc/poweroff"
+                          method="POST"
+                          target="response"
+                          style="display: inline">
+
+                        <input type="hidden"
+                               name="wsid"
+                               class="wsid"
+                               value="-1"/>
+                        <button onclick="confirm('NUC will shut down!',
+                                                 function () {
+                                                    $('#poweroff').submit();
+                                                 });
+                                                 return false"
+                                class="btn btn-danger">
+                            Shut down
+                        </button>
+
+                    </form>
+
+                    <form id="reboot"
+                          action="/nuc/reboot"
+                          method="POST"
+                          target="response"
+                          style="display: inline">
+
+                        <input type="hidden"
+                               name="wsid"
+                               class="wsid"
+                               value="-1"/>
+                        <button onclick="confirm('NUC will reboot!',
+                                                 function () {
+                                                    $('#reboot').submit();
+                                                 });
+                                                 return false"
+                                class="btn btn-danger">
+                            Reboot
+                        </button>
+
+                    </form>
+                </div>
+            </div>
+
+            <div class="page-header">
+                <form method="POST"
+                      target="response">
+                    <input type="hidden"
+                           name="wsid"
+                           class="wsid"
+                           value="-1"/>
+                    <hr/>
+                    <div id="flows">
+                        {{> flows}}
+                    </div>
+                </form>
+            </div>
+
+            <div class="page-header" style="padding-left: 2em; padding-bottom: 5em">
+                <h2>All Sensors</h2>
+                <form method="POST"
+                      target="response">
+                    <input type="hidden"
+                           name="wsid"
+                           class="wsid"
+                           value="-1"/>
+                    {{#each services}}
+                        <div class="container">
+                            <h3>{{name}}</h3>
+                            {{{extra}}}
+                            <p>
+                            <button formaction="/control/{{shortname}}/start"
+                                    type="submit"
+                                    class="btn btn-success">Start</button>
+                            <button formaction="/control/{{shortname}}/stop"
+                                    type="submit"
+                                    class="btn btn-danger">Stop</button>
+                            <button formaction="/control/{{shortname}}/kick"
+                                    type="submit"
+                                    class="btn btn-warning">Frame</button>
+                        </div>
+                    {{/each}}
+                </form>
+            </div>
+        </div>
+        <div style="position: fixed;
+                    bottom: 0;
+                    left: 0;
+                    width: 100%;
+                    padding-left: 1em;
+                    padding-right 1em;
+                    background: white;
+                    border-top: 1px solid black">
+            <h4>NUC Output</h4>
+            <iframe name="response" style="width: 95%; height: 2.5em"></iframe>
+        </div>
+        <div class="modal fade" id="alert">
+            <div class"modal-dialog" style="position: fixed;
+                                            top: 25%;
+                                            left: 10%;
+                                            width: 80%;
+                                            background: white;
+                                            border: 1px solid black">
+                <div class"modal-content">
+                    <div class="modal-body">
+                    </div>
+                    <div class="modal-footer">
+                        <a href="#" class="btn btn-primary" data-dismiss="modal" id="ok">OK</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal fade" id="confirm">
+            <div class"modal-dialog" style="position: fixed;
+                                            top: 25%;
+                                            left: 10%;
+                                            width: 80%;
+                                            background: white;
+                                            border: 1px solid black">
+                <div class"modal-content">
+                    <div class="modal-body">
+                    </div>
+                    <div class="modal-footer">
+                        <a href="#" class="btn btn-primary" data-dismiss="modal" id="yes">Yes</a>
+                        <a href="#" class="btn btn-primary" data-dismiss="modal" id="no">No</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal fade" id="prompt">
+            <div class"modal-dialog" style="position: fixed;
+                                            top: 25%;
+                                            left: 10%;
+                                            width: 80%;
+                                            background: white;
+                                            border: 1px solid black">
+                <div class"modal-content">
+                    <div class="modal-body">
+                        <div id="text"></div>
+                        <form>
+                            <input type="text" id="input"/>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <a href="#" class="btn btn-primary" data-dismiss="modal" id="ok">OK</a>
+                        <a href="#" class="btn btn-primary" data-dismiss="modal" id="cancel">Cancel</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
+

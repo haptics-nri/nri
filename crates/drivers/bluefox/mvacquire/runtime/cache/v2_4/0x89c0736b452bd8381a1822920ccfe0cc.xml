@@ -1,0 +1,538 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?><RegisterDescription MajorVersion="7" MinorVersion="0" ModelName="mvGenTL_System" ProductGuid="97DB9E1A-D834-4d4c-A71E-A721B1737127" SchemaMajorVersion="1" SchemaMinorVersion="1" SchemaSubMinorVersion="0" StandardNameSpace="GEV" SubMinorVersion="0" ToolTip="MATRIX VISION GenICam GenTL system interface" VendorName="MATRIX_VISION" VersionGuid="6C5BD722-F5B6-48f3-80DC-B7561D7ACF38">
+  <!-- =================================================================================
+       == Categories                                                                  ==
+       ================================================================================= -->
+  <Category Name="Root" NameSpace="Standard">
+    <ToolTip>Provides the Root of the GenICam features tree.</ToolTip>
+    <Description>Provides the Root of the GenICam features tree.</Description>
+    <DisplayName>Root</DisplayName>
+    <pFeature>System</pFeature>
+  <IsFeature>Yes</IsFeature></Category>
+  <Category Name="System" NameSpace="Standard">
+    <ToolTip>Category that contains items that belong to the system module of the transport layer.</ToolTip>
+    <Description>The System category contains items that belong to the system module of the transport layer.</Description>
+    <DisplayName>System</DisplayName>
+    <pFeature>TLVendorName</pFeature>
+    <pFeature>TLModelName</pFeature>
+    <pFeature>TLID</pFeature>
+    <pFeature>TLVersion</pFeature>
+    <pFeature>TLPath</pFeature>
+    <pFeature>TLType</pFeature>
+    <pFeature>InterfaceUpdateList</pFeature>
+    <pFeature>InterfaceSelector</pFeature>
+    <pFeature>InterfaceID</pFeature>
+    <pFeature>InterfaceType</pFeature>
+    <pFeature>GevInterfaceMACAddress</pFeature>
+    <pFeature>GevInterfaceDefaultIPAddress</pFeature>
+    <pFeature>GevInterfaceDefaultSubnetMask</pFeature>
+    <pFeature>GevInterfaceDefaultGateway</pFeature>
+    <pFeature>mvGevInterfaceMTU</pFeature>
+    <pFeature>mvGevInterfaceLinkSpeed</pFeature>
+    <pFeature>GenTLVersionMajor</pFeature>
+    <pFeature>GenTLVersionMinor</pFeature>
+    <pFeature>GenCPVersionMajor</pFeature>
+    <pFeature>GenCPVersionMinor</pFeature>
+    <pFeature>GevVersionMajor</pFeature>
+    <pFeature>GevVersionMinor</pFeature>
+    <pFeature>mvGevChannelDummyPacketSendEnable</pFeature>
+    <pFeature>mvGevChannelDummyPacketSendInterval</pFeature>
+    <pFeature>U3vVersionMajor</pFeature>
+    <pFeature>U3vVersionMinor</pFeature>
+  <pDependent>Root</pDependent><IsFeature>Yes</IsFeature></Category>
+  <!-- =================================================================================
+       == Registers                                                                   ==
+       ================================================================================= -->
+  <IntReg Name="InterfaceSelector_InqMax" NameSpace="Custom">
+    <Visibility>Invisible</Visibility>
+    <Address>0x02000000</Address>
+    <Length>4</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>TLPort</pPort>
+    <pInvalidator>InterfaceCommand_CtrlValue</pInvalidator>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>InterfaceType</pDependent><pDependent>Root</pDependent><pDependent>GevInterfaceDefaultGateway</pDependent><pDependent>mvGevInterfaceMTU</pDependent><pDependent>mvGevInterfaceLinkSpeed</pDependent><pDependent>GevInterfaceMACAddress</pDependent><pDependent>GevInterfaceDefaultIPAddress</pDependent><pDependent>GevInterfaceDefaultSubnetMask</pDependent><pDependent>InterfaceSelector</pDependent><pDependent>InterfaceID</pDependent><pDependent>System</pDependent><pTerminal>InterfaceSelector_InqMax</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <StringReg Name="TLVendorName" NameSpace="Standard">
+    <ToolTip>Indicates the name of the transport layer vendor.</ToolTip>
+    <Description>This is a read only element. It is a string that indicates the name of the transport layer vendor.</Description>
+    <DisplayName>TL Vendor Name</DisplayName>
+    <Address>0x02000004</Address>
+    <Length>128</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>TLPort</pPort>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>TLVendorName</pTerminal><IsFeature>Yes</IsFeature></StringReg>
+  <StringReg Name="TLModelName" NameSpace="Standard">
+    <ToolTip>Indicates the name of the transport layer Model.</ToolTip>
+    <Description>This is a read only element. It is a string that indicates the name of the transport layer Model to distinguish different kinds of GenTL Producer implementations from one vendor.</Description>
+    <DisplayName>TL Model Name</DisplayName>
+    <Address>0x02000084</Address>
+    <Length>128</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>TLPort</pPort>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>TLModelName</pTerminal><IsFeature>Yes</IsFeature></StringReg>
+  <StringReg Name="TLID" NameSpace="Standard">
+    <ToolTip>Indicates the ID of the transport layer.</ToolTip>
+    <Description>This is a read only element. It is a string that indicates the ID of the transport layer.</Description>
+    <DisplayName>TL ID</DisplayName>
+    <Address>0x02000104</Address>
+    <Length>64</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>TLPort</pPort>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>TLID</pTerminal><IsFeature>Yes</IsFeature></StringReg>
+  <StringReg Name="TLVersion" NameSpace="Standard">
+    <ToolTip>Indicates a vendor specific version string for this transport layer.</ToolTip>
+    <Description>This is a read only element. It is a string that indicates a vendor specific version string for this transport layer.</Description>
+    <DisplayName>TL Version</DisplayName>
+    <Address>0x02000144</Address>
+    <Length>32</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>TLPort</pPort>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>TLVersion</pTerminal><IsFeature>Yes</IsFeature></StringReg>
+  <StringReg Name="TLPath" NameSpace="Standard">
+    <ToolTip>Indicates the full path to the GenTL Producer driver including name and extension.</ToolTip>
+    <Description>This is a read only element. It is a string that indicates the full path to the GenTL Producer driver including name and extension.</Description>
+    <DisplayName>TL Path</DisplayName>
+    <Address>0x02000164</Address>
+    <Length>256</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>TLPort</pPort>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>TLPath</pTerminal><IsFeature>Yes</IsFeature></StringReg>
+  <IntReg Name="TLType_CtrlValue" NameSpace="Custom">
+    <ToolTip>Identifies the transport layer technology of the GenTL Producer implementation.</ToolTip>
+    <Description>This is a read only feature. This enumeration provides a value that indicates the transport layer technology of the GenTL Producer implementation.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x02000264</Address>
+    <Length>4</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>TLPort</pPort>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pDependent>TLType</pDependent><pTerminal>TLType_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <EnumEntry Name="EnumEntry_TLType_Mixed" NameSpace="Standard">
+      <ToolTip>Indicates that this is a transport layer for different technologies.</ToolTip>
+      <Description>This enumeration value indicates that this is a transport layer for different technologies.</Description>
+      <DisplayName>Mixed</DisplayName>
+      <Value>0</Value>
+    <Symbolic>Mixed</Symbolic>
+<pDependent>Root</pDependent><pDependent>System</pDependent><pDependent>TLType</pDependent><pTerminal>EnumEntry_TLType_Mixed</pTerminal><IsFeature>No</IsFeature></EnumEntry>
+<EnumEntry Name="EnumEntry_TLType_GEV" NameSpace="Standard">
+      <ToolTip>Indicates that this is a transport layer for the GigE Vision protocol.</ToolTip>
+      <Description>This enumeration value indicates that this is a transport layer for the GigE Vision protocol.</Description>
+      <DisplayName>GigE Vision</DisplayName>
+      <Value>2</Value>
+    <Symbolic>GEV</Symbolic>
+<pDependent>Root</pDependent><pDependent>System</pDependent><pDependent>TLType</pDependent><pTerminal>EnumEntry_TLType_GEV</pTerminal><IsFeature>No</IsFeature></EnumEntry>
+<EnumEntry Name="EnumEntry_TLType_U3V" NameSpace="Standard">
+      <ToolTip>Indicates that this is a transport layer for the USB3 Vision protocol.</ToolTip>
+      <Description>This enumeration value indicates that this is a transport layer for the USB3 Vision protocol.</Description>
+      <DisplayName>USB3 Vision</DisplayName>
+      <Value>8</Value>
+    <Symbolic>U3V</Symbolic>
+<pDependent>Root</pDependent><pDependent>System</pDependent><pDependent>TLType</pDependent><pTerminal>EnumEntry_TLType_U3V</pTerminal><IsFeature>No</IsFeature></EnumEntry>
+<Enumeration Name="TLType" NameSpace="Standard">
+    <ToolTip>Identifies the transport layer technology of the GenTL Producer implementation.</ToolTip>
+    <Description>This is a read only feature. This enumeration provides a value that indicates the transport layer technology of the GenTL Producer implementation.</Description>
+    <DisplayName>TL Type</DisplayName>
+    <pEnumEntry>EnumEntry_TLType_Mixed</pEnumEntry>
+    <pEnumEntry>EnumEntry_TLType_GEV</pEnumEntry>
+    <pEnumEntry>EnumEntry_TLType_U3V</pEnumEntry>
+    <pValue>TLType_CtrlValue</pValue>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>TLType_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Enumeration>
+  <IntReg Name="InterfaceCommand_CtrlValue" NameSpace="Custom">
+    <Visibility>Invisible</Visibility>
+    <Address>0x01000000</Address>
+    <Length>4</Length>
+    <AccessMode>RW</AccessMode>
+    <pPort>TLPort</pPort>
+    <Cachable>NoCache</Cachable>
+    <Sign>Signed</Sign>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>InterfaceType</pDependent><pDependent>GevInterfaceMACAddress_CtrlValue</pDependent><pDependent>InterfaceSelector_InqMax</pDependent><pDependent>Root</pDependent><pDependent>GevInterfaceDefaultGateway_CtrlValue</pDependent><pDependent>GevInterfaceDefaultGateway</pDependent><pDependent>mvGevInterfaceMTU_CtrlValue</pDependent><pDependent>mvGevInterfaceMTU</pDependent><pDependent>mvGevInterfaceLinkSpeed_CtrlValue</pDependent><pDependent>mvGevInterfaceLinkSpeed</pDependent><pDependent>GevInterfaceMACAddress</pDependent><pDependent>GevInterfaceDefaultIPAddress_CtrlValue</pDependent><pDependent>GevInterfaceDefaultIPAddress</pDependent><pDependent>GevInterfaceDefaultSubnetMask_CtrlValue</pDependent><pDependent>GevInterfaceDefaultSubnetMask</pDependent><pDependent>InterfaceSelector</pDependent><pDependent>InterfaceID</pDependent><pDependent>InterfaceType_CtrlValue</pDependent><pDependent>System</pDependent><pDependent>InterfaceType_IsGEV</pDependent><pDependent>InterfaceUpdateList</pDependent><pDependent>InterfaceSelector_CtrlValue</pDependent><pTerminal>InterfaceCommand_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Command Name="InterfaceUpdateList" NameSpace="Standard">
+    <ToolTip>Updates the internal interface list.</ToolTip>
+    <Description>This command updates the internal interface list of this transport layer.</Description>
+    <DisplayName>Interface Update List</DisplayName>
+    <pValue>InterfaceCommand_CtrlValue</pValue>
+    <CommandValue>1</CommandValue>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>InterfaceCommand_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Command>
+  <IntReg Name="InterfaceSelector_CtrlValue" NameSpace="Custom">
+    <ToolTip>Selector for the different GenTL Producer interfaces.</ToolTip>
+    <Description>Selector for the different GenTL Producer interfaces. Selector for the different GenTL Producer interfaces. This interface list only changes on execution of InterfaceUpdateList. The selector is 0-based in order to match the index of the C interface.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x01000004</Address>
+    <Length>4</Length>
+    <AccessMode>RW</AccessMode>
+    <pPort>TLPort</pPort>
+    <pInvalidator>InterfaceCommand_CtrlValue</pInvalidator>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>InterfaceType</pDependent><pDependent>GevInterfaceMACAddress_CtrlValue</pDependent><pDependent>Root</pDependent><pDependent>GevInterfaceDefaultGateway_CtrlValue</pDependent><pDependent>GevInterfaceDefaultGateway</pDependent><pDependent>mvGevInterfaceMTU_CtrlValue</pDependent><pDependent>mvGevInterfaceMTU</pDependent><pDependent>mvGevInterfaceLinkSpeed_CtrlValue</pDependent><pDependent>mvGevInterfaceLinkSpeed</pDependent><pDependent>GevInterfaceMACAddress</pDependent><pDependent>GevInterfaceDefaultIPAddress_CtrlValue</pDependent><pDependent>GevInterfaceDefaultIPAddress</pDependent><pDependent>GevInterfaceDefaultSubnetMask_CtrlValue</pDependent><pDependent>GevInterfaceDefaultSubnetMask</pDependent><pDependent>InterfaceSelector</pDependent><pDependent>InterfaceID</pDependent><pDependent>InterfaceType_CtrlValue</pDependent><pDependent>System</pDependent><pDependent>InterfaceType_IsGEV</pDependent><pTerminal>InterfaceSelector_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Integer Name="InterfaceSelector" NameSpace="Standard">
+    <ToolTip>Selector for the different GenTL Producer interfaces.</ToolTip>
+    <Description>Selector for the different GenTL Producer interfaces. Selector for the different GenTL Producer interfaces. This interface list only changes on execution of InterfaceUpdateList. The selector is 0-based in order to match the index of the C interface.</Description>
+    <DisplayName>Interface Selector</DisplayName>
+    <pValue>InterfaceSelector_CtrlValue</pValue>
+    <Min>0</Min>
+    <pMax>InterfaceSelector_InqMax</pMax>
+    <pSelected>InterfaceID</pSelected>
+    <pSelected>InterfaceType</pSelected>
+    <pSelected>GevInterfaceMACAddress</pSelected>
+    <pSelected>GevInterfaceDefaultIPAddress</pSelected>
+    <pSelected>GevInterfaceDefaultSubnetMask</pSelected>
+    <pSelected>GevInterfaceDefaultGateway</pSelected>
+    <pSelected>mvGevInterfaceMTU</pSelected>
+    <pSelected>mvGevInterfaceLinkSpeed</pSelected>
+  <pDependent>InterfaceType</pDependent><pDependent>Root</pDependent><pDependent>GevInterfaceDefaultGateway</pDependent><pDependent>mvGevInterfaceMTU</pDependent><pDependent>mvGevInterfaceLinkSpeed</pDependent><pDependent>GevInterfaceMACAddress</pDependent><pDependent>GevInterfaceDefaultIPAddress</pDependent><pDependent>GevInterfaceDefaultSubnetMask</pDependent><pDependent>InterfaceID</pDependent><pDependent>System</pDependent><pTerminal>InterfaceSelector_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Integer>
+  <StringReg Name="InterfaceID" NameSpace="Standard">
+    <ToolTip>GenTL producer wide unique identifier of the selected interface.</ToolTip>
+    <Description>This is a read only element. It is a string that indicates a GenTL producer wide unique identifier of the selected interface.</Description>
+    <DisplayName>Interface ID</DisplayName>
+    <Address>0x02000268</Address>
+    <Length>64</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>TLPort</pPort>
+    <pInvalidator>InterfaceCommand_CtrlValue</pInvalidator>
+    <pInvalidator>InterfaceSelector_CtrlValue</pInvalidator>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>InterfaceID</pTerminal><pSelecting>InterfaceSelector</pSelecting><IsFeature>Yes</IsFeature></StringReg>
+  <IntReg Name="InterfaceType_CtrlValue" NameSpace="Custom">
+    <ToolTip>Identifies the interfaces technology of the GenTL Producer implementation.</ToolTip>
+    <Description>This is a read only feature. This enumeration provides a value that indicates interfaces technology of the GenTL Producer implementation.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x020002a8</Address>
+    <Length>4</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>TLPort</pPort>
+    <pInvalidator>InterfaceCommand_CtrlValue</pInvalidator>
+    <pInvalidator>InterfaceSelector_CtrlValue</pInvalidator>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>InterfaceType</pDependent><pDependent>Root</pDependent><pDependent>GevInterfaceDefaultGateway</pDependent><pDependent>mvGevInterfaceMTU</pDependent><pDependent>mvGevInterfaceLinkSpeed</pDependent><pDependent>GevInterfaceMACAddress</pDependent><pDependent>GevInterfaceDefaultIPAddress</pDependent><pDependent>GevInterfaceDefaultSubnetMask</pDependent><pDependent>System</pDependent><pDependent>InterfaceType_IsGEV</pDependent><pTerminal>InterfaceType_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <EnumEntry Name="EnumEntry_InterfaceType_Custom" NameSpace="Standard">
+      <ToolTip>Indicates that this is a device for a custom protocol.</ToolTip>
+      <Description>This enumeration value indicates that this is a device for a custom protocol.</Description>
+      <DisplayName>Custom</DisplayName>
+      <Value>1</Value>
+    <Symbolic>Custom</Symbolic>
+<pDependent>InterfaceType</pDependent><pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>EnumEntry_InterfaceType_Custom</pTerminal><IsFeature>No</IsFeature></EnumEntry>
+<EnumEntry Name="EnumEntry_InterfaceType_GEV" NameSpace="Standard">
+      <ToolTip>Indicates that this is an interface for the GigE Vision protocol.</ToolTip>
+      <Description>This enumeration value indicates that this is an interface for the GigE Vision protocol.</Description>
+      <DisplayName>GigE Vision</DisplayName>
+      <Value>2</Value>
+    <Symbolic>GEV</Symbolic>
+<pDependent>InterfaceType</pDependent><pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>EnumEntry_InterfaceType_GEV</pTerminal><IsFeature>No</IsFeature></EnumEntry>
+<EnumEntry Name="EnumEntry_InterfaceType_U3V" NameSpace="Standard">
+      <ToolTip>Indicates that this is an interface for the USB3 Vision protocol.</ToolTip>
+      <Description>This enumeration value indicates that this is an interface for the USB3 Vision protocol.</Description>
+      <DisplayName>USB3 Vision</DisplayName>
+      <Value>8</Value>
+    <Symbolic>U3V</Symbolic>
+<pDependent>InterfaceType</pDependent><pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>EnumEntry_InterfaceType_U3V</pTerminal><IsFeature>No</IsFeature></EnumEntry>
+<Enumeration Name="InterfaceType" NameSpace="Standard">
+    <ToolTip>Identifies the interfaces technology of the GenTL Producer implementation.</ToolTip>
+    <Description>This is a read only feature. This enumeration provides a value that indicates interfaces technology of the GenTL Producer implementation.</Description>
+    <DisplayName>Interface Type</DisplayName>
+    <pEnumEntry>EnumEntry_InterfaceType_Custom</pEnumEntry>
+    <pEnumEntry>EnumEntry_InterfaceType_GEV</pEnumEntry>
+    <pEnumEntry>EnumEntry_InterfaceType_U3V</pEnumEntry>
+    <pValue>InterfaceType_CtrlValue</pValue>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>InterfaceType_CtrlValue</pTerminal><pSelecting>InterfaceSelector</pSelecting><IsFeature>Yes</IsFeature></Enumeration>
+  <IntReg Name="GevInterfaceMACAddress_CtrlValue" NameSpace="Custom">
+    <ToolTip>Indicates the 48-bit MAC address of the selected interface.</ToolTip>
+    <Description>This is a read only element. It indicates the 48-bit MAC address of the selected interface.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x020002ac</Address>
+    <Length>8</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>TLPort</pPort>
+    <pInvalidator>InterfaceCommand_CtrlValue</pInvalidator>
+    <pInvalidator>InterfaceSelector_CtrlValue</pInvalidator>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>Root</pDependent><pDependent>GevInterfaceMACAddress</pDependent><pDependent>System</pDependent><pTerminal>GevInterfaceMACAddress_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Integer Name="GevInterfaceMACAddress" NameSpace="Standard">
+    <ToolTip>Indicates the 48-bit MAC address of the selected interface.</ToolTip>
+    <Description>This is a read only element. It indicates the 48-bit MAC address of the selected interface.</Description>
+    <DisplayName>Gev Interface MAC Address</DisplayName>
+    <pIsAvailable>InterfaceType_IsGEV</pIsAvailable>
+    <pValue>GevInterfaceMACAddress_CtrlValue</pValue>
+    <Representation>HexNumber</Representation>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>GevInterfaceMACAddress_CtrlValue</pTerminal><pSelecting>InterfaceSelector</pSelecting><IsFeature>Yes</IsFeature></Integer>
+  <IntReg Name="GevInterfaceDefaultIPAddress_CtrlValue" NameSpace="Custom">
+    <ToolTip>Indicates the IP address of the first subnet of the selected interface.</ToolTip>
+    <Description>This is a read only element. It indicates the IP address of the first subnet of the selected interface.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x020002b4</Address>
+    <Length>4</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>TLPort</pPort>
+    <pInvalidator>InterfaceCommand_CtrlValue</pInvalidator>
+    <pInvalidator>InterfaceSelector_CtrlValue</pInvalidator>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>Root</pDependent><pDependent>GevInterfaceDefaultIPAddress</pDependent><pDependent>System</pDependent><pTerminal>GevInterfaceDefaultIPAddress_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Integer Name="GevInterfaceDefaultIPAddress" NameSpace="Standard">
+    <ToolTip>Indicates the IP address of the first subnet of the selected interface.</ToolTip>
+    <Description>This is a read only element. It indicates the IP address of the first subnet of the selected interface.</Description>
+    <DisplayName>Gev Interface Default IP Address</DisplayName>
+    <pIsAvailable>InterfaceType_IsGEV</pIsAvailable>
+    <pValue>GevInterfaceDefaultIPAddress_CtrlValue</pValue>
+    <Representation>HexNumber</Representation>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>GevInterfaceDefaultIPAddress_CtrlValue</pTerminal><pSelecting>InterfaceSelector</pSelecting><IsFeature>Yes</IsFeature></Integer>
+  <IntReg Name="GevInterfaceDefaultSubnetMask_CtrlValue" NameSpace="Custom">
+    <ToolTip>Indicates the subnet mask of the first subnet of the selected interface.</ToolTip>
+    <Description>This is a read only element. It indicates the subnet mask of the first subnet of the selected interface.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x020002b8</Address>
+    <Length>4</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>TLPort</pPort>
+    <pInvalidator>InterfaceCommand_CtrlValue</pInvalidator>
+    <pInvalidator>InterfaceSelector_CtrlValue</pInvalidator>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>Root</pDependent><pDependent>GevInterfaceDefaultSubnetMask</pDependent><pDependent>System</pDependent><pTerminal>GevInterfaceDefaultSubnetMask_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Integer Name="GevInterfaceDefaultSubnetMask" NameSpace="Standard">
+    <ToolTip>Indicates the subnet mask of the first subnet of the selected interface.</ToolTip>
+    <Description>This is a read only element. It indicates the subnet mask of the first subnet of the selected interface.</Description>
+    <DisplayName>Gev Interface Default Subnet Mask</DisplayName>
+    <pIsAvailable>InterfaceType_IsGEV</pIsAvailable>
+    <pValue>GevInterfaceDefaultSubnetMask_CtrlValue</pValue>
+    <Representation>HexNumber</Representation>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>GevInterfaceDefaultSubnetMask_CtrlValue</pTerminal><pSelecting>InterfaceSelector</pSelecting><IsFeature>Yes</IsFeature></Integer>
+  <IntReg Name="GevInterfaceDefaultGateway_CtrlValue" NameSpace="Custom">
+    <ToolTip>Indicates the default gateway of the first subnet of the selected interface.</ToolTip>
+    <Description>This is a read only element. It indicates the default gateway of the first subnet of the selected interface.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x020002bc</Address>
+    <Length>4</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>TLPort</pPort>
+    <pInvalidator>InterfaceCommand_CtrlValue</pInvalidator>
+    <pInvalidator>InterfaceSelector_CtrlValue</pInvalidator>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>Root</pDependent><pDependent>GevInterfaceDefaultGateway</pDependent><pDependent>System</pDependent><pTerminal>GevInterfaceDefaultGateway_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Integer Name="GevInterfaceDefaultGateway" NameSpace="Standard">
+    <ToolTip>Indicates the default gateway of the first subnet of the selected interface.</ToolTip>
+    <Description>This is a read only element. It indicates the default gateway of the first subnet of the selected interface.</Description>
+    <DisplayName>Gev Interface Default Gateway</DisplayName>
+    <pIsAvailable>InterfaceType_IsGEV</pIsAvailable>
+    <pValue>GevInterfaceDefaultGateway_CtrlValue</pValue>
+    <Representation>HexNumber</Representation>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>GevInterfaceDefaultGateway_CtrlValue</pTerminal><pSelecting>InterfaceSelector</pSelecting><IsFeature>Yes</IsFeature></Integer>
+  <IntReg Name="mvGevInterfaceMTU_CtrlValue" NameSpace="Custom">
+    <ToolTip>Indicates the MTU of the selected interface.</ToolTip>
+    <Description>This is a read only element. It indicates the MTU(Maximum Transmission Unit) of the selected interface.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x020002c0</Address>
+    <Length>4</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>TLPort</pPort>
+    <pInvalidator>InterfaceCommand_CtrlValue</pInvalidator>
+    <pInvalidator>InterfaceSelector_CtrlValue</pInvalidator>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>Root</pDependent><pDependent>mvGevInterfaceMTU</pDependent><pDependent>System</pDependent><pTerminal>mvGevInterfaceMTU_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Integer Name="mvGevInterfaceMTU" NameSpace="Custom">
+    <ToolTip>Indicates the MTU of the selected interface.</ToolTip>
+    <Description>This is a read only element. It indicates the MTU(Maximum Transmission Unit) of the selected interface.</Description>
+    <DisplayName>mv Gev Interface MTU</DisplayName>
+    <Visibility>Expert</Visibility>
+    <pIsAvailable>InterfaceType_IsGEV</pIsAvailable>
+    <pValue>mvGevInterfaceMTU_CtrlValue</pValue>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>mvGevInterfaceMTU_CtrlValue</pTerminal><pSelecting>InterfaceSelector</pSelecting><IsFeature>Yes</IsFeature></Integer>
+  <IntReg Name="mvGevInterfaceLinkSpeed_CtrlValue" NameSpace="Custom">
+    <ToolTip>Indicates the link speed of this interface.</ToolTip>
+    <Description>This is a read only element. It indicates the link speed(in Mbits per second) of this interface.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x020002c4</Address>
+    <Length>4</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>TLPort</pPort>
+    <pInvalidator>InterfaceCommand_CtrlValue</pInvalidator>
+    <pInvalidator>InterfaceSelector_CtrlValue</pInvalidator>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>Root</pDependent><pDependent>mvGevInterfaceLinkSpeed</pDependent><pDependent>System</pDependent><pTerminal>mvGevInterfaceLinkSpeed_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Integer Name="mvGevInterfaceLinkSpeed" NameSpace="Custom">
+    <ToolTip>Indicates the link speed of this interface.</ToolTip>
+    <Description>This is a read only element. It indicates the link speed(in Mbits per second) of this interface.</Description>
+    <DisplayName>mv Gev Interface Link Speed</DisplayName>
+    <Visibility>Expert</Visibility>
+    <pIsAvailable>InterfaceType_IsGEV</pIsAvailable>
+    <pValue>mvGevInterfaceLinkSpeed_CtrlValue</pValue>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>mvGevInterfaceLinkSpeed_CtrlValue</pTerminal><pSelecting>InterfaceSelector</pSelecting><IsFeature>Yes</IsFeature></Integer>
+  <IntReg Name="GenTLVersionMajor_CtrlValue" NameSpace="Custom">
+    <ToolTip>Defines the major version number of the GenTL specification the GenTL Producer implementation complies with.</ToolTip>
+    <Description>This is a read only element. It defines the major version number of the GenTL specification the GenTL Producer implementation complies with.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x020002c8</Address>
+    <Length>4</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>TLPort</pPort>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>GenTLVersionMajor</pDependent><pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>GenTLVersionMajor_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Integer Name="GenTLVersionMajor" NameSpace="Standard">
+    <ToolTip>Defines the major version number of the GenTL specification the GenTL Producer implementation complies with.</ToolTip>
+    <Description>This is a read only element. It defines the major version number of the GenTL specification the GenTL Producer implementation complies with.</Description>
+    <DisplayName>GenTL Version Major</DisplayName>
+    <pValue>GenTLVersionMajor_CtrlValue</pValue>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>GenTLVersionMajor_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Integer>
+  <IntReg Name="GenTLVersionMinor_CtrlValue" NameSpace="Custom">
+    <ToolTip>Defines the minor version number of the GenTL specification the GenTL Producer implementation complies with.</ToolTip>
+    <Description>This is a read only element. It defines the minor version number of the GenTL specification the GenTL Producer implementation complies with.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x020002cc</Address>
+    <Length>4</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>TLPort</pPort>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>GenTLVersionMinor</pDependent><pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>GenTLVersionMinor_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Integer Name="GenTLVersionMinor" NameSpace="Standard">
+    <ToolTip>Defines the minor version number of the GenTL specification the GenTL Producer implementation complies with.</ToolTip>
+    <Description>This is a read only element. It defines the minor version number of the GenTL specification the GenTL Producer implementation complies with.</Description>
+    <DisplayName>GenTL Version Minor</DisplayName>
+    <pValue>GenTLVersionMinor_CtrlValue</pValue>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>GenTLVersionMinor_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Integer>
+  <IntReg Name="GenCPVersionMajor_CtrlValue" NameSpace="Custom">
+    <ToolTip>Indicates the major version number of the GenCP specification this GenTL Producer implementation complies with.</ToolTip>
+    <Description>This is a read only element. It indicates the major version number of the GenCP specification this GenTL Producer implementation complies with.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x020002d0</Address>
+    <Length>4</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>TLPort</pPort>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>GenCPVersionMajor</pDependent><pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>GenCPVersionMajor_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Integer Name="GenCPVersionMajor" NameSpace="Standard">
+    <ToolTip>Indicates the major version number of the GenCP specification this GenTL Producer implementation complies with.</ToolTip>
+    <Description>This is a read only element. It indicates the major version number of the GenCP specification this GenTL Producer implementation complies with.</Description>
+    <DisplayName>GenCP Version Major</DisplayName>
+    <pValue>GenCPVersionMajor_CtrlValue</pValue>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>GenCPVersionMajor_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Integer>
+  <IntReg Name="GenCPVersionMinor_CtrlValue" NameSpace="Custom">
+    <ToolTip>Indicates the minor version number of the GenCP specification this GenTL Producer implementation complies with.</ToolTip>
+    <Description>This is a read only element. It indicates the minor version number of the GenCP specification this GenTL Producer implementation complies with.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x020002d4</Address>
+    <Length>4</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>TLPort</pPort>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>Root</pDependent><pDependent>GenCPVersionMinor</pDependent><pDependent>System</pDependent><pTerminal>GenCPVersionMinor_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Integer Name="GenCPVersionMinor" NameSpace="Standard">
+    <ToolTip>Indicates the minor version number of the GenCP specification this GenTL Producer implementation complies with.</ToolTip>
+    <Description>This is a read only element. It indicates the minor version number of the GenCP specification this GenTL Producer implementation complies with.</Description>
+    <DisplayName>GenCP Version Minor</DisplayName>
+    <pValue>GenCPVersionMinor_CtrlValue</pValue>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>GenCPVersionMinor_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Integer>
+  <IntReg Name="GevVersionMajor_CtrlValue" NameSpace="Custom">
+    <ToolTip>Indicates the major version number of the GigE Vision specification this GenTL Producer implementation complies with.</ToolTip>
+    <Description>This is a read only element. It indicates the major version number of the GigE Vision specification this GenTL Producer implementation complies with.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x020002d8</Address>
+    <Length>4</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>TLPort</pPort>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>Root</pDependent><pDependent>GevVersionMajor</pDependent><pDependent>System</pDependent><pTerminal>GevVersionMajor_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Integer Name="GevVersionMajor" NameSpace="Standard">
+    <ToolTip>Indicates the major version number of the GigE Vision specification this GenTL Producer implementation complies with.</ToolTip>
+    <Description>This is a read only element. It indicates the major version number of the GigE Vision specification this GenTL Producer implementation complies with.</Description>
+    <DisplayName>Gev Version Major</DisplayName>
+    <pValue>GevVersionMajor_CtrlValue</pValue>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>GevVersionMajor_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Integer>
+  <IntReg Name="GevVersionMinor_CtrlValue" NameSpace="Custom">
+    <ToolTip>Indicates the minor version number of the GigE Vision specification this GenTL Producer implementation complies with.</ToolTip>
+    <Description>This is a read only element. It indicates the minor version number of the GigE Vision specification this GenTL Producer implementation complies with.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x020002dc</Address>
+    <Length>4</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>TLPort</pPort>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>Root</pDependent><pDependent>GevVersionMinor</pDependent><pDependent>System</pDependent><pTerminal>GevVersionMinor_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Integer Name="GevVersionMinor" NameSpace="Standard">
+    <ToolTip>Indicates the minor version number of the GigE Vision specification this GenTL Producer implementation complies with.</ToolTip>
+    <Description>This is a read only element. It indicates the minor version number of the GigE Vision specification this GenTL Producer implementation complies with.</Description>
+    <DisplayName>Gev Version Minor</DisplayName>
+    <pValue>GevVersionMinor_CtrlValue</pValue>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>GevVersionMinor_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Integer>
+  <IntReg Name="mvGevChannelDummyPacketSendEnable_CtrlValue" NameSpace="Custom">
+    <ToolTip>Enables or disables the periodical sending of dummy packets to a stream or message channel source port of a GigE Vision device.</ToolTip>
+    <Description>Enables or disables the periodical sending of dummy packets to a stream or message channel source port of a GigE Vision device. This might be useful to overcome firewall related problems when working with network devices.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x01000008</Address>
+    <Length>4</Length>
+    <AccessMode>RW</AccessMode>
+    <pPort>TLPort</pPort>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>mvGevChannelDummyPacketSendEnable_IsOn</pDependent><pDependent>mvGevChannelDummyPacketSendEnable</pDependent><pDependent>mvGevChannelDummyPacketSendInterval</pDependent><pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>mvGevChannelDummyPacketSendEnable_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Boolean Name="mvGevChannelDummyPacketSendEnable" NameSpace="Custom">
+    <ToolTip>Enables or disables the periodical sending of dummy packets to a stream or message channel source port of a GigE Vision device.</ToolTip>
+    <Description>Enables or disables the periodical sending of dummy packets to a stream or message channel source port of a GigE Vision device. This might be useful to overcome firewall related problems when working with network devices.</Description>
+    <DisplayName>mv Gev Channel Dummy Packet Send Enable</DisplayName>
+    <Visibility>Guru</Visibility>
+    <pValue>mvGevChannelDummyPacketSendEnable_CtrlValue</pValue>
+    <OnValue>1</OnValue>
+    <OffValue>0</OffValue>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>mvGevChannelDummyPacketSendEnable_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Boolean>
+  <IntReg Name="mvGevChannelDummyPacketSendInterval_CtrlValue" NameSpace="Custom">
+    <ToolTip>Defines the period(in ms) for sending dummy packets to a stream or message channel source port of a GigE Vision device.</ToolTip>
+    <Description>Defines the period(in ms) for sending dummy packets to a stream or message channel source port of a GigE Vision device. This might be useful to overcome firewall related problems when working with network devices.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x0100000c</Address>
+    <Length>4</Length>
+    <AccessMode>RW</AccessMode>
+    <pPort>TLPort</pPort>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>mvGevChannelDummyPacketSendInterval</pDependent><pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>mvGevChannelDummyPacketSendInterval_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Integer Name="mvGevChannelDummyPacketSendInterval" NameSpace="Custom">
+    <ToolTip>Defines the period(in ms) for sending dummy packets to a stream or message channel source port of a GigE Vision device.</ToolTip>
+    <Description>Defines the period(in ms) for sending dummy packets to a stream or message channel source port of a GigE Vision device. This might be useful to overcome firewall related problems when working with network devices.</Description>
+    <DisplayName>mv Gev Channel Dummy Packet Send Interval</DisplayName>
+    <Visibility>Guru</Visibility>
+    <pIsAvailable>mvGevChannelDummyPacketSendEnable_IsOn</pIsAvailable>
+    <pValue>mvGevChannelDummyPacketSendInterval_CtrlValue</pValue>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>mvGevChannelDummyPacketSendInterval_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Integer>
+  <IntReg Name="U3vVersionMajor_CtrlValue" NameSpace="Custom">
+    <ToolTip>Indicates the major version number of the USB3 Vision specification this GenTL Producer implementation complies with.</ToolTip>
+    <Description>This is a read only element. It indicates the major version number of the USB3 Vision specification this GenTL Producer implementation complies with.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x020002e0</Address>
+    <Length>4</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>TLPort</pPort>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pDependent>U3vVersionMajor</pDependent><pTerminal>U3vVersionMajor_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Integer Name="U3vVersionMajor" NameSpace="Standard">
+    <ToolTip>Indicates the major version number of the USB3 Vision specification this GenTL Producer implementation complies with.</ToolTip>
+    <Description>This is a read only element. It indicates the major version number of the USB3 Vision specification this GenTL Producer implementation complies with.</Description>
+    <DisplayName>U3v Version Major</DisplayName>
+    <pValue>U3vVersionMajor_CtrlValue</pValue>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>U3vVersionMajor_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Integer>
+  <IntReg Name="U3vVersionMinor_CtrlValue" NameSpace="Custom">
+    <ToolTip>Indicates the minor version number of the USB3 Vision specification this GenTL Producer implementation complies with.</ToolTip>
+    <Description>This is a read only element. It indicates the minor version number of the USB3 Vision specification this GenTL Producer implementation complies with.</Description>
+    <Visibility>Invisible</Visibility>
+    <Address>0x020002e4</Address>
+    <Length>4</Length>
+    <AccessMode>RO</AccessMode>
+    <pPort>TLPort</pPort>
+    <Endianess>LittleEndian</Endianess>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pDependent>U3vVersionMinor</pDependent><pTerminal>U3vVersionMinor_CtrlValue</pTerminal><IsFeature>No</IsFeature></IntReg>
+  <Integer Name="U3vVersionMinor" NameSpace="Standard">
+    <ToolTip>Indicates the minor version number of the USB3 Vision specification this GenTL Producer implementation complies with.</ToolTip>
+    <Description>This is a read only element. It indicates the minor version number of the USB3 Vision specification this GenTL Producer implementation complies with.</Description>
+    <DisplayName>U3v Version Minor</DisplayName>
+    <pValue>U3vVersionMinor_CtrlValue</pValue>
+  <pDependent>Root</pDependent><pDependent>System</pDependent><pTerminal>U3vVersionMinor_CtrlValue</pTerminal><IsFeature>Yes</IsFeature></Integer>
+  <IntSwissKnife Name="InterfaceType_IsGEV" NameSpace="Custom">
+    <Visibility>Invisible</Visibility>
+    <pVariable Name="VALUE">InterfaceType_CtrlValue</pVariable>
+    <Formula>(VALUE = 2) ? 1 : 0</Formula>
+  <pDependent>Root</pDependent><pDependent>GevInterfaceDefaultGateway</pDependent><pDependent>mvGevInterfaceMTU</pDependent><pDependent>mvGevInterfaceLinkSpeed</pDependent><pDependent>GevInterfaceMACAddress</pDependent><pDependent>GevInterfaceDefaultIPAddress</pDependent><pDependent>GevInterfaceDefaultSubnetMask</pDependent><pDependent>System</pDependent><IsFeature>No</IsFeature></IntSwissKnife>
+  <IntSwissKnife Name="mvGevChannelDummyPacketSendEnable_IsOn" NameSpace="Custom">
+    <Visibility>Invisible</Visibility>
+    <pVariable Name="VALUE">mvGevChannelDummyPacketSendEnable_CtrlValue</pVariable>
+    <Formula>(VALUE &lt;&gt; 0) ? 1 : 0</Formula>
+  <pDependent>mvGevChannelDummyPacketSendInterval</pDependent><pDependent>Root</pDependent><pDependent>System</pDependent><IsFeature>No</IsFeature></IntSwissKnife>
+  <!-- =================================================================================
+       == Ports                                                                       ==
+       ================================================================================= -->
+  <Port Name="TLPort" NameSpace="Standard">
+    <ToolTip>Port giving access to the system module of the transport layer.</ToolTip>
+    <Description>Port giving access to the system module of the transport layer.</Description>
+  <pDependent>TLPath</pDependent><pDependent>mvGevChannelDummyPacketSendEnable_IsOn</pDependent><pDependent>GenTLVersionMajor_CtrlValue</pDependent><pDependent>GenTLVersionMajor</pDependent><pDependent>GenTLVersionMinor_CtrlValue</pDependent><pDependent>GenTLVersionMinor</pDependent><pDependent>GenCPVersionMajor_CtrlValue</pDependent><pDependent>GenCPVersionMajor</pDependent><pDependent>InterfaceType</pDependent><pDependent>GevInterfaceMACAddress_CtrlValue</pDependent><pDependent>mvGevChannelDummyPacketSendEnable_CtrlValue</pDependent><pDependent>mvGevChannelDummyPacketSendEnable</pDependent><pDependent>mvGevChannelDummyPacketSendInterval_CtrlValue</pDependent><pDependent>mvGevChannelDummyPacketSendInterval</pDependent><pDependent>U3vVersionMajor_CtrlValue</pDependent><pDependent>TLID</pDependent><pDependent>InterfaceSelector_InqMax</pDependent><pDependent>TLVendorName</pDependent><pDependent>Root</pDependent><pDependent>GevInterfaceDefaultGateway_CtrlValue</pDependent><pDependent>GevInterfaceDefaultGateway</pDependent><pDependent>mvGevInterfaceMTU_CtrlValue</pDependent><pDependent>mvGevInterfaceMTU</pDependent><pDependent>mvGevInterfaceLinkSpeed_CtrlValue</pDependent><pDependent>mvGevInterfaceLinkSpeed</pDependent><pDependent>GevInterfaceMACAddress</pDependent><pDependent>GevInterfaceDefaultIPAddress_CtrlValue</pDependent><pDependent>GevInterfaceDefaultIPAddress</pDependent><pDependent>GevInterfaceDefaultSubnetMask_CtrlValue</pDependent><pDependent>GevInterfaceDefaultSubnetMask</pDependent><pDependent>GenCPVersionMinor_CtrlValue</pDependent><pDependent>GenCPVersionMinor</pDependent><pDependent>GevVersionMajor_CtrlValue</pDependent><pDependent>GevVersionMajor</pDependent><pDependent>GevVersionMinor_CtrlValue</pDependent><pDependent>GevVersionMinor</pDependent><pDependent>InterfaceSelector</pDependent><pDependent>InterfaceID</pDependent><pDependent>InterfaceType_CtrlValue</pDependent><pDependent>TLVersion</pDependent><pDependent>System</pDependent><pDependent>TLType</pDependent><pDependent>InterfaceCommand_CtrlValue</pDependent><pDependent>U3vVersionMajor</pDependent><pDependent>U3vVersionMinor_CtrlValue</pDependent><pDependent>U3vVersionMinor</pDependent><pDependent>InterfaceType_IsGEV</pDependent><pDependent>TLModelName</pDependent><pDependent>InterfaceUpdateList</pDependent><pDependent>InterfaceSelector_CtrlValue</pDependent><pDependent>TLType_CtrlValue</pDependent><IsFeature>No</IsFeature></Port>
+</RegisterDescription>
