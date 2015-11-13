@@ -1,9 +1,0 @@
-Test flow
-
-- One
-    "Please insert Tab A into Slot B"
-
-- Two
-    "Now fold Tab C on top of Tab D"
-    > "answer" (41..43)
-

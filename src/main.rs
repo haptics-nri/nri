@@ -111,75 +111,20 @@
 #![cfg_attr(not(target_os = "linux"), allow(dead_code))]
 #![cfg_attr(feature = "nightly", feature(const_fn, read_exact, core_intrinsics))]
 
-/// Just like println!, but prints to stderr
-#[macro_export]
-macro_rules! errorln {
-    ($($arg:tt)*) => {{
-        use std::io::Write;
-        match writeln!(&mut ::std::io::stderr(), $($arg)* ) {
-            Ok(_) => {},
-            Err(x) => panic!("Unable to write to stderr: {}", x),
-        }
-    }}
-}
-
-#[macro_export]
-macro_rules! group_attr {
-    (#[cfg($attr:meta)] $($yes:item)*) => { group_attr!{internal #[cfg($attr)] $($yes)* } };
-
-    ($modname:ident #[cfg($attr:meta)] $($yes:item)*) => {
-        #[cfg($attr)]
-        mod $modname {
-            $($yes)*
-        }
-
-        #[cfg(not($attr))]
-        mod $modname {
-        }
-
-        pub use self::$modname::*;
-    };
-}
-
 #[macro_use]
 extern crate guilt_by_association;
 extern crate libc;
 
-// TODO move this profiling stuff to a mod
-use std::cell::RefCell;
-
-thread_local! {
-    // Thread-local profiler object (FIXME no doc comments on thread locals)
-    static PROF: RefCell<Option<hprof::Profiler>> = RefCell::new(None)
-}
-
-#[macro_export]
-macro_rules! prof {
-    ($b:expr) => { prof!(stringify!($b), $b) };
-    //($n:expr, $b:expr) => ($b)
-    ($n:expr, $b:expr) => {{
-        $crate::PROF.with(|wrapped_prof| {
-            let appease_borrowck = wrapped_prof.borrow();
-            let g = match *appease_borrowck {
-                Some(ref prof) => prof.enter($n),
-                None => $crate::hprof::enter($n)
-            };
-            let ret = { $b }; //~ ALLOW let_unit_value
-            drop(g);
-            ret
-        })
-    }}
-}
-
-#[macro_use] mod comms;
-mod scribe;
-mod cli;
-mod web;
-mod teensy;
-mod optoforce;
-mod structure;
-mod bluefox;
-mod biotac;
+#[macro_use] extern crate utils;
+#[macro_use] extern crate comms;
+extern crate scribe;
+extern crate cli;
+extern crate web;
+extern crate teensy;
+extern crate optoforce;
+extern crate structure;
+extern crate bluefox;
+extern crate biotac;
 
 use std::{fs, process};
 use std::io::{Write, BufRead};

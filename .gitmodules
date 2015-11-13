@@ -1,21 +1,21 @@
 [submodule "openni2"]
-	path = src/structure/openni2
+	path = crates/drivers/structure/openni2
 	url = https://github.com/occipital/openni2
-[submodule "overrides/filetime"]
+[submodule "filetime"]
 	path = overrides/filetime
 	url = git@github.com:alexcrichton/filetime
-[submodule "overrides/staticfile"]
+[submodule "staticfile"]
 	path = overrides/staticfile
 	url = git@github.com:iron/staticfile
-[submodule "src/optoforce/liboptoforce"]
-	path = src/optoforce/liboptoforce
+[submodule "liboptoforce"]
+	path = crates/drivers/optoforce/liboptoforce
 	url = git@github.com:haptics-nri/liboptoforce
-[submodule "src/optoforce/remake"]
-	path = src/optoforce/remake
+[submodule "remake"]
+	path = crates/drivers/optoforce/remake
 	url = git@github.com:kralf/remake
-[submodule "overrides/hprof"]
+[submodule "hprof"]
 	path = overrides/hprof
 	url = git@github.com:cmr/hprof
-[submodule "src/biotac/bolt"]
-	path = src/biotac/bolt
+[submodule "bolt"]
+	path = crates/drivers/biotac/bolt
 	url = git@github.com:IanTheEngineer/Penn-haptics-bolt
