@@ -99,7 +99,7 @@ impl ToJson for Service {
 
 /// Make a path relative to the current file's directory
 fn relpath(path: &str) -> String {
-    String::from(Path::new(file!()).parent().unwrap().join(path).to_str().unwrap())
+    String::from(Path::new(file!()).parent().unwrap().parent().unwrap().join(path).to_str().unwrap())
 }
 
 fn watch<T, U, F>(mut thing: T,
