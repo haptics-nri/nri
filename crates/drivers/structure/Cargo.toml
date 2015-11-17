@@ -4,9 +4,8 @@ version = "0.1.0"
 authors = ["Alex Burka <aburka@seas.upenn.edu>"]
 # TODO build script
 
-[profile.dev]
-opt-level = 3
-debug     = true
+[profile.release]
+debug = true
 
 [dependencies]
 comms                = { path = "../../back/comms"        }

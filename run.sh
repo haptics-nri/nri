@@ -7,8 +7,8 @@ export RUST_BACKTRACE=1
 if [ "$#" -ne 0 ]; then 
     DEV=$1
     shift
-    rlwrap cargo run --example read$DEV -- "$@"
+    rlwrap cargo run --release --example read$DEV -- "$@"
 else
-    rlwrap cargo run
+    rlwrap cargo run --release
 fi
 
