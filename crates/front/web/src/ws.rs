@@ -5,7 +5,8 @@ use comms::CmdFrom;
 use super::config;
 pub use websocket::{Sender, Receiver, Message};
 use websocket::message::Type as MsgType;
-use websocket::{server, header, stream, Server};
+use websocket::{server, header, stream, Server, Client};
+use url::Host;
 
 lazy_static! {
     pub static ref RPC_SENDERS: Mutex<HashMap<usize, mpsc::Sender<String>>>                         = Mutex::new(HashMap::new());
@@ -61,9 +62,10 @@ pub fn spawn(ctx: mpsc::Sender<CmdFrom>, wsrx: mpsc::Receiver<Message<'static>>)
             WS_SENDERS.lock().unwrap().iter_mut().map(|ref mut s| {
                 s.send_message(&Message::close()).unwrap();
             }).count();
+            println!("web: finished shutting down websocket servers");
         });
 
-        for connection in ws {
+        'listener: for connection in ws {
             let request = connection.unwrap().read_request().unwrap(); // Get the request
             let headers = request.headers.clone(); // Keep the headers so we can check them
 
@@ -72,65 +74,81 @@ pub fn spawn(ctx: mpsc::Sender<CmdFrom>, wsrx: mpsc::Receiver<Message<'static>>)
             let mut response = request.accept(); // Form a response
 
             if let Some(&header::WebSocketProtocol(ref protocols)) = headers.get() {
-                if protocols.contains(&("rust-websocket".to_owned())) {
+                if protocols.contains(&"ouroboros".to_owned()) {
+                    // Shutdown signal
+                    println!("Websocket listener received shutdown signal");
+                    break 'listener;
+                } else if protocols.contains(&"rust-websocket".to_owned()) {
                     // We have a protocol we want to use
                     response.headers.set(header::WebSocketProtocol(vec!["rust-websocket".to_owned()]));
-                }
-            }
 
-            let mut client = response.send().unwrap(); // Send the response
+                    let mut client = response.send().unwrap(); // Send the response
 
-            let ip = client.get_mut_sender()
-                .get_mut()
-                .peer_addr()
-                .unwrap();
+                    let ip = client.get_mut_sender()
+                        .get_mut()
+                        .peer_addr()
+                        .unwrap();
 
-            println!("Websocket connection from {}", ip);
+                    println!("Websocket connection from {}", ip);
 
-            let mut locked_senders = WS_SENDERS.lock().unwrap();
-            let wsid = locked_senders.len();
+                    let mut locked_senders = WS_SENDERS.lock().unwrap();
+                    let wsid = locked_senders.len();
 
-            client.send_message(&Message::text(format!("hello {}", wsid))).unwrap();
+                    client.send_message(&Message::text(format!("hello {}", wsid))).unwrap();
 
-            let (sender, mut receiver) = client.split();
-            locked_senders.push(sender);
-            let cctx = ctx.clone();
-            relays.push(thread::spawn(move || {
-                for message in receiver.incoming_messages() {
-                    let message = message.unwrap();
+                    let (sender, mut receiver) = client.split();
+                    locked_senders.push(sender);
+                    let cctx = ctx.clone();
+                    relays.push(thread::spawn(move || {
+                        for message in receiver.incoming_messages() {
+                            let message = message.unwrap();
 
-                    match message {
-                        Message { opcode: MsgType::Close, .. } => {
-                            println!("Websocket client {} disconnected", ip);
-                            return;
-                        },
-                        Message { opcode: MsgType::Text, payload: text, .. } => {
-                            println!("Received WS text {:?}", str::from_utf8(&text).unwrap_or(&*format!("{:?}", text)));
-                            if text.starts_with(b"RPC") {
-                                let text = str::from_utf8(&text).unwrap();
-                                let space = text.find(' ').unwrap();
-                                let id = text[3..space].parse::<usize>().unwrap();
-                                let msg = text[space+1..].to_owned();
+                            match message {
+                                Message { opcode: MsgType::Close, .. } => {
+                                    println!("Websocket client {} disconnected", ip);
+                                    return;
+                                },
+                                Message { opcode: MsgType::Text, payload: text, .. } => {
+                                    println!("Received WS text {:?}", str::from_utf8(&text).unwrap_or(&*format!("{:?}", text)));
+                                    if text.starts_with(b"RPC") {
+                                        let text = str::from_utf8(&text).unwrap();
+                                        let space = text.find(' ').unwrap();
+                                        let id = text[3..space].parse::<usize>().unwrap();
+                                        let msg = text[space+1..].to_owned();
 
-                                let mut locked_senders = WS_SENDERS.lock().unwrap();
-                                let locked_rpcs = RPC_SENDERS.lock().unwrap();
-                                println!("Received RPC for WSID {}: {}", wsid, msg);
-                                if let Some(rpc) = locked_rpcs.get(&id) {
-                                    rpc.send(msg).unwrap();
-                                } else {
-                                    locked_senders[id].send_message(&Message::text("RPC ERROR: nobody listening".to_owned())).unwrap();
-                                }
-                            } else {
-                                cctx.send(CmdFrom::Data(str::from_utf8(&text).unwrap().to_owned())).unwrap();
+                                        let mut locked_senders = WS_SENDERS.lock().unwrap();
+                                        let locked_rpcs = RPC_SENDERS.lock().unwrap();
+                                        println!("Received RPC for WSID {}: {}", wsid, msg);
+                                        if let Some(rpc) = locked_rpcs.get(&id) {
+                                            rpc.send(msg).unwrap();
+                                        } else {
+                                            locked_senders[id].send_message(&Message::text("RPC ERROR: nobody listening".to_owned())).unwrap();
+                                        }
+                                    } else {
+                                        cctx.send(CmdFrom::Data(str::from_utf8(&text).unwrap().to_owned())).unwrap();
+                                    }
+                                },
+                                _ => ()
                             }
-                        },
-                        _ => ()
-                    }
+                        }
+                    }));
+                } else {
+                    println!("Websocket connection with no suitable protocols!");
                 }
-            }));
+            } else {
+                println!("Websocket connection with no protocols!");
+            }
         }
 
+        println!("joining marshal");
         marshal.join().unwrap();
+        println!("joined marshal");
     })
+}
+
+pub fn ouroboros() {
+    let mut req = Client::connect((Host::Domain("0.0.0.0".to_owned()), config::WS_PORT, "", false)).unwrap();
+    req.headers.set(header::WebSocketProtocol(vec!["ouroboros".to_owned()]));
+    let _ = req.send();
 }
 

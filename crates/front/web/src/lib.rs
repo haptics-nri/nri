@@ -357,8 +357,9 @@ guilty!{
 
         fn teardown(&mut self) {
             self.listening.close().unwrap(); // FIXME this does not do anything (known bug in hyper)
-            drop(self.wstx.take()); // close the channel
-            self.websocket.take().unwrap().join().unwrap(); // safe to join since wstx was just shut down
+            drop(self.wstx.take()); // (a) close the channel
+            ws::ouroboros(); // (b) close the websocket listener
+            self.websocket.take().unwrap().join().unwrap(); // safe to join after (a) and (b) above
         }
     }
 }
