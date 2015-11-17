@@ -1,9 +1,7 @@
 #![allow(dead_code)]
 
-extern crate libc;
-extern crate conv;
-use self::libc::{c_void, c_int, c_uint, c_char, c_double};
-use self::conv::TryFrom;
+use libc::{c_void, c_int, c_uint, c_char, c_double};
+use conv::TryFrom;
 use std::slice;
 use std::mem;
 use std::ptr;

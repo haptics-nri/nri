@@ -1,6 +1,7 @@
 #!/bin/bash
 
-export LD_LIBRARY_PATH=src/optoforce
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:crates/drivers/optoforce
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:crates/drivers/biotac/src/wrapper
 export RUST_BACKTRACE=1
 
 if [ "$#" -ne 0 ]; then 

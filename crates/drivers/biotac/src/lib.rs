@@ -1,12 +1,19 @@
 //! Service to read data from the BioTac sensor
 
+#[macro_use] extern crate guilt_by_association;
+#[macro_use] extern crate utils;
+#[macro_use] extern crate comms;
+
 group_attr! {
     #[cfg(target_os = "linux")]
 
+    extern crate scribe;
+
+    extern crate libc;
     extern crate time;
 
-    use ::comms::{Controllable, CmdFrom, Block};
-    use ::scribe::{Writer, Writable};
+    use comms::{Controllable, CmdFrom, Block};
+    use scribe::{Writer, Writable};
     use std::sync::mpsc::Sender;
     use std::default::Default;
     use std::{mem, str};

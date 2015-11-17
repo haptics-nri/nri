@@ -2,14 +2,14 @@ fn main() {
     let project_dir = env!("CARGO_MANIFEST_DIR");
     //let out_dir = env!("OUT_DIR");
 
-    //Command::new("make -C src/structure").status().unwrap();
+    //Command::new("make -C crates/drivers/structure").status().unwrap();
 
-    println!("cargo:rustc-link-search=native={}/src/structure", project_dir);
-    println!("cargo:rustc-libdir={}/src/structure", project_dir);
-    println!("cargo:rustc-link-search=native={}/src/bluefox", project_dir);
-    println!("cargo:rustc-libdir={}/src/bluefox", project_dir);
-    println!("cargo:rustc-link-search=native={}/src/optoforce", project_dir);
-    println!("cargo:rustc-libdir={}/src/optoforce", project_dir);
-    println!("cargo:rustc-link-search=native={}/src/biotac/wrapper", project_dir);
-    println!("cargo:rustc-libdir={}/src/biotac/wrapper", project_dir);
+    println!("cargo:rustc-link-search=native={}/crates/drivers/structure", project_dir);
+    println!("cargo:rustc-libdir={}/crates/drivers/structure", project_dir);
+    println!("cargo:rustc-link-search=native={}/crates/drivers/bluefox", project_dir);
+    println!("cargo:rustc-libdir={}/crates/drivers/bluefox", project_dir);
+    println!("cargo:rustc-link-search=native={}/crates/drivers/optoforce", project_dir);
+    println!("cargo:rustc-libdir={}/crates/drivers/optoforce", project_dir);
+    println!("cargo:rustc-link-search=native={}/crates/drivers/biotac/src/wrapper", project_dir);
+    println!("cargo:rustc-libdir={}/crates/drivers/biotac/src/wrapper", project_dir);
 }

@@ -1,0 +1,21 @@
+[package]
+name    = "bluefox"
+version = "0.1.0"
+authors = ["Alex Burka <aburka@seas.upenn.edu>"]
+
+[profile.dev]
+opt-level = 3
+debug     = true
+
+[dependencies]
+comms                = { path = "../../back/comms"        }
+scribe               = { path = "../../back/scribe"       }
+utils                = { path = "../../utils"             }
+guilt-by-association = "0.2"
+custom_derive  = "0.1"
+conv           = "0.3"
+time                 = "0.1"
+libc                 = "0.2"
+image          = "0.4"
+rustc-serialize = "0.3" # TODO migrate to serde
+

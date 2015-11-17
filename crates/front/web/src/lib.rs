@@ -2,6 +2,16 @@
 //!
 //! Uses the Iron web framework, Handlebars templates, and Twitter Boostrap.
 
+#[macro_use] extern crate comms;
+#[macro_use] extern crate utils;
+extern crate teensy;
+
+#[macro_use] extern crate log;
+#[macro_use] extern crate lazy_static;
+#[macro_use] extern crate guilt_by_association;
+extern crate time;
+extern crate uuid;
+
 extern crate iron;
 extern crate handlebars as hbs;
 extern crate staticfile;
@@ -12,6 +22,7 @@ extern crate url;
 extern crate hyper;
 extern crate rustc_serialize as serialize;
 extern crate notify;
+extern crate websocket;
 
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
@@ -21,23 +32,23 @@ use std::thread::JoinHandle;
 use std::collections::{HashMap, BTreeMap};
 use std::io::{Read, BufReader};
 use std::fs::{self, File};
-use super::comms::{Controllable, CmdFrom, Power, Block};
-use super::teensy::ParkState;
-use self::iron::prelude::*;
-use self::iron::status;
-use self::iron::middleware::Handler;
-use self::iron::modifiers::Header;
-use self::hbs::Handlebars;
-use self::staticfile::Static;
-use self::mount::Mount;
-use self::router::Router;
-#[allow(unused_imports)] use self::urlencoded::{UrlEncodedQuery, UrlEncodedBody};
-use self::url::percent_encoding::percent_decode;
-use self::hyper::server::Listening;
-use self::hyper::header::ContentType;
-use self::hyper::mime::{Mime, TopLevel, SubLevel};
-use self::serialize::json::{ToJson, Json};
-use self::notify::{Watcher, RecommendedWatcher};
+use comms::{Controllable, CmdFrom, Power, Block};
+use teensy::ParkState;
+use iron::prelude::*;
+use iron::status;
+use iron::middleware::Handler;
+use iron::modifiers::Header;
+use hbs::Handlebars;
+use staticfile::Static;
+use mount::Mount;
+use router::Router;
+#[allow(unused_imports)] use urlencoded::{UrlEncodedQuery, UrlEncodedBody};
+use url::percent_encoding::percent_decode;
+use hyper::server::Listening;
+use hyper::header::ContentType;
+use hyper::mime::{Mime, TopLevel, SubLevel};
+use serialize::json::{ToJson, Json};
+use notify::{Watcher, RecommendedWatcher};
 
 macro_rules! jsonize {
     ($map:ident, $selph:ident, $var:ident) => {{
@@ -103,7 +114,7 @@ fn watch<T, U, F>(mut thing: T,
                   f: &mut F,
                   root: &'static Path,
                   ext: &'static str| {
-        fs::read_dir(root).unwrap()
+        fs::read_dir(root).expect(&format!("could not read directory {:?}", root))
             .take_while(Result::is_ok).map(Result::unwrap)
             .map(|e| e.path())
             .filter(|p| match p.extension() { Some(x) if x == ext => true, _ => false })
@@ -115,15 +126,16 @@ fn watch<T, U, F>(mut thing: T,
 
     thread::spawn(move || {
         let (tx, rx) = mpsc::channel();
-        let mut w: RecommendedWatcher = Watcher::new(tx).unwrap();
-        w.watch(root).unwrap();
+        let mut w: RecommendedWatcher = Watcher::new(tx).expect("failed to crate watcher");
+        w.watch(root).expect("watcher refused to watch");
 
         for evt in rx {
             if let Some(path) = evt.path {
                 if let Some(x) = path.extension() {
                     if x == ext {
-                        print!("Updating... ({:?} {:?})", path.file_name().unwrap(), evt.op.unwrap());
-                        let mut thing = global.write().unwrap();
+                        print!("Updating... ({:?} {:?})", path.file_name().expect(&format!("could not get file name of {:?}", path)),
+                                                          evt.op.expect(&format!("no operation for event")));
+                        let mut thing = global.write().expect("couldn't get a write lock");
                         update(&mut *thing, &mut f, root, ext);
                         println!(" done.");
                     }
@@ -151,9 +163,11 @@ lazy_static! {
                                                             Path::new(config::FLOW_PATH),
                                                             "flow",
                                                             |flows, path| {
-        let flow = Flow::parse(path.file_stem().unwrap().to_str().unwrap().to_owned(),
-                               BufReader::new(File::open(&path).unwrap()))
-                        .unwrap();
+        let flow = Flow::parse(path.file_stem().expect(&format!("no file stem for {:?}", path))
+                                    .to_str().expect(&format!("bad UTF-8 in {:?}", path))
+                                    .to_owned(),
+                               BufReader::new(File::open(&path).expect(&format!("could not open flow {:?}", path))))
+                        .expect(&format!("unable to parse flow {:?}", path));
         flows.insert(flow.name.clone(), flow);
     });
 }

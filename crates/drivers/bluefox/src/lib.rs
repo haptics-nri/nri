@@ -1,11 +1,21 @@
 //! Service to capture frames from the mvBlueFOX3 camera
 
+#[macro_use] extern crate guilt_by_association;
+#[macro_use] extern crate utils;
+#[macro_use] extern crate comms;
+#[macro_use] extern crate custom_derive;
+#[macro_use] extern crate conv;
+
 group_attr!{
     #[cfg(target_os = "linux")]
 
+    extern crate libc;
     extern crate time;
     extern crate image;
     extern crate rustc_serialize as serialize;
+
+    extern crate scribe;
+
     use std::io::Write;
     use self::image::{imageops, ImageBuffer, ColorType, FilterType};
     use self::image::png::PNGEncoder;
@@ -13,8 +23,8 @@ group_attr!{
     use self::serialize::base64::ToBase64;
     use std::sync::Mutex;
     use std::sync::mpsc::Sender;
-    use ::comms::{Controllable, CmdFrom, Block, RestartableThread};
-    use ::scribe::Writer;
+    use comms::{Controllable, CmdFrom, Block, RestartableThread};
+    use scribe::Writer;
 
     type PngStuff = (usize, Vec<u8>, (usize, usize), ColorType);
 

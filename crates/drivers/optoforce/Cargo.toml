@@ -1,0 +1,18 @@
+[package]
+name    = "optoforce"
+version = "0.1.0"
+authors = ["Alex Burka <aburka@seas.upenn.edu>"]
+
+[profile.dev]
+opt-level = 3
+debug     = true
+# TODO build script
+
+[dependencies]
+comms                = { path = "../../back/comms"        }
+scribe               = { path = "../../back/scribe"       }
+utils                = { path = "../../utils"             }
+guilt-by-association = "0.2"
+time                 = "0.1"
+libc                 = "0.2"
+

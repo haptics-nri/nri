@@ -1,7 +1,3 @@
-extern crate time;
-extern crate uuid;
-extern crate rustc_serialize as serialize;
-
 use std::sync::mpsc;
 use std::collections::BTreeMap;
 use std::io::{Write, BufRead};
@@ -9,11 +5,12 @@ use std::fs::{self, File};
 use std::path::PathBuf;
 use std::{fmt, env, thread};
 use std::time::Duration;
-use ::teensy::ParkState;
-use ::comms::CmdFrom;
+use time::{Timespec, get_time};
+use teensy::ParkState;
+use comms::CmdFrom;
 use super::ws;
-use self::uuid::Uuid;
-use self::serialize::json::{ToJson, Json};
+use uuid::Uuid;
+use serialize::json::{ToJson, Json};
 
 #[derive(Debug)]
 enum EventContour {
@@ -23,7 +20,7 @@ enum EventContour {
     In,
 }
 
-struct StampPrinter(time::Timespec);
+struct StampPrinter(Timespec);
 
 impl fmt::Display for StampPrinter {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -42,9 +39,9 @@ pub struct Flow {
     /// All states done but one?
     almostdone: bool,
 
-    stamp: Option<time::Timespec>,
+    stamp: Option<Timespec>,
     dir: Option<PathBuf>,
-    id: Option<uuid::Uuid>,
+    id: Option<Uuid>,
 }
 
 /// One state in a data collection flow
@@ -54,10 +51,10 @@ pub struct FlowState {
     /// State of parking lot that allows this state (if applicable)
     park: Option<ParkState>,
     /// Commands to run for this state
-    script: Vec<(FlowCmd, Option<time::Timespec>)>,
+    script: Vec<(FlowCmd, Option<Timespec>)>,
     /// Has this state been completed?
     done: bool,
-    stamp: Option<time::Timespec>,
+    stamp: Option<Timespec>,
 }
 
 /// Different actions that a flow can perform at each state
@@ -92,8 +89,8 @@ impl Flow {
             println!("Beginning flow {}!", self.name);
 
             // need a timestamp and ID
-            self.stamp = Some(time::get_time());
-            self.id = Some(uuid::Uuid::new_v4());
+            self.stamp = Some(get_time());
+            self.id = Some(Uuid::new_v4());
             self.active = true;
 
             fs::create_dir(format!("data/{}.{}", self.shortname, self.stamp.unwrap().sec)).unwrap();
@@ -249,14 +246,14 @@ impl Flow {
 }
 
 impl FlowState {
-    pub fn new(name: String, park: Option<ParkState>, script: Vec<(FlowCmd, Option<time::Timespec>)>) -> FlowState {
+    pub fn new(name: String, park: Option<ParkState>, script: Vec<(FlowCmd, Option<Timespec>)>) -> FlowState {
         FlowState { name: name, park: park, script: script, stamp: None, done: false }
     }
 
     pub fn run(&mut self, tx: &mpsc::Sender<CmdFrom>, wsid: usize) {
-        self.stamp = Some(time::get_time());
+        self.stamp = Some(get_time());
         for &mut (ref mut c, ref mut stamp) in &mut self.script {
-            *stamp = Some(time::get_time());
+            *stamp = Some(get_time());
             c.run(&tx, wsid);
         }
         self.done = true;

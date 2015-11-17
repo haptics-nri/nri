@@ -1,8 +1,8 @@
 use std::io::{self, Read};
-use super::iron::prelude::*;
-use super::iron::status;
-use super::iron::headers::Connection;
-use super::iron::middleware::AfterMiddleware;
+use iron::prelude::*;
+use iron::status;
+use iron::headers::Connection;
+use iron::middleware::AfterMiddleware;
 use super::config;
 
 pub struct Catchall;

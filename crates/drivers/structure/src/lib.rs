@@ -1,9 +1,18 @@
 //! Service to capture frames from the Structure Sensor
 
+#[macro_use] extern crate utils;
+
+#[macro_use] extern crate guilt_by_association;
+#[macro_use] extern crate custom_derive;
+#[macro_use] extern crate conv;
+
 group_attr!{
     #[cfg(target_os = "linux")]
 
+    extern crate comms;
+    extern crate scribe;
     extern crate time;
+    extern crate libc;
     extern crate image;
     extern crate rustc_serialize as serialize;
     use std::{mem, slice};
@@ -14,8 +23,8 @@ group_attr!{
     use self::serialize::base64;
     use self::serialize::base64::ToBase64;
     use std::sync::mpsc::Sender;
-    use ::comms::{Controllable, CmdFrom, Block, RestartableThread};
-    use ::scribe::Writer;
+    use comms::{Controllable, CmdFrom, Block, RestartableThread};
+    use scribe::Writer;
 
     type PngStuff = (usize, Vec<u8>, bool, (i32, i32), ColorType);
 

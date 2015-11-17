@@ -1,9 +1,7 @@
 #![allow(dead_code)]
 
-extern crate libc;
-extern crate conv;
-use self::libc::{c_void, c_char, c_int};
-use self::conv::TryFrom;
+use libc::{c_void, c_char, c_int};
+use conv::TryFrom;
 use std::ptr;
 use std::mem;
 use std::ffi::CString;
@@ -149,7 +147,7 @@ pub mod prop {
     }
 
     use super::{OniCropping, OniVideoMode};
-    use super::libc::{c_int, c_float};
+    use libc::{c_int, c_float};
 
     pub type Radians = f32;
 

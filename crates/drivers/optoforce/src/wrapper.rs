@@ -1,7 +1,6 @@
 #![allow(dead_code)] // these are full bindings to the adapter lib
 
-extern crate libc;
-use self::libc::{c_void, c_int, c_char, c_uchar, c_float, c_double};
+use libc::{c_void, c_int, c_char, c_uchar, c_float, c_double};
 use std::default::Default;
 use std::f32;
 use std::ffi::CString;

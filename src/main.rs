@@ -111,10 +111,6 @@
 #![cfg_attr(not(target_os = "linux"), allow(dead_code))]
 #![cfg_attr(feature = "nightly", feature(const_fn, read_exact, core_intrinsics))]
 
-#[macro_use]
-extern crate guilt_by_association;
-extern crate libc;
-
 #[macro_use] extern crate utils;
 #[macro_use] extern crate comms;
 extern crate scribe;
@@ -143,11 +139,7 @@ use bluefox::Bluefox;
 use biotac::Biotac;
 
 #[macro_use] extern crate log;
-#[macro_use] extern crate custom_derive;
-#[macro_use] extern crate conv;
-#[macro_use] extern crate lazy_static;
-#[macro_use] extern crate abort_on_panic;
-extern crate env_logger;
+#[macro_use] extern crate env_logger;
 extern crate hprof;
 extern crate chrono;
 

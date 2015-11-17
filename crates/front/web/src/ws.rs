@@ -1,16 +1,15 @@
-extern crate websocket as ws;
-
 use std::collections::HashMap;
 use std::sync::{mpsc, Mutex};
 use std::{thread, str};
-use ::comms::CmdFrom;
+use comms::CmdFrom;
 use super::config;
-pub use self::ws::{Sender, Receiver, Message};
-use self::ws::message::Type as MsgType;
+pub use websocket::{Sender, Receiver, Message};
+use websocket::message::Type as MsgType;
+use websocket::{server, header, stream, Server};
 
 lazy_static! {
     pub static ref RPC_SENDERS: Mutex<HashMap<usize, mpsc::Sender<String>>>                         = Mutex::new(HashMap::new());
-    pub static ref WS_SENDERS:  Mutex<Vec<ws::server::sender::Sender<ws::stream::WebSocketStream>>> = Mutex::new(Vec::new());
+    pub static ref WS_SENDERS:  Mutex<Vec<server::sender::Sender<stream::WebSocketStream>>> = Mutex::new(Vec::new());
 }
 
 pub fn send(wsid: usize, msg: String) {
@@ -45,7 +44,7 @@ pub fn rpc<T, F: Fn(String) -> Result<T, String>>(wsid: usize, prompt: String, v
 
 pub fn spawn(ctx: mpsc::Sender<CmdFrom>, wsrx: mpsc::Receiver<Message<'static>>) -> thread::JoinHandle<()> {
     thread::spawn(move || {
-        let ws = ws::Server::bind(("0.0.0.0", config::WS_PORT)).unwrap();
+        let ws = Server::bind(("0.0.0.0", config::WS_PORT)).unwrap();
 
         let mut relays = Vec::new();
 
@@ -72,10 +71,10 @@ pub fn spawn(ctx: mpsc::Sender<CmdFrom>, wsrx: mpsc::Receiver<Message<'static>>)
 
             let mut response = request.accept(); // Form a response
 
-            if let Some(&ws::header::WebSocketProtocol(ref protocols)) = headers.get() {
+            if let Some(&header::WebSocketProtocol(ref protocols)) = headers.get() {
                 if protocols.contains(&("rust-websocket".to_owned())) {
                     // We have a protocol we want to use
-                    response.headers.set(ws::header::WebSocketProtocol(vec!["rust-websocket".to_owned()]));
+                    response.headers.set(header::WebSocketProtocol(vec!["rust-websocket".to_owned()]));
                 }
             }
 

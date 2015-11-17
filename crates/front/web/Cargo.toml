@@ -1,0 +1,32 @@
+[package]
+name    = "web"
+version = "0.1.0"
+authors = ["Alex Burka <aburka@seas.upenn.edu>"]
+
+[profile.dev]
+opt-level = 3
+debug     = true
+
+[dependencies] 
+comms                = { path = "../../back/comms"     }
+utils                = { path = "../../utils"          }
+teensy               = { path = "../../drivers/teensy" }
+guilt-by-association = "0.2"
+lazy_static          = "0.1"
+notify               = "2.4"
+time                 = "0.1"
+uuid                 = "0.1"
+log                  = "0.3"
+
+# iron deps
+iron                 = "0.2"
+handlebars-iron      = "0.9"
+handlebars           = "0.11"
+staticfile           = { version = "0.0.6", default-features = false }
+mount                = "0.0.9"
+hyper                = "0.6"
+router               = "0.0.15"
+urlencoded           = "0.2"
+url                  = "0.2"
+rustc-serialize      = "0.3" # TODO migrate to serde
+websocket            = "0.13"
