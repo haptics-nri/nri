@@ -23,9 +23,9 @@ handlebars-iron      = "0.9"
 handlebars           = "0.11"
 staticfile           = { version = "0.0.6", default-features = false }
 mount                = "0.0.9"
-hyper                = "0.6"
+hyper                = "0.7"
 router               = "0.0.15"
 urlencoded           = "0.2"
-url                  = "0.2"
+url                  = "0.5"
 rustc-serialize      = "0.3" # TODO migrate to serde
-websocket            = "0.13"
+websocket            = "0.14"

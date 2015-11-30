@@ -45,13 +45,13 @@
 //! [liboptoforce]: https://github.com/ethz-asl/liboptoforce
 
 #[macro_use] extern crate utils;
+#[macro_use] extern crate comms;
 
 #[macro_use] extern crate guilt_by_association;
 
 group_attr!{
     #[cfg(target_os = "linux")]
 
-    extern crate comms;
     extern crate scribe;
 
     extern crate time;

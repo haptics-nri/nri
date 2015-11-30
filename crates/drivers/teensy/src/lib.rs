@@ -1,6 +1,7 @@
 //! Service to read data from the Teensy and attached sensors
 
 #[macro_use] extern crate utils;
+#[macro_use] extern crate comms;
 
 #[macro_use] extern crate guilt_by_association;
 #[macro_use] extern crate custom_derive;
@@ -33,7 +34,6 @@ impl ParkState {
 group_attr!{
     #[cfg(target_os = "linux")]
 
-    extern crate comms;
     extern crate scribe;
 
     extern crate serial;
