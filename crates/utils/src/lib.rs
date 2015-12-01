@@ -14,17 +14,13 @@ macro_rules! errorln {
 macro_rules! group_attr {
     (#[cfg($attr:meta)] $($yes:item)*) => { group_attr!{internal #[cfg($attr)] $($yes)* } };
 
-    ($modname:ident #[cfg($attr:meta)] $($yes:item)*) => {
+    ($name:ident #[cfg($attr:meta)] $($yes:item)*) => {
+        macro_rules! $name {
+            () => { $($yes)* }
+        }
+
         #[cfg($attr)]
-        mod $modname {
-            $($yes)*
-        }
-
-        #[cfg(not($attr))]
-        mod $modname {
-        }
-
-        pub use self::$modname::*;
+        $name!();
     };
 }
 
