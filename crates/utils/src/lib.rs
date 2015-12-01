@@ -47,7 +47,7 @@ macro_rules! errorln {
 ///     );
 /// }
 ///
-/// type Baz = Bar; // types from inside are acessible
+/// type Baz = Bar; // types from inside are accessible
 /// # fn main() {}
 /// ```
 ///
