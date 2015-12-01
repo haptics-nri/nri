@@ -18,10 +18,10 @@ group_attr!{
     use std::{mem, slice};
     use std::io::Write;
     use std::sync::Mutex;
-    use self::image::{imageops, ImageBuffer, ColorType, FilterType};
-    use self::image::png::PNGEncoder;
-    use self::serialize::base64;
-    use self::serialize::base64::ToBase64;
+    use image::{imageops, ImageBuffer, ColorType, FilterType};
+    use image::png::PNGEncoder;
+    use serialize::base64;
+    use serialize::base64::ToBase64;
     use std::sync::mpsc::Sender;
     use comms::{Controllable, CmdFrom, Block, RestartableThread};
     use scribe::Writer;

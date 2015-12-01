@@ -12,12 +12,33 @@ macro_rules! errorln {
 
 #[macro_export]
 macro_rules! group_attr {
-    (#[cfg($attr:meta)] $($yes:item)*) => { group_attr!(internal #[cfg($attr)] $($yes)*); };
+    (#[cfg($attr:meta)] $($yes:tt)*) => { group_attr!(internal () #[cfg($attr)] $($yes)*); };
 
-    ($name:ident #[cfg($attr:meta)] $($yes:item)*) => {
+    ($name:ident ($($krates:ident)*) #[cfg($attr:meta)] extern crate $krate:ident; $($yes:tt)*) => {
+        #[cfg($attr)] extern crate $krate;
+        group_attr!($name ($($krates)* $krate) #[cfg($attr)] $($yes)*);
+    };
+
+    ($name:ident ($($krates:ident)*) #[cfg($attr:meta)] #[macro_use] extern crate $krate:ident; $($yes:tt)*) => {
+        #[cfg($attr)] #[macro_use] extern crate $krate;
+        group_attr!($name ($($krates)* $krate) #[cfg($attr)] $($yes)*);
+    };
+
+    ($name:ident ($($krates:ident)*) #[cfg($attr:meta)] extern crate $krate:ident as $alias:ident; $($yes:tt)*) => {
+        #[cfg($attr)] extern crate $krate as $alias;
+        group_attr!($name ($($krates)* $alias) #[cfg($attr)] $($yes)*);
+    };
+
+    ($name:ident ($($krates:ident)*) #[cfg($attr:meta)] #[macro_use] extern crate $krate:ident as $alias:ident; $($yes:tt)*) => {
+        #[cfg($attr)] #[macro_use] extern crate $krate as $alias;
+        group_attr!($name ($($krates)* $alias) #[cfg($attr)] $($yes)*);
+    };
+
+    ($name:ident ($($krates:ident)*) #[cfg($attr:meta)] $($yes:item)*) => {
         #[cfg($attr)]
         mod $name {
-            use super::*;
+            #[allow(unused_imports)] use super::{$($krates),*};
+            #[allow(unused_imports)] use super::*;
             $($yes)*
         }
     

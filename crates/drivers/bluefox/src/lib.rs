@@ -1,5 +1,7 @@
 //! Service to capture frames from the mvBlueFOX3 camera
 
+#![recursion_limit = "1000"]
+
 #[macro_use] extern crate guilt_by_association;
 #[macro_use] extern crate utils;
 #[macro_use] extern crate comms;
@@ -17,10 +19,10 @@ group_attr!{
     extern crate scribe;
 
     use std::io::Write;
-    use self::image::{imageops, ImageBuffer, ColorType, FilterType};
-    use self::image::png::PNGEncoder;
-    use self::serialize::base64;
-    use self::serialize::base64::ToBase64;
+    use image::{imageops, ImageBuffer, ColorType, FilterType};
+    use image::png::PNGEncoder;
+    use serialize::base64;
+    use serialize::base64::ToBase64;
     use std::sync::Mutex;
     use std::sync::mpsc::Sender;
     use comms::{Controllable, CmdFrom, Block, RestartableThread};
