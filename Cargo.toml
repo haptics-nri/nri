@@ -9,7 +9,7 @@ exclude = ["src/web/templates/*", "src/web/bootstrap/*", "src/web/flows/*", "dat
 debug = true
 
 [features]
-nightly = []
+nightly = ["utils/nightly", "teensy/nightly", "biotac/nightly", "optoforce/nightly"]
 
 [dependencies]
 # sub-crates

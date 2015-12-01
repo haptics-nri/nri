@@ -6,6 +6,9 @@ authors = ["Alex Burka <aburka@seas.upenn.edu>"]
 [profile.release]
 debug = true
 
+[features]
+nightly = ["utils/nightly"]
+
 [dependencies]
 comms                = { path = "../../back/comms"        }
 scribe               = { path = "../../back/scribe"       }

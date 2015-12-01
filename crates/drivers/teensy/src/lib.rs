@@ -1,5 +1,7 @@
 //! Service to read data from the Teensy and attached sensors
 
+#![cfg_attr(feature = "nightly", feature(read_exact))]
+
 #[macro_use] extern crate utils;
 #[macro_use] extern crate comms;
 

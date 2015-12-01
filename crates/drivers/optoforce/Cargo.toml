@@ -7,6 +7,9 @@ authors = ["Alex Burka <aburka@seas.upenn.edu>"]
 debug = true
 # TODO build script
 
+[features]
+nightly = ["utils/nightly"]
+
 [dependencies]
 comms                = { path = "../../back/comms"        }
 scribe               = { path = "../../back/scribe"       }

@@ -6,7 +6,7 @@ rm target
 ln -s target-nightly target
 
 # run clippy
-multirust run nightly cargo clippy
+multirust run nightly cargo clippy --features nightly
 
 # cleanup
 rm target

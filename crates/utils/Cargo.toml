@@ -6,6 +6,9 @@ authors = ["Alex Burka <aburka@seas.upenn.edu>"]
 [profile.release]
 debug = true
 
+[features]
+nightly = []
+
 [dependencies]
 hprof = "0.1"
 

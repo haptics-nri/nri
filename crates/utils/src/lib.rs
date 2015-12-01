@@ -93,7 +93,7 @@ macro_rules! group_attr {
             #[allow(unused_imports)] use super::*;
 
             // explicitly import all the collected extern crates
-            #[allow(unused_imports)] use super::{$($krates),*}; // FIXME remove this when 1.6 is stable
+            #[cfg(not(feature = "nightly"))] #[allow(unused_imports)] use super::{$($krates),*}; // FIXME remove this when 1.6 is stable
 
             // output the rest of the items
             $($yes)*
