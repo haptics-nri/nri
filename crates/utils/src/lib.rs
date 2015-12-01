@@ -12,20 +12,8 @@ macro_rules! errorln {
 
 #[macro_export]
 macro_rules! group_attr {
-    (#[cfg($attr:meta)] $($yes:item)*) => { group_attr!{internal #[cfg($attr)] $($yes)* } };
-
-    ($name:ident #[cfg($attr:meta)] $($yes:item)*) => {
-        #[cfg($attr)]
-        macro_rules! $name {
-            () => { $($yes)* }
-        }
-
-        #[cfg(not($attr))]
-        macro_rules! $name {
-            () => { }
-        }
-
-        $name!();
+    (#[cfg($attr:meta)] $($yes:item)*) => {
+        $(#[cfg($attr)] $yes)*
     };
 }
 
