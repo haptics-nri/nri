@@ -12,8 +12,17 @@ macro_rules! errorln {
 
 #[macro_export]
 macro_rules! group_attr {
-    (#[cfg($attr:meta)] $($yes:item)*) => {
-        $(#[cfg($attr)] $yes)*
+    (#[cfg($attr:meta)] $($yes:item)*) => { group_attr!(internal #[cfg($attr)] $($yes)*); };
+
+    ($name:ident #[cfg($attr:meta)] $($yes:item)*) => {
+        #[cfg($attr)]
+        mod $name {
+            use super::*;
+            $($yes)*
+        }
+    
+        #[cfg($attr)]
+        pub use $name::*;
     };
 }
 
