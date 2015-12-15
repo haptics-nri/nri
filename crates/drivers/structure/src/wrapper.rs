@@ -171,7 +171,7 @@ pub struct OniCropping {
 
 #[repr(C)]
 #[derive(Debug)]
-#[allow(raw_pointer_derive)]
+#[allow(unknown_lints, raw_pointer_derive)]
 pub struct OniFrame {
     pub data_size    : i32,
     data             : *mut c_void,
@@ -202,7 +202,7 @@ pub struct OniVideoMode {
 
 #[repr(C)]
 #[derive(Debug)]
-#[allow(raw_pointer_derive)]
+#[allow(unknown_lints, raw_pointer_derive)]
 pub struct OniSensorInfo {
     sensor_type               : OniSensorType,
     num_supported_video_modes : i32,
@@ -265,26 +265,26 @@ pub fn shutdown() {
     unsafe { oniShutdown() }
 }
 
-#[allow(raw_pointer_derive)]
+#[allow(unknown_lints, raw_pointer_derive)]
 #[derive(Debug)]
 pub struct Device {
     pdev: *mut c_void,
 }
 
-#[allow(raw_pointer_derive)]
+#[allow(unknown_lints, raw_pointer_derive)]
 #[derive(Debug)]
 pub struct VideoStream {
     pvs: *mut c_void,
     running: Cell<bool>,
 }
 
-#[allow(raw_pointer_derive)]
+#[allow(unknown_lints, raw_pointer_derive)]
 #[derive(Debug)]
 pub struct Frame {
     pf: *mut OniFrame,
 }
 
-#[allow(raw_pointer_derive)]
+#[allow(unknown_lints, raw_pointer_derive)]
 #[derive(Debug)]
 pub struct SensorInfo {
     pinfo: *const OniSensorInfo,

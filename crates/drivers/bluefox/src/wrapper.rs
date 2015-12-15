@@ -309,7 +309,7 @@ struct ChannelData {
 
 #[repr(C, packed)]
 #[derive(Debug)]
-#[allow(raw_pointer_derive)]
+#[allow(unknown_lints, raw_pointer_derive)]
 struct ImageBuffer {
     pub bytes_per_pixel : c_int,
     pub height          : c_int,
