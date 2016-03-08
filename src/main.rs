@@ -109,7 +109,7 @@
 //! 2. <code>sudo iptables -t nat -I OUTPUT -p tcp -d 127.0.0.1 --dport 80 -j REDIRECT --to-port 3000</code>
 
 #![cfg_attr(not(target_os = "linux"), allow(dead_code))]
-#![cfg_attr(feature = "nightly", feature(const_fn, read_exact, core_intrinsics))]
+#![cfg_attr(feature = "nightly", feature(const_fn))]
 
 #[macro_use] extern crate utils;
 #[macro_use] extern crate comms;
