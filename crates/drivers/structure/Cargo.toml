@@ -24,5 +24,5 @@ conv                 = "0.3"
 time                 = "0.1"
 libc                 = "0.2"
 rustc-serialize      = "0.3" # TODO migrate to serde
-image                = "0.4"
+image                = "0.7"
 

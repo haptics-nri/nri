@@ -13,7 +13,7 @@ use uuid::Uuid;
 use serialize::json::{ToJson, Json};
 
 #[derive(Debug)]
-enum EventContour {
+pub enum EventContour {
     Starting,
     Continuing,
     Finishing,
