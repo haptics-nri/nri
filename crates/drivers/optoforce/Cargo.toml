@@ -8,7 +8,11 @@ debug = true
 # TODO build script
 
 [features]
-nightly = ["utils/nightly"]
+nightly = [
+    "comms/nightly",
+    "scribe/nightly",
+    "utils/nightly",
+    ]
 
 [dependencies]
 comms                = { path = "../../back/comms"        }

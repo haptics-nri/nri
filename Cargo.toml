@@ -9,7 +9,19 @@ exclude = ["src/web/templates/*", "src/web/bootstrap/*", "src/web/flows/*", "dat
 debug = true
 
 [features]
-nightly = ["utils/nightly", "teensy/nightly", "biotac/nightly", "optoforce/nightly"]
+nightly = [
+    "cli/nightly",
+    "web/nightly",
+    "comms/nightly",
+    "scribe/nightly",
+    "biotac/nightly",
+    "bluefox/nightly",
+    "optoforce/nightly",
+    "structure/nightly",
+    "teensy/nightly",
+    "utils/nightly",
+    "lazy_static/nightly",
+    ]
 
 [dependencies]
 # sub-crates
@@ -31,7 +43,7 @@ hprof       = "0.1"
 chrono      = "0.2"
 
 # needed for examples (TODO remove)
-lazy_static = "0.1"
+lazy_static = { git = "https://github.com/durka/lazy-static.rs", branch = "internal-unstable" }
 time        = "0.1"
 libc        = "0.2"
 csv         = "0.14"

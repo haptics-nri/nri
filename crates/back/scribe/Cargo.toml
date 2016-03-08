@@ -6,9 +6,15 @@ authors = ["Alex Burka <aburka@seas.upenn.edu>"]
 [profile.release]
 debug = true
 
+[features]
+nightly = [
+    "utils/nightly",
+    "lazy_static/nightly",
+    ]
+
 [dependencies]
 utils          = { path = "../../utils" }
 libc           = "0.2"
-lazy_static    = "0.1"
+lazy_static    = { git = "https://github.com/durka/lazy-static.rs", branch = "internal-unstable" }
 abort_on_panic = "1.0"
 

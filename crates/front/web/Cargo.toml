@@ -6,12 +6,20 @@ authors = ["Alex Burka <aburka@seas.upenn.edu>"]
 [profile.release]
 debug = true
 
+[features]
+nightly = [
+    "comms/nightly",
+    "utils/nightly",
+    "teensy/nightly",
+    "lazy_static/nightly",
+    ]
+
 [dependencies] 
 comms                = { path = "../../back/comms"     }
 utils                = { path = "../../utils"          }
 teensy               = { path = "../../drivers/teensy" }
 guilt-by-association = "0.2"
-lazy_static          = "0.1"
+lazy_static          = { git = "https://github.com/durka/lazy-static.rs", branch = "internal-unstable" }
 notify               = "2.4"
 time                 = "0.1"
 uuid                 = "0.1"
