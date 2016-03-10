@@ -9,7 +9,7 @@ extern crate teensy;
 extern crate chrono;
 
 use comms::{Controllable, CmdFrom, Power, Block};
-use std::{env, thread};
+use std::{env, fs, thread};
 use std::io::{self, BufRead, Write};
 use std::process::Command;
 use std::sync::mpsc::Sender;
@@ -44,20 +44,20 @@ guilty!{
                     let mut words = command.trim().split(" ");
                     match words.next().unwrap_or("") {
                         "" => {},
-                        "episode" => {
+                        "episode" =>
                             if let Some(surface) = words.next() {
                                 if let Some(sec_str) = words.next() {
                                     if let Ok(sec) = sec_str.parse::<u64>() {
                                         self.episode(surface, sec);
                                     } else {
                                         errorln!("Invalid duration value (episode <surface> <sec>)");
+                                    }
                                 } else {
                                     errorln!("No duration (episode <surface> <sec>)");
                                 }
                             } else {
                                 errorln!("No surface (episode <surface> <sec>)");
-                            }
-                        },
+                            },
                         "cd" => { env::set_current_dir(words.next().unwrap()).unwrap(); },
                         "sleep" => {
                             if let Some(ms_str) = words.next() {
@@ -129,25 +129,24 @@ impl CLI {
 
     fn episode(&self, surface: &str, sec: u64) {
         match teensy::ParkState::metermaid() {
-            teensy::ParkState::None => errorln!("No end-effector"),
-            teensy::ParkState::Multiple => errorln!("Multiple end-effectors"),
-            endeff =>
+            None => errorln!("Failed to read end-effector state"),
+            Some(teensy::ParkState::None) => errorln!("No end-effector"),
+            Some(teensy::ParkState::Multiple) => errorln!("Multiple end-effectors"),
+            Some(endeff) =>
                 if let Ok(_) = env::set_current_dir("data") {
-                    let datedir = chrono::Local::today().format("%Y%m%d");
+                    let datedir = chrono::Local::today().format("%Y%m%d").to_string();
                     loop {
-                        if let Ok(_) = env::set_current_dir(datedir) {
+                        if let Ok(_) = env::set_current_dir(&datedir) {
                             let mut epnum = 1;
                             for entry in fs::read_dir(".").expect("list episode dir") {
                                 if let Ok(entry) = entry {
                                     if let Ok(typ) = entry.file_type() {
                                         if typ.is_dir() {
-                                            if let Ok(name) = entry.file_name() {
-                                                if let Ok(name) = name.into_string() {
-                                                    if name.starts_with(surface) && name.ends_with(endeff.short()) {
-                                                        let a = surface.len();
-                                                        let b = name.len() - endeff.short().len();
-                                                        epnum = name[a..b].parse::<u64>().unwrap() + 1;
-                                                    }
+                                            if let Ok(name) = entry.file_name().into_string() {
+                                                if name.starts_with(surface) && name.ends_with(endeff.short()) {
+                                                    let a = surface.len();
+                                                    let b = name.len() - endeff.short().len();
+                                                    epnum = name[a..b].parse::<u64>().unwrap() + 1;
                                                 }
                                             }
                                         }
@@ -155,21 +154,21 @@ impl CLI {
                                 }
                             }
                             let epdir = format!("{}{}{}", surface, epnum, endeff.short());
-                            if let Ok(_) = env::create_dir(epdir) {
-                                if let Ok(_) = env::set_current_dir(epdir) {
+                            if let Ok(_) = fs::create_dir(&epdir) {
+                                if let Ok(_) = env::set_current_dir(&epdir) {
                                     match endeff {
-                                        teensy::ParkState::OptoForce => start("optoforce"),
-                                        teensy::ParkState::BioTac => start("biotac"),
-                                        teensy::ParkState::Stick => {},
+                                        teensy::ParkState::OptoForce => self.start("optoforce"),
+                                        teensy::ParkState::BioTac    => self.start("biotac"),
+                                        teensy::ParkState::Stick     => {},
                                         _ => unreachable!() // checked above
                                     }
-                                    start("teensy");
-                                    sleep(sec * 1000);
-                                    stop("teensy");
+                                    self.start("teensy");
+                                    self.sleep(sec * 1000);
+                                    self.stop("teensy");
                                     match endeff { // TODO RAII
-                                        teensy::ParkState::OptoForce => stop("optoforce"),
-                                        teensy::ParkState::BioTac => stop("biotac"),
-                                        teensy::ParkState::Stick => {},
+                                        teensy::ParkState::OptoForce => self.stop("optoforce"),
+                                        teensy::ParkState::BioTac    => self.stop("biotac"),
+                                        teensy::ParkState::Stick     => {},
                                         _ => unreachable!() // checked above
                                     }
 
@@ -182,9 +181,9 @@ impl CLI {
                                 errorln!("Failed to create episode directory");
                             }
 
-                            env::set_current_dir("..").expect("leave date dir");
+                            env::set_current_dir("../..").expect("leave episode dir");
                             break;
-                        } else if let Ok(_) = env::create_dir(datedir) {
+                        } else if let Ok(_) = fs::create_dir(&datedir) {
                             continue;
                         } else {
                             errorln!("Failed to create/enter date directory");
@@ -194,8 +193,6 @@ impl CLI {
                 } else {
                     errorln!("No data directory");
                 }
-        } else {
-            errorln!("Failed to read end-effector state");
         }
     }
 }

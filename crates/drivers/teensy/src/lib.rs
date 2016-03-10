@@ -29,11 +29,11 @@ custom_derive! {
 impl ParkState {
     pub fn short(&self) -> &str {
         match *self {
-            None      => "center", // HACK
-            OptoForce => "opto",
-            Stick     => "stick",
-            BioTac    => "bio",
-            Multiple  => "multi"
+            ParkState::None      => "center", // HACK
+            ParkState::OptoForce => "opto",
+            ParkState::Stick     => "stick",
+            ParkState::BioTac    => "bio",
+            ParkState::Multiple  => "multi"
         }
     }
 }
