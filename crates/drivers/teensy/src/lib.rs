@@ -26,6 +26,18 @@ custom_derive! {
     }
 }
 
+impl ParkState {
+    pub fn short(&self) -> &str {
+        match *self {
+            None      => "center", // HACK
+            OptoForce => "opto",
+            Stick     => "stick",
+            BioTac    => "bio",
+            Multiple  => "multi"
+        }
+    }
+}
+
 #[cfg(not(target_os = "linux"))]
 impl ParkState {
     pub fn metermaid() -> Option<ParkState> {

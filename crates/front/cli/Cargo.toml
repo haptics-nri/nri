@@ -19,3 +19,5 @@ comms                = { path = "../../back/comms"     }
 teensy               = { path = "../../drivers/teensy" }
 guilt-by-association = "0.2"
 
+chrono               = "0.2"
+

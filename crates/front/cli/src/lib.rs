@@ -6,6 +6,8 @@ extern crate teensy;
 
 #[macro_use] extern crate guilt_by_association;
 
+extern crate chrono;
+
 use comms::{Controllable, CmdFrom, Power, Block};
 use std::{env, thread};
 use std::io::{self, BufRead, Write};
@@ -42,30 +44,40 @@ guilty!{
                     let mut words = command.trim().split(" ");
                     match words.next().unwrap_or("") {
                         "" => {},
+                        "episode" => {
+                            if let Some(surface) = words.next() {
+                                if let Some(sec_str) = words.next() {
+                                    if let Ok(sec) = sec_str.parse::<u64>() {
+                                        self.episode(surface, sec);
+                                    } else {
+                                        errorln!("Invalid duration value (episode <surface> <sec>)");
+                                } else {
+                                    errorln!("No duration (episode <surface> <sec>)");
+                                }
+                            } else {
+                                errorln!("No surface (episode <surface> <sec>)");
+                            }
+                        },
                         "cd" => { env::set_current_dir(words.next().unwrap()).unwrap(); },
                         "sleep" => {
                             if let Some(ms_str) = words.next() {
                                 if let Ok(ms) = ms_str.parse::<u64>() {
-                                    thread::sleep(Duration::from_millis(ms));
+                                    self.sleep(ms);
                                 } else {
-                                    errorln!("Invalid millisecond value");
+                                    errorln!("Invalid millisecond value (sleep <ms>)");
                                 }
                             } else {
-                                errorln!("No millisecond value");
+                                errorln!("No millisecond value (sleep <ms>)");
                             }
                         },
                         "start" => {
                             while let Some(dev) = words.next() {
-                                if !rpc!(self.tx, CmdFrom::Start, dev.to_owned()).unwrap() {
-                                    errorln!("Failed to start {}", dev);
-                                }
+                                self.start(dev);
                             }
                         },
                         "stop" => {
                             while let Some(dev) = words.next() {
-                                if !rpc!(self.tx, CmdFrom::Stop, dev.to_owned()).unwrap() {
-                                    errorln!("Failed to stop {}", dev);
-                                }
+                                self.stop(dev);
                             }
                         },
                         "status" => {
@@ -97,3 +109,94 @@ guilty!{
         }
     }
 }
+
+impl CLI {
+    fn start(&self, dev: &str) {
+        if !rpc!(self.tx, CmdFrom::Start, dev.to_owned()).unwrap() {
+            errorln!("Failed to start {}", dev);
+        }
+    }
+
+    fn stop(&self, dev: &str) {
+        if !rpc!(self.tx, CmdFrom::Stop, dev.to_owned()).unwrap() {
+            errorln!("Failed to stop {}", dev);
+        }
+    }
+
+    fn sleep(&self, ms: u64) {
+        thread::sleep(Duration::from_millis(ms));
+    }
+
+    fn episode(&self, surface: &str, sec: u64) {
+        match teensy::ParkState::metermaid() {
+            teensy::ParkState::None => errorln!("No end-effector"),
+            teensy::ParkState::Multiple => errorln!("Multiple end-effectors"),
+            endeff =>
+                if let Ok(_) = env::set_current_dir("data") {
+                    let datedir = chrono::Local::today().format("%Y%m%d");
+                    loop {
+                        if let Ok(_) = env::set_current_dir(datedir) {
+                            let mut epnum = 1;
+                            for entry in fs::read_dir(".").expect("list episode dir") {
+                                if let Ok(entry) = entry {
+                                    if let Ok(typ) = entry.file_type() {
+                                        if typ.is_dir() {
+                                            if let Ok(name) = entry.file_name() {
+                                                if let Ok(name) = name.into_string() {
+                                                    if name.starts_with(surface) && name.ends_with(endeff.short()) {
+                                                        let a = surface.len();
+                                                        let b = name.len() - endeff.short().len();
+                                                        epnum = name[a..b].parse::<u64>().unwrap() + 1;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            let epdir = format!("{}{}{}", surface, epnum, endeff.short());
+                            if let Ok(_) = env::create_dir(epdir) {
+                                if let Ok(_) = env::set_current_dir(epdir) {
+                                    match endeff {
+                                        teensy::ParkState::OptoForce => start("optoforce"),
+                                        teensy::ParkState::BioTac => start("biotac"),
+                                        teensy::ParkState::Stick => {},
+                                        _ => unreachable!() // checked above
+                                    }
+                                    start("teensy");
+                                    sleep(sec * 1000);
+                                    stop("teensy");
+                                    match endeff { // TODO RAII
+                                        teensy::ParkState::OptoForce => stop("optoforce"),
+                                        teensy::ParkState::BioTac => stop("biotac"),
+                                        teensy::ParkState::Stick => {},
+                                        _ => unreachable!() // checked above
+                                    }
+
+                                    env::set_current_dir("..").expect("leave episode dir");
+                                    println!("Success!");
+                                } else {
+                                    errorln!("Failed to enter episode directory");
+                                }
+                            } else {
+                                errorln!("Failed to create episode directory");
+                            }
+
+                            env::set_current_dir("..").expect("leave date dir");
+                            break;
+                        } else if let Ok(_) = env::create_dir(datedir) {
+                            continue;
+                        } else {
+                            errorln!("Failed to create/enter date directory");
+                            break;
+                        }
+                    }
+                } else {
+                    errorln!("No data directory");
+                }
+        } else {
+            errorln!("Failed to read end-effector state");
+        }
+    }
+}
+
