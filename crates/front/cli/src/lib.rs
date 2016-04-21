@@ -146,7 +146,10 @@ impl CLI {
                                                 if name.starts_with(surface) && name.ends_with(endeff.short()) {
                                                     let a = surface.len();
                                                     let b = name.len() - endeff.short().len();
-                                                    epnum = name[a..b].parse::<u64>().unwrap() + 1;
+                                                    let num = name[a..b].parse::<u64>().unwrap() + 1;
+                                                    if num > epnum {
+                                                        epnum = num;
+                                                    }
                                                 }
                                             }
                                         }

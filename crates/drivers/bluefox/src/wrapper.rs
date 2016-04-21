@@ -300,7 +300,7 @@ enum SearchMode {
 }
 
 #[repr(C, packed)]
-struct ChannelData {
+pub struct ChannelData {
     pub channel_offset : c_int,
     pub line_pitch     : c_int,
     pub pixel_pitch    : c_int,
@@ -309,8 +309,7 @@ struct ChannelData {
 
 #[repr(C, packed)]
 #[derive(Debug)]
-#[allow(unknown_lints, raw_pointer_derive)]
-struct ImageBuffer {
+pub struct ImageBuffer {
     pub bytes_per_pixel : c_int,
     pub height          : c_int,
     pub width           : c_int,
@@ -321,7 +320,7 @@ struct ImageBuffer {
     pub channels        : *mut ChannelData,
 }
 
-struct Image<'a> {
+pub struct Image<'a> {
     pub buf: ImageBuffer,
     reqnr: c_int,
     parent: &'a Device,

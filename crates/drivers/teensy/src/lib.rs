@@ -1,7 +1,5 @@
 //! Service to read data from the Teensy and attached sensors
 
-#![cfg_attr(feature = "nightly", feature(read_exact))]
-
 #[macro_use] extern crate utils;
 #[macro_use] extern crate comms;
 
@@ -64,41 +62,6 @@ group_attr!{
     use serial::prelude::*;
     use conv::TryFrom;
 
-    trait RFC980: Read {
-        fn read_exact_shim(&mut self, buf: &mut [u8]) -> io::Result<()> {
-            self.read_exact_real(buf)
-        }
-
-        #[cfg(feature = "nightly")]
-        fn read_exact_real(&mut self, buf: &mut [u8]) -> io::Result<()> {
-            self.read_exact(buf)
-        }
-
-        #[cfg(not(feature = "nightly"))]
-        fn read_exact_real(&mut self, mut buf: &mut [u8]) -> io::Result<()> {
-            while !buf.is_empty() {
-                match self.read(buf) {
-                    Ok(0)   => break,
-                    Ok(n)   => {
-                        let tmp = buf;
-                        buf = &mut tmp[n..];
-                    },
-                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted
-                            => {},
-                    Err(e)  => return Err(e),
-                }
-            }
-
-            if !buf.is_empty() {
-                Err(io::Error::new(io::ErrorKind::Other, "failed to fill whole buffer"))
-            } else {
-                Ok(())
-            }
-        }
-    }
-
-    impl<T: Read> RFC980 for T {}
-
     trait Coffee: Read + Write {
         fn coffee<W: Write>(self, w: W) -> CoffeeImpl<Self, W> where Self: Sized {
             CoffeeImpl { parent: self, writer: w }
@@ -153,7 +116,7 @@ group_attr!{
             port.write_all(&['4' as u8]).unwrap();
 
             let mut buf = [0u8; 1];
-            match port.read_exact_shim(&mut buf) {
+            match port.read_exact(&mut buf) {
                 Ok(())         => {
                     match ParkState::try_from(!(buf[0] | 0b1111_1000)) {
                         Ok(ps) => Some(ps),
@@ -286,10 +249,10 @@ group_attr!{
 
                 /*
                 let mut b = [0u8; 4096];
-                self.port.read_exact_shim(&mut b).err().map(|e| println!("Teensy read error {:?}", e));
+                self.port.read_exact(&mut b).err().map(|e| println!("Teensy read error {:?}", e));
                 */
                 let mut size_buf = [0u8; 4];
-                let packet_size = match self.port.read_exact_shim(&mut size_buf) {
+                let packet_size = match self.port.read_exact(&mut size_buf) {
                     Ok(()) => {
                         if &size_buf[..3] == b"aaa" {
                             size_buf[3] as usize
@@ -298,14 +261,14 @@ group_attr!{
                             let mut scanning = [0u8; 1];
                             let mut count = 0;
                             while count < 3 {
-                                self.port.read_exact_shim(&mut scanning).unwrap();
+                                self.port.read_exact(&mut scanning).unwrap();
                                 if scanning[0] == 'a' as u8 {
                                     count += 1;
                                 } else {
                                     count = 0;
                                 }
                             }
-                            self.port.read_exact_shim(&mut scanning).unwrap();
+                            self.port.read_exact(&mut scanning).unwrap();
                             scanning[0] as usize
                         }
                     },
@@ -315,7 +278,7 @@ group_attr!{
                     }
                 };
                 let mut buf = vec![0u8; packet_size];
-                match self.port.read_exact_shim(&mut buf[..]) {
+                match self.port.read_exact(&mut buf[..]) {
                     Ok(()) => {
                         let packet = match unsafe { Packet::new(&buf) } {
                             Ok(p) => p,
