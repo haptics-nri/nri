@@ -5,12 +5,12 @@ use comms::CmdFrom;
 use super::config;
 pub use websocket::{Sender, Receiver, Message};
 use websocket::message::Type as MsgType;
-use websocket::{server, header, stream, Server, Client};
+use websocket::{sender, header, stream, Server, Client};
 use url::Host;
 
 lazy_static! {
     pub static ref RPC_SENDERS: Mutex<HashMap<usize, mpsc::Sender<String>>>                         = Mutex::new(HashMap::new());
-    pub static ref WS_SENDERS:  Mutex<Vec<server::sender::Sender<stream::WebSocketStream>>> = Mutex::new(Vec::new());
+    pub static ref WS_SENDERS:  Mutex<Vec<sender::Sender<stream::WebSocketStream>>> = Mutex::new(Vec::new());
 }
 
 pub fn send(wsid: usize, msg: String) {

@@ -43,7 +43,7 @@ hprof       = "0.1"
 chrono      = "0.2"
 
 # needed for examples (TODO remove)
-lazy_static = { git = "https://github.com/durka/lazy-static.rs", branch = "internal-unstable" }
+lazy_static = "0.2"
 time        = "0.1"
 libc        = "0.2"
 csv         = "0.14"
