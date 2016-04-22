@@ -243,7 +243,7 @@ impl Service {
                                                thread: name,
                                                panic_reason: downcast!(y {
                                                                             _ => format!("{:?}", y),
-                                                                            String, &str => format!("{}", y)
+                                                                            String, &str => y.to_string()
                                                                       })
                                            }).unwrap()
                                        };
@@ -348,7 +348,7 @@ fn main() {
                             .spawn().unwrap()
                             .wait().unwrap();
                     },
-                    CmdFrom::Timeout { thread: who, ms: _ }  => {
+                    CmdFrom::Timeout { thread: who, .. }  => {
                         // TODO actually time the service and do something if it times out
                         if find(&services, who.to_owned()).is_some() {
                             timers.insert(who, UTC::now());
