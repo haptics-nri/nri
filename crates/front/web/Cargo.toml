@@ -22,6 +22,7 @@ guilt-by-association = "0.2"
 lazy_static          = "0.2"
 notify               = "2.5"
 time                 = "0.1"
+chrono               = "0.2"
 uuid                 = "0.2"
 log                  = "0.3"
 

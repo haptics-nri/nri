@@ -5,7 +5,7 @@ use std::fs::{self, File};
 use std::path::PathBuf;
 use std::{fmt, env, thread};
 use std::time::Duration;
-use time::{Timespec, get_time};
+use chrono::{DateTime, Local, Timelike};
 use teensy::ParkState;
 use comms::CmdFrom;
 use super::ws;
@@ -20,11 +20,11 @@ pub enum EventContour {
     In,
 }
 
-struct StampPrinter(Timespec);
+struct StampPrinter(DateTime<Local>);
 
 impl fmt::Display for StampPrinter {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:.9}", self.0.sec as f64 + self.0.nsec as f64 / 1_000_000_000f64)
+        write!(f, "{:.9}", self.0.timestamp() as f64 + self.0.nanosecond() as f64 / 1_000_000_000f64)
     }
 }
 
@@ -39,7 +39,7 @@ pub struct Flow {
     /// All states done but one?
     almostdone: bool,
 
-    stamp: Option<Timespec>,
+    stamp: Option<DateTime<Local>>,
     dir: Option<PathBuf>,
     id: Option<Uuid>,
 }
@@ -51,10 +51,10 @@ pub struct FlowState {
     /// State of parking lot that allows this state (if applicable)
     park: Option<ParkState>,
     /// Commands to run for this state
-    script: Vec<(FlowCmd, Option<Timespec>)>,
+    script: Vec<(FlowCmd, Option<DateTime<Local>>)>,
     /// Has this state been completed?
     done: bool,
-    stamp: Option<Timespec>,
+    stamp: Option<DateTime<Local>>,
 }
 
 /// Different actions that a flow can perform at each state
@@ -89,13 +89,29 @@ impl Flow {
             println!("Beginning flow {}!", self.name);
 
             // need a timestamp and ID
-            self.stamp = Some(get_time());
+            self.stamp = Some(Local::now());
             self.id = Some(Uuid::new_v4());
             self.active = true;
 
-            fs::create_dir(format!("data/{}.{}", self.shortname, self.stamp.unwrap().sec)).unwrap();
+            let datedir = self.stamp.unwrap().format("%Y%m%d").to_string();
+            let fldir = format!("data/{}/{}", datedir, self.shortname); // TODO use PathBuf::push
+            fs::create_dir_all(&fldir).unwrap();
             self.dir = Some(env::current_dir().unwrap());
-            env::set_current_dir(format!("data/{}.{}", self.shortname, self.stamp.unwrap().sec)).unwrap();
+            env::set_current_dir(&fldir).unwrap();
+            let mut epnum = 1;
+            for entry in fs::read_dir(".").unwrap() {
+                let entry = entry.unwrap();
+                if entry.file_type().unwrap().is_dir()
+                {
+                    let name = entry.file_name().into_string().unwrap();
+                    let num = name.parse::<u64>().unwrap() + 1;
+                    if num > epnum {
+                        epnum = num;
+                    }
+                }
+            }
+            fs::create_dir(epnum.to_string()).unwrap();
+            env::set_current_dir(epnum.to_string()).unwrap();
 
             ret = EventContour::Starting;
         }
@@ -246,14 +262,14 @@ impl Flow {
 }
 
 impl FlowState {
-    pub fn new(name: String, park: Option<ParkState>, script: Vec<(FlowCmd, Option<Timespec>)>) -> FlowState {
+    pub fn new(name: String, park: Option<ParkState>, script: Vec<(FlowCmd, Option<DateTime<Local>>)>) -> FlowState {
         FlowState { name: name, park: park, script: script, stamp: None, done: false }
     }
 
     pub fn run(&mut self, tx: &mpsc::Sender<CmdFrom>, wsid: usize) {
-        self.stamp = Some(get_time());
+        self.stamp = Some(Local::now());
         for &mut (ref mut c, ref mut stamp) in &mut self.script {
-            *stamp = Some(get_time());
+            *stamp = Some(Local::now());
             c.run(&tx, wsid);
         }
         self.done = true;

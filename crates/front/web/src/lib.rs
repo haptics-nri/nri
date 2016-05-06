@@ -10,6 +10,7 @@ extern crate teensy;
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate guilt_by_association;
 extern crate time;
+extern crate chrono;
 extern crate uuid;
 
 extern crate iron;
@@ -182,8 +183,8 @@ fn index() -> Box<Handler> {
     Box::new(move |req: &mut Request| -> IronResult<Response> {
                       let mut data = BTreeMap::<String, Json>::new();
                       data.insert("services".to_owned(), vec![
-                                  Service::new("Structure Sensor", "structure" , "<img class=\"structure latest\" /><div class=\"structure framenum\"></div>"),
-                                  Service::new("mvBlueFOX3"      , "bluefox"   , "<img class=\"bluefox latest\" /><div class=\"bluefox framenum\"></div>"),
+                                  Service::new("Structure Sensor", "structure" , "<img class=\"frame structure latest\" /><div class=\"structure framenum\"></div>"),
+                                  Service::new("mvBlueFOX3"      , "bluefox"   , "<img class=\"frame bluefox latest\" /><div class=\"bluefox framenum\"></div>"),
                                   Service::new("OptoForce"       , "optoforce" , ""),
                                   Service::new("SynTouch BioTac" , "biotac"    , ""),
                                   Service::new("Teensy"          , "teensy"    , ""),
