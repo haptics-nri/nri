@@ -123,7 +123,7 @@ group_attr!{
                         Err(_) => Some(ParkState::Multiple)
                     }
                 },
-                Err(..)         => {
+                Err(..)        => {
                     None
                 }
             }

@@ -123,7 +123,12 @@ impl Flow {
                 println!("Executing state {}", state.name);
                 state.run(tx, wsid);
                 println!("Finished executing state {}", state.name);
+            } else if state.park.is_some() {
+                println!("Waiting for parking lot state to be {:?} (currently {:?})", state.park, park);
+                ws::send(wsid, format!("msg Please insert {:?} end-effector", state.park.unwrap()));
             }
+        } else {
+            println!("No applicable states.");
         }
 
         let almostdone = match self.states.last() {
