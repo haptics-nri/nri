@@ -174,12 +174,11 @@ pub fn do_camera<T, Data: Debug + Pixels<T>>(width: usize, height: usize, channe
 
     const N_THREADS: usize = 4;
     print!("Creating {} threads...", N_THREADS);
-    let mut threads = Vec::with_capacity(N_THREADS);
-    unsafe { threads.set_len(N_THREADS); }
+    let mut threads = vec![];
     for i in 0..N_THREADS {
         print!("{}...", i);
         let (tx, rx) = mpsc::channel::<PathBuf>();
-        threads[i] = Some((
+        threads.push(Some((
             thread::spawn(move || {
                 for dat_path in rx {
                     let dat = dat_path.to_str().unwrap().to_string();
@@ -195,7 +194,7 @@ pub fn do_camera<T, Data: Debug + Pixels<T>>(width: usize, height: usize, channe
                 }
             }),
             tx
-        ));
+        )));
     }
     println!("done!");
 
