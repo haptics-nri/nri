@@ -113,6 +113,19 @@ group_attr!{
             fn step(&mut self, data: Option<String>) {
                 self.i += 1;
 
+                match data.as_ref().map(|s| s as &str) {
+                    Some("disk start") => {
+                        println!("Started Bluefox recording.");
+                        self.writing = true;
+                        self.writer.set_index(self.i);
+                    },
+                    Some("disk stop") => {
+                        println!("Stopped Bluefox recording.");
+                        self.writing = false;
+                    },
+                    Some(_) | None => ()
+                }
+
                 let image = self.device.request().unwrap();
 
                 if self.writing {
@@ -125,9 +138,8 @@ group_attr!{
                                                   + stamp.nsec as f64
                                                   / 1_000_000_000f64))
                                          .as_bytes());
-                } else {
-                    self.writer.decoy();
                 }
+
                 match data.as_ref().map(|s| s as &str) {
                     Some("kick") => {
                         //self.device.set_reverse_x(!self.device.get_reverse_x().unwrap());
@@ -140,15 +152,7 @@ group_attr!{
                                              ColorType::RGB(8)))
                               .unwrap())
                     },
-                    Some("disk start") => {
-                        println!("Started Bluefox recording.");
-                        self.writing = true;
-                    },
-                    Some("disk stop") => {
-                        println!("Stopped Bluefox recording.");
-                        self.writing = false;
-                    },
-                    Some(_) | None => ()
+                    _ => {}
                 }
                 /*
                 PNGEncoder::new(&mut f).encode(image.data(),

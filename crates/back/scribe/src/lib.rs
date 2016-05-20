@@ -76,9 +76,8 @@ lazy_static! {
                             indices.insert(h, i + 1);
                             File::create(patterns[&h].replace("{}", &i.to_string())).unwrap().write_all(&data).unwrap();
                         },
-                        Message::Decoy(h) => {
-                            let i = indices[&h] + 1;
-                            indices.insert(h, i + 1);
+                        Message::SetIndex(h, index) => {
+                            indices.insert(h, index);
                         },
                     }
                 }
@@ -107,7 +106,7 @@ pub enum Message {
     Register(String, mpsc::Sender<Handle>),
     Unregister(Handle),
     Packet(Handle, Box<[u8]>),
-    Decoy(Handle),
+    SetIndex(Handle, usize),
 }
 
 pub unsafe trait Writable {}
@@ -141,9 +140,9 @@ impl<T: ?Sized> Writer<T> {
         }
     }
 
-    pub fn decoy(&mut self) {
+    pub fn set_index(&mut self, index: usize) {
         if self.dst == Destination::Pattern {
-            send(Message::Decoy(self.handle));
+            send(Message::SetIndex(self.handle, index));
         }
     }
 }
