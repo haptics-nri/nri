@@ -20,6 +20,7 @@ dependencies = [
  "teensy 0.1.0",
  "time 0.1.35 (registry+https://github.com/rust-lang/crates.io-index)",
  "utils 0.1.0",
+ "vicon 0.1.0",
  "web 0.1.0",
 ]
 
@@ -1128,6 +1129,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "vicon"
+version = "0.1.0"
+dependencies = [
+ "comms 0.1.0",
+ "guilt-by-association 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "scribe 0.1.0",
+ "time 0.1.35 (registry+https://github.com/rust-lang/crates.io-index)",
+ "utils 0.1.0",
+]
+
+[[package]]
 name = "void"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1145,6 +1157,7 @@ dependencies = [
 name = "web"
 version = "0.1.0"
 dependencies = [
+ "chrono 0.2.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "comms 0.1.0",
  "guilt-by-association 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "handlebars 0.16.0 (registry+https://github.com/rust-lang/crates.io-index)",
