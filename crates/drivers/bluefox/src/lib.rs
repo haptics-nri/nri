@@ -64,10 +64,27 @@ group_attr!{
                 
                 // TODO set desired properties (height, width, pixel format, frame rate)
 
-                println!("height = {}\nwidth = {}\npixel format = {:?}",
+                println!("BEFORE:\noffset = ({}, {})\nheight = {}\nwidth = {}\npixel format = {:?}\nframe rate = ({}, {})",
+                         device.get_offset_x().unwrap(),
+                         device.get_offset_y().unwrap(),
                          device.get_height().unwrap(),
                          device.get_width().unwrap(),
-                         device.get_pixel_format().unwrap());
+                         device.get_pixel_format().unwrap(),
+                         device.get_acq_fr_enable().unwrap(), device.get_acq_fr().unwrap());
+                device.set_offset_x(0).unwrap();
+                device.set_offset_y(0).unwrap();
+                device.set_height(1200).unwrap();
+                device.set_width(1600).unwrap();
+                device.set_pixel_format(wrapper::settings::PixelFormat::RGB8).unwrap();
+                device.set_acq_fr_enable(true).unwrap();
+                device.set_acq_fr(7.5).unwrap();
+                println!("AFTER:\noffset = ({}, {})\nheight = {}\nwidth = {}\npixel format = {:?}\nframe rate = ({}, {})",
+                         device.get_offset_x().unwrap(),
+                         device.get_offset_y().unwrap(),
+                         device.get_height().unwrap(),
+                         device.get_width().unwrap(),
+                         device.get_pixel_format().unwrap(),
+                         device.get_acq_fr_enable().unwrap(), device.get_acq_fr().unwrap());
 
                 let mtx = Mutex::new(tx);
                 Bluefox {

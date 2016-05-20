@@ -447,7 +447,7 @@ impl Device {
     getset!(get_scale_width,   set_scale_width,   HOBJ(0x800003), i32);
     getset!(get_scale_height,  set_scale_height,  HOBJ(0x800004), i32);
     getset!(get_acq_fr_enable, set_acq_fr_enable, HOBJ(0x850017), b: bool => b as i64, i: i64 => i == 1);
-    getset!(get_acq_fr,        set_acq_fr,        HOBJ(0x850018), i64);
+    getset!(get_acq_fr,        set_acq_fr,        HOBJ(0x850018), f64);
 
     fn set_prop<T: ObjProp>(&self, prop: HOBJ, value: T, index: c_int) -> Result<(), TPROPHANDLING_ERROR> {
         prop_status2result!(unsafe { T::set(prop, value, index) })
