@@ -1,0 +1,23 @@
+OptoForce-and-Camera Episode
+
+- Begin
+    stop
+    "Starting new episode!"
+
+- Capture
+    start structure
+    start bluefox
+    start teensy
+    start optoforce
+    : bluefox disk start
+    : structure disk start
+    "Now recording!"
+- Finish
+    : bluefox disk stop
+    : structure disk stop
+    "Writing to disk, please wait..."
+    stop optoforce teensy bluefox structure
+    "Done!"
+- Wrap up
+    > "surface name"
+
