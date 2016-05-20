@@ -19,6 +19,7 @@ nightly = [
     "optoforce/nightly",
     "structure/nightly",
     "teensy/nightly",
+    "vicon/nightly",
     "utils/nightly",
     "lazy_static/nightly",
     ]
@@ -34,6 +35,7 @@ bluefox     = { path = "crates/drivers/bluefox"   }
 optoforce   = { path = "crates/drivers/optoforce" }
 structure   = { path = "crates/drivers/structure" }
 teensy      = { path = "crates/drivers/teensy"    }
+vicon       = { path = "crates/drivers/vicon"     }
 utils       = { path = "crates/utils"             }
 
 # external deps

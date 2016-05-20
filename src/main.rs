@@ -121,6 +121,7 @@ extern crate optoforce;
 extern crate structure;
 extern crate bluefox;
 extern crate biotac;
+extern crate vicon;
 
 use std::{fs, process};
 use std::io::{Write, BufRead};
@@ -137,6 +138,7 @@ use optoforce::Optoforce;
 use structure::Structure;
 use bluefox::Bluefox;
 use biotac::Biotac;
+use vicon::Vicon;
 
 #[macro_use] extern crate log;
 #[macro_use] extern crate env_logger;
@@ -297,7 +299,7 @@ fn main() {
 
         let (reply_tx, reply_rx) = channel();
 
-        let mut services = rxspawn!(reply_tx; CLI, Web, Teensy, Optoforce, Structure, Bluefox, Optoforce, Biotac);
+        let mut services = rxspawn!(reply_tx; CLI, Web, Teensy, Optoforce, Structure, Bluefox, Optoforce, Biotac, Vicon);
         let mut timers = HashMap::new();
 
         thread::sleep(Duration::from_millis(500)); // wait for threads to start
