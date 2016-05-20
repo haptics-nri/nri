@@ -24,6 +24,7 @@ group_attr!{
     use serialize::base64;
     use serialize::base64::ToBase64;
     use std::sync::Mutex;
+    use std::sync::atomic::{AtomicBool, ATOMIC_BOOL_INIT, Ordering};
     use std::sync::mpsc::Sender;
     use comms::{Controllable, CmdFrom, Block, RestartableThread};
     use scribe::Writer;
@@ -31,6 +32,8 @@ group_attr!{
     type PngStuff = (usize, Vec<u8>, (usize, usize), ColorType);
 
     mod wrapper;
+
+    static SETTINGS_DONE: AtomicBool = ATOMIC_BOOL_INIT;
 
     /// Controllable struct for the camera
     pub struct Bluefox {
@@ -64,27 +67,33 @@ group_attr!{
                 
                 // TODO set desired properties (height, width, pixel format, frame rate)
 
-                println!("BEFORE:\noffset = ({}, {})\nheight = {}\nwidth = {}\npixel format = {:?}\nframe rate = ({}, {})",
-                         device.get_offset_x().unwrap(),
-                         device.get_offset_y().unwrap(),
-                         device.get_height().unwrap(),
-                         device.get_width().unwrap(),
-                         device.get_pixel_format().unwrap(),
-                         device.get_acq_fr_enable().unwrap(), device.get_acq_fr().unwrap());
-                device.set_offset_x(0).unwrap();
-                device.set_offset_y(0).unwrap();
-                device.set_height(1200).unwrap();
-                device.set_width(1600).unwrap();
-                device.set_pixel_format(wrapper::settings::PixelFormat::RGB8).unwrap();
-                device.set_acq_fr_enable(true).unwrap();
-                device.set_acq_fr(7.5).unwrap();
-                println!("AFTER:\noffset = ({}, {})\nheight = {}\nwidth = {}\npixel format = {:?}\nframe rate = ({}, {})",
-                         device.get_offset_x().unwrap(),
-                         device.get_offset_y().unwrap(),
-                         device.get_height().unwrap(),
-                         device.get_width().unwrap(),
-                         device.get_pixel_format().unwrap(),
-                         device.get_acq_fr_enable().unwrap(), device.get_acq_fr().unwrap());
+                if SETTINGS_DONE.load(Ordering::SeqCst) {
+                    // HACK: driver always returns error if we try to modify settings again
+                    println!("settings already set, not modifying");
+                } else {
+                    println!("BEFORE:\noffset = ({}, {})\nheight = {}\nwidth = {}\npixel format = {:?}\nframe rate = ({}, {})",
+                             device.get_offset_x().unwrap(),
+                             device.get_offset_y().unwrap(),
+                             device.get_height().unwrap(),
+                             device.get_width().unwrap(),
+                             device.get_pixel_format().unwrap(),
+                             device.get_acq_fr_enable().unwrap(), device.get_acq_fr().unwrap());
+                    device.set_offset_x(0).unwrap();
+                    device.set_offset_y(0).unwrap();
+                    device.set_height(1200).unwrap();
+                    device.set_width(1600).unwrap();
+                    device.set_pixel_format(wrapper::settings::PixelFormat::RGB8).unwrap();
+                    device.set_acq_fr_enable(true).unwrap();
+                    device.set_acq_fr(7.5).unwrap();
+                    println!("AFTER:\noffset = ({}, {})\nheight = {}\nwidth = {}\npixel format = {:?}\nframe rate = ({}, {})",
+                             device.get_offset_x().unwrap(),
+                             device.get_offset_y().unwrap(),
+                             device.get_height().unwrap(),
+                             device.get_width().unwrap(),
+                             device.get_pixel_format().unwrap(),
+                             device.get_acq_fr_enable().unwrap(), device.get_acq_fr().unwrap());
+                    SETTINGS_DONE.store(true, Ordering::SeqCst);
+                }
 
                 let mtx = Mutex::new(tx);
                 Bluefox {
