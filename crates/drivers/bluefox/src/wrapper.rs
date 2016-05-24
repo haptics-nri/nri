@@ -342,6 +342,7 @@ extern "C" {
     fn DMR_ImageRequestWaitFor(hDrv: HDRV, timeout_ms: c_int, queueNr: c_int, pRequestNr: *mut c_int) -> TDMR_ERROR;
     fn DMR_ImageRequestUnlock(hDrv: HDRV, requestNr: c_int) -> TDMR_ERROR;
     fn DMR_GetImageRequestBuffer(hDrv: HDRV, requestNr: c_int, ppBuffer: *mut *mut ImageBuffer) -> TDMR_ERROR;
+    fn DMR_ImageRequestReset(hDrv: HDRV, requestCtrl: c_int, mode: c_int) -> TDMR_ERROR;
 
     fn DMR_FindList(hDrv: HDRV, pName: *const c_char, typ: ListType, flags: c_uint, pHList: *mut HLIST) -> TDMR_ERROR;
 
@@ -424,28 +425,31 @@ impl Device {
         let mut n: u32 = 0;
         try!(dmr_status2result!(unsafe { DMR_GetDeviceCount(&mut n as *mut _) }));
         println!("Have {} Bluefox devices.", n);
-        try!(dmr_status2result!(unsafe { DMR_GetDevice(&mut this.dev, DeviceSearchMode::Serial, b"*\0" as *const u8 as *const c_char, 0, b'*' as c_char) }));
-        dmr_status2result!(unsafe { DMR_OpenDevice(this.dev, &mut this.drv) }, this)
+        try!(dmr_status2result!(unsafe { DMR_GetDevice(&mut this.dev,
+                                                       DeviceSearchMode::Serial,
+                                                       b"*\0" as *const u8 as *const c_char,
+                                                       0,
+                                                       b'*' as c_char) }));
+        dmr_status2result!(unsafe { DMR_OpenDevice(this.dev,
+                                                   &mut this.drv) }, this)
     }
 
-    getset!(get_width,         set_width,         HOBJ(0x840004), i64);
-    getset!(get_height,        set_height,        HOBJ(0x840005), i64);
-    getset!(get_offset_x,      set_offset_x,      HOBJ(0x840006), i64);
-    getset!(get_offset_y,      set_offset_y,      HOBJ(0x840007), i64);
-    getset!(get_reverse_x,     set_reverse_x,     HOBJ(0x84000E), b: bool => b as i32, i: i32 => i == 1);
-    getset!(get_reverse_y,     set_reverse_y,     HOBJ(0x84000F), b: bool => b as i32, i: i32 => i == 1);
-    getset!(get_bin_x,         set_bin_x,         HOBJ(0x84000A), i64);
-    getset!(get_bin_y,         set_bin_y,         HOBJ(0x84000B), i64);
-    getset!(get_decimate_x,    set_decimate_x,    HOBJ(0x84000C), i64);
-    getset!(get_decimate_y,    set_decimate_y,    HOBJ(0x84000D), i64);
-    getset!(get_pixel_format,  set_pixel_format,  HOBJ(0x840008), settings::PixelFormat       as i64);
-    getset!(get_afr_enabled,   set_afr_enabled,   HOBJ(0x850017), b: bool => b as i64, i: i64 => i == 1);
-    getset!(get_afr,           set_afr,           HOBJ(0x850018), f64);
-    getset!(get_color_proc,    set_color_proc,    HOBJ(0x5e0008), settings::ColorProc         as i32);
+    getset!(get_color_proc,    set_color_proc,    HOBJ(0x5E0008), settings::ColorProc         as i32);
     getset!(get_scale_enabled, set_scale_enabled, HOBJ(0x800001), b: bool => b as i32, i: i32 => i == 1);
     getset!(get_scale_mode,    set_scale_mode,    HOBJ(0x800002), settings::InterpolationMode as i32);
     getset!(get_scale_width,   set_scale_width,   HOBJ(0x800003), i32);
     getset!(get_scale_height,  set_scale_height,  HOBJ(0x800004), i32);
+    getset!(get_width,         set_width,         HOBJ(0x840004), i64);
+    getset!(get_height,        set_height,        HOBJ(0x840005), i64);
+    getset!(get_offset_x,      set_offset_x,      HOBJ(0x840006), i64);
+    getset!(get_offset_y,      set_offset_y,      HOBJ(0x840007), i64);
+    getset!(get_pixel_format,  set_pixel_format,  HOBJ(0x840008), settings::PixelFormat       as i64);
+    getset!(get_bin_x,         set_bin_x,         HOBJ(0x84000A), i64);
+    getset!(get_bin_y,         set_bin_y,         HOBJ(0x84000B), i64);
+    getset!(get_decimate_x,    set_decimate_x,    HOBJ(0x84000C), i64);
+    getset!(get_decimate_y,    set_decimate_y,    HOBJ(0x84000D), i64);
+    getset!(get_reverse_x,     set_reverse_x,     HOBJ(0x84000E), b: bool => b as i32, i: i32 => i == 1);
+    getset!(get_reverse_y,     set_reverse_y,     HOBJ(0x84000F), b: bool => b as i32, i: i32 => i == 1);
     getset!(get_acq_fr_enable, set_acq_fr_enable, HOBJ(0x850017), b: bool => b as i64, i: i64 => i == 1);
     getset!(get_acq_fr,        set_acq_fr,        HOBJ(0x850018), f64);
 
@@ -460,16 +464,44 @@ impl Device {
         }
     }
 
+    pub fn request_reset(&self) -> Result<(), TDMR_ERROR> {
+        dmr_status2result!(unsafe { DMR_ImageRequestReset(self.drv,
+                                                          0,
+                                                          0) })
+    }
+
     pub fn request(&self) -> Result<Image, TDMR_ERROR> {
-        try!(dmr_status2result!(unsafe { DMR_ImageRequestSingle(self.drv, 0, ptr::null_mut()) }));
+        try!(dmr_status2result!(unsafe { DMR_ImageRequestSingle(self.drv,
+                                                                0,
+                                                                ptr::null_mut()) }));
         let mut reqnr: c_int = 0;
-        try!(dmr_status2result!(unsafe { DMR_ImageRequestWaitFor(self.drv, -1, 0, &mut reqnr) }));
-        let mut image_buf = ImageBuffer { bytes_per_pixel: 0, channel_count: 0, height: 0, size: 0, width: 0, channels: ptr::null_mut(), pixel_format: PixelFormat::Mono8, data: ptr::null_mut() };
-        dmr_status2result!(unsafe { DMR_GetImageRequestBuffer(self.drv, reqnr, &mut &mut image_buf as *mut &mut ImageBuffer as *mut *mut ImageBuffer) }, Image { buf: image_buf, reqnr: reqnr, parent: self })
+        try!(dmr_status2result!(unsafe { DMR_ImageRequestWaitFor(self.drv,
+                                                                 -1,
+                                                                 0,
+                                                                 &mut reqnr) }));
+        let mut image_buf = ImageBuffer {
+            bytes_per_pixel: 0,
+            channel_count: 0,
+            height: 0,
+            size: 0,
+            width: 0,
+            channels: ptr::null_mut(),
+            pixel_format: PixelFormat::Mono8,
+            data: ptr::null_mut()
+        };
+        dmr_status2result!(unsafe { DMR_GetImageRequestBuffer(self.drv,
+                                                              reqnr,
+                                                              &mut &mut image_buf as *mut &mut ImageBuffer as *mut *mut ImageBuffer) },
+                           Image {
+                               buf: image_buf,
+                               reqnr: reqnr,
+                               parent: self
+                           })
     }
 
     pub fn close(&self) -> Result<(), TDMR_ERROR> {
-        try!(dmr_status2result!(unsafe { DMR_CloseDevice(self.drv, self.dev) }));
+        try!(dmr_status2result!(unsafe { DMR_CloseDevice(self.drv,
+                                                         self.dev) }));
         dmr_status2result!(unsafe { DMR_Close() })
     }
 }
@@ -484,7 +516,10 @@ impl<'a> Image<'a> {
     }
 
     pub fn data(&self) -> &[u8] {
-        &unsafe { slice::from_raw_parts(mem::transmute(self.buf.data), self.buf.size as usize) }
+        unsafe {
+            slice::from_raw_parts(mem::transmute(self.buf.data),
+            self.buf.size as usize)
+        }
     }
 }
 
