@@ -46,7 +46,8 @@ pub struct Version {
 }
 
 #[repr(C)]
-pub struct Double(c_double);
+#[derive(Copy, Clone)]
+pub struct Double(pub c_double);
 
 impl fmt::Debug for Double {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
@@ -64,10 +65,11 @@ impl Deref for Double {
 
 #[derive(Debug)]
 #[repr(C)]
+#[derive(Copy, Clone)]
 pub struct XYZ {
-    x : Double,
-    y : Double,
-    z : Double,
+    pub x: Double,
+    pub y: Double,
+    pub z: Double,
 }
 
 type Handle = *mut c_void;

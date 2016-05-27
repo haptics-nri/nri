@@ -21,4 +21,6 @@ utils                = { path = "../../utils"             }
 guilt-by-association = "0.2"
 time                 = "0.1"
 libc                 = "0.2"
+rustc-serialize      = "0.3" # TODO migrate to serde
+gnuplot              = "0.0.21"
 

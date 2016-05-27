@@ -50,17 +50,22 @@ group_attr!{
 
     extern crate serial;
     extern crate time;
+    extern crate rustc_serialize as serialize;
+    extern crate gnuplot;
 
-    use comms::{Controllable, CmdFrom, Block};
+    use comms::{Controllable, CmdFrom, Block, RestartableThread};
     use scribe::{Writer, Writable};
     use std::io::{self, Read, Write};
     use std::fs::File;
+    use std::thread;
     use std::sync::mpsc::Sender;
     use std::{u8, ptr, mem, ops};
     use std::fmt::{self, Display, Debug, Formatter};
     use std::time::Duration;
     use serial::prelude::*;
     use conv::TryFrom;
+    use serialize::base64::{self, ToBase64};
+    use gnuplot::{Figure, PlotOption, Coordinate, AxesCommon};
 
     trait Coffee: Read + Write {
         fn coffee<W: Write>(self, w: W) -> CoffeeImpl<Self, W> where Self: Sized {
@@ -130,14 +135,20 @@ group_attr!{
         }
     }
 
+    type PngStuff = (Sender<CmdFrom>, Vec<Packet>);
+
     pub struct Teensy {
         port: Box<StaticReadWrite>,
         file: Writer<Packet>,
         i: usize,
+        buf: Option<Vec<Packet>>,
+        tx: Sender<CmdFrom>,
+        png: RestartableThread<PngStuff>,
         start: time::Tm,
     }
 
     #[repr(packed)]
+    #[derive(Copy, Clone)]
     struct XYZ<T> {
         x: T,
         y: T,
@@ -152,6 +163,8 @@ group_attr!{
         n_gyro : u8,
         imu    : [XYZ<i16>; 37]
     }
+    impl Copy for Packet {}
+    impl Clone for Packet { fn clone(&self) -> Packet { *self } }
 
     unsafe impl Writable for Packet {}
 
@@ -235,16 +248,125 @@ group_attr!{
             const NAME: &'static str = "teensy",
             const BLOCK: Block = Block::Period(333_333),
 
-            fn setup(_: Sender<CmdFrom>, _: Option<String>) -> Teensy {
+            fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Teensy {
                 assert_eq!(mem::size_of::<Packet>(), u8::MAX as usize + mem::size_of::<time::Timespec>());
 
                 let mut port = serialport();
                 port.write_all(&['1' as u8]).unwrap();
 
-                Teensy { port: port, file: Writer::with_file("teensy.dat"), i: 0, start: time::now() }
+                // some stuff for the RestartableThread
+                let mut idx = 0;
+                let mut fig = Figure::new();
+                let mut data = Vec::with_capacity(10240);
+                let start = time::get_time();
+
+                Teensy {
+                    port: port,
+                    file: Writer::with_file("teensy.dat"),
+                    i: 0,
+                    start: time::now(),
+                    tx: tx,
+                    buf: None,
+                    png: RestartableThread::new("Teensy PNG thread", move |(sender, vec): PngStuff| {
+                        // process data
+                        let mut t  = [0.0; 3000];
+                        let mut fx = [0.0; 3000];
+                        let mut fy = [0.0; 3000];
+                        let mut fz = [0.0; 3000];
+                        let mut tx = [0.0; 3000];
+                        let mut ty = [0.0; 3000];
+                        let mut tz = [0.0; 3000];
+                        for i in 0..3000 {
+                            let diff = (vec[i].stamp - start).to_std().unwrap();
+                            t[i] = diff.as_secs() as f64 + (diff.subsec_nanos() as f64 / 1.0e9);
+                            let mut ft = [(((vec[i].ft[0]  as u32) << 8) + (vec[i].ft[1]  as u32)) as i32,
+                                          (((vec[i].ft[2]  as u32) << 8) + (vec[i].ft[3]  as u32)) as i32,
+                                          (((vec[i].ft[4]  as u32) << 8) + (vec[i].ft[5]  as u32)) as i32,
+                                          (((vec[i].ft[6]  as u32) << 8) + (vec[i].ft[7]  as u32)) as i32,
+                                          (((vec[i].ft[8]  as u32) << 8) + (vec[i].ft[9]  as u32)) as i32,
+                                          (((vec[i].ft[10] as u32) << 8) + (vec[i].ft[11] as u32)) as i32];
+                            for j in 0..6 {
+                                if ft[j] >= 2048 {
+                                    ft[j] -= 4096;
+                                }
+                            }
+                            const BIAS: [f64; 6] = [-0.1884383674, 0.2850118688, -0.180718143, -0.191009933, 0.3639300747, -0.4307167708];
+                            const TF: [[f64; 6]; 6] = [[0.00679, 0.01658, -0.04923, 6.20566, 0.15882, -6.19201],
+                                                       [0.11638, -7.31729, -0.04322, 3.54949, -0.08024, 3.57115],
+                                                       [10.35231, 0.32653, 10.61091, 0.29668, 10.33382, 0.25761],
+                                                       [0.00022, -0.0414, 0.14917, 0.02435, -0.15234, 0.01567],
+                                                       [-0.16837, -0.00464, 0.08561, -0.03311, 0.08763, 0.03721],
+                                                       [0.00128, -0.08962, 0.00085, -0.08785, 0.00204, -0.0879]];
+                            fx[i] = (TF[0][0] * (((ft[0] as f64) * 0.002) - BIAS[0]))
+                                  + (TF[0][1] * (((ft[1] as f64) * 0.002) - BIAS[1]))
+                                  + (TF[0][2] * (((ft[2] as f64) * 0.002) - BIAS[2]))
+                                  + (TF[0][3] * (((ft[3] as f64) * 0.002) - BIAS[3]))
+                                  + (TF[0][4] * (((ft[4] as f64) * 0.002) - BIAS[4]))
+                                  + (TF[0][5] * (((ft[5] as f64) * 0.002) - BIAS[5]));
+                            fy[i] = (TF[1][0] * (((ft[0] as f64) * 0.002) - BIAS[0]))
+                                  + (TF[1][1] * (((ft[1] as f64) * 0.002) - BIAS[1]))
+                                  + (TF[1][2] * (((ft[2] as f64) * 0.002) - BIAS[2]))
+                                  + (TF[1][3] * (((ft[3] as f64) * 0.002) - BIAS[3]))
+                                  + (TF[1][4] * (((ft[4] as f64) * 0.002) - BIAS[4]))
+                                  + (TF[1][5] * (((ft[5] as f64) * 0.002) - BIAS[5]));
+                            fz[i] = (TF[2][0] * (((ft[0] as f64) * 0.002) - BIAS[0]))
+                                  + (TF[2][1] * (((ft[1] as f64) * 0.002) - BIAS[1]))
+                                  + (TF[2][2] * (((ft[2] as f64) * 0.002) - BIAS[2]))
+                                  + (TF[2][3] * (((ft[3] as f64) * 0.002) - BIAS[3]))
+                                  + (TF[2][4] * (((ft[4] as f64) * 0.002) - BIAS[4]))
+                                  + (TF[2][5] * (((ft[5] as f64) * 0.002) - BIAS[5]));
+                            tx[i] = (TF[3][0] * (((ft[0] as f64) * 0.002) - BIAS[0]))
+                                  + (TF[3][1] * (((ft[1] as f64) * 0.002) - BIAS[1]))
+                                  + (TF[3][2] * (((ft[2] as f64) * 0.002) - BIAS[2]))
+                                  + (TF[3][3] * (((ft[3] as f64) * 0.002) - BIAS[3]))
+                                  + (TF[3][4] * (((ft[4] as f64) * 0.002) - BIAS[4]))
+                                  + (TF[3][5] * (((ft[5] as f64) * 0.002) - BIAS[5]));
+                            ty[i] = (TF[4][0] * (((ft[0] as f64) * 0.002) - BIAS[0]))
+                                  + (TF[4][1] * (((ft[1] as f64) * 0.002) - BIAS[1]))
+                                  + (TF[4][2] * (((ft[2] as f64) * 0.002) - BIAS[2]))
+                                  + (TF[4][3] * (((ft[3] as f64) * 0.002) - BIAS[3]))
+                                  + (TF[4][4] * (((ft[4] as f64) * 0.002) - BIAS[4]))
+                                  + (TF[4][5] * (((ft[5] as f64) * 0.002) - BIAS[5]));
+                            tz[i] = (TF[5][0] * (((ft[0] as f64) * 0.002) - BIAS[0]))
+                                  + (TF[5][1] * (((ft[1] as f64) * 0.002) - BIAS[1]))
+                                  + (TF[5][2] * (((ft[2] as f64) * 0.002) - BIAS[2]))
+                                  + (TF[5][3] * (((ft[3] as f64) * 0.002) - BIAS[3]))
+                                  + (TF[5][4] * (((ft[4] as f64) * 0.002) - BIAS[4]))
+                                  + (TF[5][5] * (((ft[5] as f64) * 0.002) - BIAS[5]));
+                        }
+
+                        // write out plot to file
+                        let fname = format!("/tmp/teensy{}.png", idx);
+                        fig.clear_axes();
+                        fig.set_terminal("png", &fname);
+                        fig.axes2d()
+                           .lines(&t as &[_], &fx as &[_], &[PlotOption::Color("red"),    PlotOption::Caption("FX")])
+                           .lines(&t as &[_], &fy as &[_], &[PlotOption::Color("green"),  PlotOption::Caption("FY")])
+                           .lines(&t as &[_], &fz as &[_], &[PlotOption::Color("blue"),   PlotOption::Caption("FZ")])
+                           .lines(&t as &[_], &tx as &[_], &[PlotOption::Color("orange"), PlotOption::Caption("TX")])
+                           .lines(&t as &[_], &ty as &[_], &[PlotOption::Color("pink"),   PlotOption::Caption("TY")])
+                           .lines(&t as &[_], &tz as &[_], &[PlotOption::Color("plum"),   PlotOption::Caption("TZ")])
+                           .set_x_label("Time (s)", &[])
+                           .set_y_label("Force (N) and Torque (Nm)", &[])
+                           .set_legend(Coordinate::Graph(0.9), Coordinate::Graph(0.8), &[], &[])
+                           ;
+                        fig.show();
+
+                        thread::sleep(Duration::from_millis(100)); // HACK
+
+                        // read plot back in from file
+                        let mut file = File::open(&fname).unwrap();
+                        data.clear();
+                        file.read_to_end(&mut data).unwrap();
+
+                        // send to browser
+                        sender.send(CmdFrom::Data(format!("send kick teensy {} data:image/png;base64,{}", idx, data.to_base64(base64::STANDARD)))).unwrap();
+                        idx += 1;
+                    })
+                }
             }
 
-            fn step(&mut self, _: Option<String>) {
+            fn step(&mut self, cmd: Option<String>) {
                 self.i += 1;
 
                 /*
@@ -287,6 +409,28 @@ group_attr!{
                                 return;
                             },
                         };
+
+                        match cmd.as_ref().map(|s| s as &str) {
+                            Some("kick") => {
+                                self.buf = Some(Vec::with_capacity(3000));
+                            }
+                            _ => {}
+                        }
+
+                        let buf_ready = if let Some(ref mut buf) = self.buf {
+                            if buf.len() == 3000 {
+                                true
+                            } else {
+                                buf.push(packet.clone());
+                                false
+                            }
+                        } else {
+                            false
+                        };
+                        if buf_ready {
+                            self.png.send((self.tx.clone(), self.buf.take().unwrap())).unwrap();
+                        }
+
                         self.file.write(packet);
                     },
                     Err(e)  => errorln!("Error reading packet from Teensy: {:?}", e)

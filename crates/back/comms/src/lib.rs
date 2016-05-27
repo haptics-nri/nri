@@ -353,8 +353,8 @@ impl<Data: Send + 'static> RestartableThread<Data> {
     /// The thread will run (and wait for input) until RestartableThread::join() is called or the
     /// RestartableThread instance is dropped.
     /// To pass input, use RestartableThread::send().
-    pub fn new<F>(n: &'static str, f: F) -> RestartableThread<Data>
-        where F: Send + 'static + Fn(Data)
+    pub fn new<F>(n: &'static str, mut f: F) -> RestartableThread<Data>
+        where F: Send + 'static + FnMut(Data)
     {
         let (tx, rx) = channel();
         RestartableThread {

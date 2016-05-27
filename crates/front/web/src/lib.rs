@@ -185,9 +185,9 @@ fn index() -> Box<Handler> {
                       data.insert("services".to_owned(), vec![
                                   Service::new("Structure Sensor", "structure" , "<img class=\"frame structure latest\" /><div class=\"structure framenum\"></div>"),
                                   Service::new("mvBlueFOX3"      , "bluefox"   , "<img class=\"frame bluefox latest\" /><div class=\"bluefox framenum\"></div>"),
-                                  Service::new("OptoForce"       , "optoforce" , ""),
-                                  Service::new("SynTouch BioTac" , "biotac"    , ""),
-                                  Service::new("Teensy"          , "teensy"    , ""),
+                                  Service::new("OptoForce"       , "optoforce" , "<img class=\"frame optoforce latest\" /><div class=\"optoforce framenum\"></div>"),
+                                  Service::new("SynTouch BioTac" , "biotac"    , "<img class=\"frame biotac latest\" /><div class=\"biotac framenum\"></div>"),
+                                  Service::new("Teensy"          , "teensy"    , "<img class=\"frame teensy latest\" /><div class=\"teensy framenum\"></div>"),
                       ].to_json());
                       data.insert("flows".to_owned(), FLOWS.read().unwrap().to_json());
                       data.insert("server".to_owned(), format!("{}:{}", req.url.host, config::WS_PORT).to_json());
