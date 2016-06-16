@@ -62,6 +62,8 @@ group_attr!{
     use std::{u8, ptr, mem, ops};
     use std::fmt::{self, Display, Debug, Formatter};
     use std::time::Duration;
+    use std::num::Wrapping;
+    use std::sync::atomic::{AtomicUsize, AtomicBool, ATOMIC_USIZE_INIT, ATOMIC_BOOL_INIT, Ordering};
     use serial::prelude::*;
     use conv::TryFrom;
     use serialize::base64::{self, ToBase64};
@@ -104,33 +106,39 @@ group_attr!{
         let mut port = serial::open("/dev/ttyTEENSY").unwrap();
         port.reconfigure(&|settings| {
             try!(settings.set_baud_rate(serial::Baud115200));
+            settings.set_flow_control(serial::FlowNone);
             Ok(())
         }).unwrap();
         port.set_timeout(Duration::from_millis(100)).unwrap();
-        if false {
+        if true {
             Box::new(port.coffee(File::create("teensydump.dat").unwrap()))
         } else {
             Box::new(port)
         }
     }
 
+    static PARK_STATE: AtomicUsize = ATOMIC_USIZE_INIT;
+    static RUNNING: AtomicBool = ATOMIC_BOOL_INIT;
+
     impl ParkState {
         pub fn metermaid() -> Option<ParkState> {
-            let mut port = serialport();
+            let val = if RUNNING.load(Ordering::SeqCst) {
+                PARK_STATE.load(Ordering::SeqCst) as u8
+            } else {
+                let mut port = serialport();
 
-            port.write_all(&['4' as u8]).unwrap();
+                port.write_all(&['4' as u8]).unwrap();
 
-            let mut buf = [0u8; 1];
-            match port.read_exact(&mut buf) {
-                Ok(())         => {
-                    match ParkState::try_from(!(buf[0] | 0b1111_1000)) {
-                        Ok(ps) => Some(ps),
-                        Err(_) => Some(ParkState::Multiple)
-                    }
-                },
-                Err(..)        => {
-                    None
+                let mut buf = [0u8; 1];
+                match port.read_exact(&mut buf) {
+                    Ok(())  => buf[0],
+                    Err(..) => return None
                 }
+            };
+
+            match ParkState::try_from(!(val | 0b1111_1000)) {
+                Ok(ps) => Some(ps),
+                Err(_) => Some(ParkState::Multiple)
             }
         }
     }
@@ -161,7 +169,7 @@ group_attr!{
         ft     : [u8; 31],
         n_acc  : u8,
         n_gyro : u8,
-        imu    : [XYZ<i16>; 37]
+        imu    : [XYZ<i16>; 63]
     }
     impl Copy for Packet {}
     impl Clone for Packet { fn clone(&self) -> Packet { *self } }
@@ -171,7 +179,10 @@ group_attr!{
     impl Packet {
         unsafe fn new(buf: &[u8]) -> Result<Packet, String> {
             fn checksum(buf: &[u8]) -> Result<(), String> {
-                let sum = buf[..buf.len()-1].into_iter().fold(0, |a, b| { u8::wrapping_add(a, *b) });
+                //let sum = buf[..buf.len()-1].into_iter().fold(0, |a, b| { u8::wrapping_add(a, *b) });
+                let mut sum = Wrapping(0u8);
+                for b in &buf[..buf.len()-1] { sum += Wrapping(*b); }
+                let sum = sum.0;
                 match buf[buf.len()-1] {
                     s if s == sum => Ok(()),
                     s => Err(format!("Received Teensy packet with wrong checksum (it says {}, I calculate {})!", s, sum)),
@@ -184,7 +195,7 @@ group_attr!{
                     ft     : mem::zeroed::<[u8; 31]>(),
                     n_acc  : 0,
                     n_gyro : 0,
-                    imu    : mem::zeroed::<[XYZ<i16>; 37]>(),
+                    imu    : mem::zeroed::<[XYZ<i16>; 63]>(),
                 };
                 byte_copy(buf, &mut p.ft);
                 p
@@ -197,33 +208,37 @@ group_attr!{
                     ft     : mem::zeroed::<[u8; 31]>(),
                     n_acc  : a as u8,
                     n_gyro : g as u8,
-                    imu    : mem::zeroed::<[XYZ<i16>; 37]>()
+                    imu    : mem::zeroed::<[XYZ<i16>; 63]>()
                 };
                 byte_copy(&buf[s..], &mut p.ft);
                 ptr::copy::<XYZ<i16>>(buf[2..s].as_ptr() as *const XYZ<i16>, p.imu.as_mut_ptr(), (a+g+1) as usize);
                 p
             }
 
-            match buf.len() {
-                x if x < 31 => Err(format!("Implausibly small packet ({}) from Teensy!", x)),
-                31 => Ok(only_analog(buf)),
+            let pkt = match buf.len() {
+                x if x < 31 => return Err(format!("Implausibly small packet ({}) from Teensy!", x)),
+                31 => only_analog(buf),
                 32 => {
                     try!(checksum(buf));
-                    Ok(only_analog(buf))
+                    only_analog(buf)
                 },
                 x => {
                     let a = buf[0] as usize;
                     let g = buf[1] as usize;
                     match x {
-                        t if t == 31 + 2 + 6*(a + g + 1) => Ok(imu_and_analog(buf, a, g)),
+                        t if t == 31 + 2 + 6*(a + g + 1) => imu_and_analog(buf, a, g),
                         t if t == 31 + 2 + 6*(a + g + 1) + 1 => {
                             try!(checksum(buf));
-                            Ok(imu_and_analog(buf, a, g))
+                            imu_and_analog(buf, a, g)
                         },
-                        _ => Err(format!("Impossible packet size ({}) from Teensy!", x)),
+                        _ => return Err(format!("Impossible packet size ({} with a={}, g={}) from Teensy!", x, a, g)),
                     }
                 },
-            }
+            };
+
+            PARK_STATE.store(pkt.ft[pkt.ft.len()-1] as usize, Ordering::SeqCst);
+
+            Ok(pkt)
         }
     }
 
@@ -243,15 +258,16 @@ group_attr!{
         }
     }
 
+    const BUF_LEN: usize = 3000;
+
     guilty! {
         impl Controllable for Teensy {
             const NAME: &'static str = "teensy",
             const BLOCK: Block = Block::Period(333_333),
 
             fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Teensy {
-                assert_eq!(mem::size_of::<Packet>(), u8::MAX as usize + mem::size_of::<time::Timespec>());
-
                 let mut port = serialport();
+                RUNNING.store(true, Ordering::SeqCst);
                 port.write_all(&['1' as u8]).unwrap();
 
                 // some stuff for the RestartableThread
@@ -269,14 +285,14 @@ group_attr!{
                     buf: None,
                     png: RestartableThread::new("Teensy PNG thread", move |(sender, vec): PngStuff| {
                         // process data
-                        let mut t  = [0.0; 3000];
-                        let mut fx = [0.0; 3000];
-                        let mut fy = [0.0; 3000];
-                        let mut fz = [0.0; 3000];
-                        let mut tx = [0.0; 3000];
-                        let mut ty = [0.0; 3000];
-                        let mut tz = [0.0; 3000];
-                        for i in 0..3000 {
+                        let mut t  = [0.0; BUF_LEN];
+                        let mut fx = [0.0; BUF_LEN];
+                        let mut fy = [0.0; BUF_LEN];
+                        let mut fz = [0.0; BUF_LEN];
+                        let mut tx = [0.0; BUF_LEN];
+                        let mut ty = [0.0; BUF_LEN];
+                        let mut tz = [0.0; BUF_LEN];
+                        for i in 0..BUF_LEN {
                             let diff = (vec[i].stamp - start).to_std().unwrap();
                             t[i] = diff.as_secs() as f64 + (diff.subsec_nanos() as f64 / 1.0e9);
                             let mut ft = [(((vec[i].ft[0]  as u32) << 8) + (vec[i].ft[1]  as u32)) as i32,
@@ -297,42 +313,53 @@ group_attr!{
                                                        [0.00022, -0.0414, 0.14917, 0.02435, -0.15234, 0.01567],
                                                        [-0.16837, -0.00464, 0.08561, -0.03311, 0.08763, 0.03721],
                                                        [0.00128, -0.08962, 0.00085, -0.08785, 0.00204, -0.0879]];
-                            fx[i] = (TF[0][0] * (((ft[0] as f64) * 0.002) - BIAS[0]))
-                                  + (TF[0][1] * (((ft[1] as f64) * 0.002) - BIAS[1]))
-                                  + (TF[0][2] * (((ft[2] as f64) * 0.002) - BIAS[2]))
-                                  + (TF[0][3] * (((ft[3] as f64) * 0.002) - BIAS[3]))
-                                  + (TF[0][4] * (((ft[4] as f64) * 0.002) - BIAS[4]))
-                                  + (TF[0][5] * (((ft[5] as f64) * 0.002) - BIAS[5]));
-                            fy[i] = (TF[1][0] * (((ft[0] as f64) * 0.002) - BIAS[0]))
-                                  + (TF[1][1] * (((ft[1] as f64) * 0.002) - BIAS[1]))
-                                  + (TF[1][2] * (((ft[2] as f64) * 0.002) - BIAS[2]))
-                                  + (TF[1][3] * (((ft[3] as f64) * 0.002) - BIAS[3]))
-                                  + (TF[1][4] * (((ft[4] as f64) * 0.002) - BIAS[4]))
-                                  + (TF[1][5] * (((ft[5] as f64) * 0.002) - BIAS[5]));
-                            fz[i] = (TF[2][0] * (((ft[0] as f64) * 0.002) - BIAS[0]))
-                                  + (TF[2][1] * (((ft[1] as f64) * 0.002) - BIAS[1]))
-                                  + (TF[2][2] * (((ft[2] as f64) * 0.002) - BIAS[2]))
-                                  + (TF[2][3] * (((ft[3] as f64) * 0.002) - BIAS[3]))
-                                  + (TF[2][4] * (((ft[4] as f64) * 0.002) - BIAS[4]))
-                                  + (TF[2][5] * (((ft[5] as f64) * 0.002) - BIAS[5]));
-                            tx[i] = (TF[3][0] * (((ft[0] as f64) * 0.002) - BIAS[0]))
-                                  + (TF[3][1] * (((ft[1] as f64) * 0.002) - BIAS[1]))
-                                  + (TF[3][2] * (((ft[2] as f64) * 0.002) - BIAS[2]))
-                                  + (TF[3][3] * (((ft[3] as f64) * 0.002) - BIAS[3]))
-                                  + (TF[3][4] * (((ft[4] as f64) * 0.002) - BIAS[4]))
-                                  + (TF[3][5] * (((ft[5] as f64) * 0.002) - BIAS[5]));
-                            ty[i] = (TF[4][0] * (((ft[0] as f64) * 0.002) - BIAS[0]))
-                                  + (TF[4][1] * (((ft[1] as f64) * 0.002) - BIAS[1]))
-                                  + (TF[4][2] * (((ft[2] as f64) * 0.002) - BIAS[2]))
-                                  + (TF[4][3] * (((ft[3] as f64) * 0.002) - BIAS[3]))
-                                  + (TF[4][4] * (((ft[4] as f64) * 0.002) - BIAS[4]))
-                                  + (TF[4][5] * (((ft[5] as f64) * 0.002) - BIAS[5]));
-                            tz[i] = (TF[5][0] * (((ft[0] as f64) * 0.002) - BIAS[0]))
-                                  + (TF[5][1] * (((ft[1] as f64) * 0.002) - BIAS[1]))
-                                  + (TF[5][2] * (((ft[2] as f64) * 0.002) - BIAS[2]))
-                                  + (TF[5][3] * (((ft[3] as f64) * 0.002) - BIAS[3]))
-                                  + (TF[5][4] * (((ft[4] as f64) * 0.002) - BIAS[4]))
-                                  + (TF[5][5] * (((ft[5] as f64) * 0.002) - BIAS[5]));
+                            const SCALE: f64 = 0.002;
+                            /*
+                            const BIAS: [f64; 6] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+                            const TF: [[f64; 6]; 6] = [[1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                                                       [0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+                                                       [0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+                                                       [0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+                                                       [0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                                                       [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]];
+                            const SCALE: f64 = 1.0;
+                            */
+                            fx[i] = (TF[0][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
+                                  + (TF[0][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
+                                  + (TF[0][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
+                                  + (TF[0][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
+                                  + (TF[0][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
+                                  + (TF[0][5] * (((ft[5] as f64) * SCALE) - BIAS[5]));
+                            fy[i] = (TF[1][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
+                                  + (TF[1][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
+                                  + (TF[1][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
+                                  + (TF[1][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
+                                  + (TF[1][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
+                                  + (TF[1][5] * (((ft[5] as f64) * SCALE) - BIAS[5]));
+                            fz[i] = (TF[2][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
+                                  + (TF[2][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
+                                  + (TF[2][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
+                                  + (TF[2][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
+                                  + (TF[2][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
+                                  + (TF[2][5] * (((ft[5] as f64) * SCALE) - BIAS[5]));
+                            tx[i] = (TF[3][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
+                                  + (TF[3][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
+                                  + (TF[3][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
+                                  + (TF[3][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
+                                  + (TF[3][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
+                                  + (TF[3][5] * (((ft[5] as f64) * SCALE) - BIAS[5]));
+                            ty[i] = (TF[4][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
+                                  + (TF[4][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
+                                  + (TF[4][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
+                                  + (TF[4][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
+                                  + (TF[4][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
+                                  + (TF[4][5] * (((ft[5] as f64) * SCALE) - BIAS[5]));
+                            tz[i] = (TF[5][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
+                                  + (TF[5][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
+                                  + (TF[5][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
+                                  + (TF[5][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
+                                  + (TF[5][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
+                                  + (TF[5][5] * (((ft[5] as f64) * SCALE) - BIAS[5]));
                         }
 
                         // write out plot to file
@@ -373,11 +400,13 @@ group_attr!{
                 let mut b = [0u8; 4096];
                 self.port.read_exact(&mut b).err().map(|e| println!("Teensy read error {:?}", e));
                 */
-                let mut size_buf = [0u8; 4];
+                let mut size_buf = [0u8; 5];
                 let packet_size = match self.port.read_exact(&mut size_buf) {
                     Ok(()) => {
                         if &size_buf[..3] == b"aaa" {
-                            size_buf[3] as usize
+                            let hi = size_buf[3] as usize;
+                            let lo = size_buf[4] as usize;
+                            (hi << 8) + lo
                         } else {
                             errorln!("The Teensy did not send the expected packet size prefix! instead {:?}", size_buf);
                             let mut scanning = [0u8; 1];
@@ -391,7 +420,10 @@ group_attr!{
                                 }
                             }
                             self.port.read_exact(&mut scanning).unwrap();
-                            scanning[0] as usize
+                            let hi = scanning[0] as usize;
+                            self.port.read_exact(&mut scanning).unwrap();
+                            let lo = scanning[0] as usize;
+                            (hi << 8) + lo
                         }
                     },
                     Err(e) => {
@@ -412,13 +444,13 @@ group_attr!{
 
                         match cmd.as_ref().map(|s| s as &str) {
                             Some("kick") => {
-                                self.buf = Some(Vec::with_capacity(3000));
+                                self.buf = Some(Vec::with_capacity(BUF_LEN));
                             }
                             _ => {}
                         }
 
                         let buf_ready = if let Some(ref mut buf) = self.buf {
-                            if buf.len() == 3000 {
+                            if buf.len() == BUF_LEN {
                                 true
                             } else {
                                 buf.push(packet.clone());
@@ -439,6 +471,7 @@ group_attr!{
 
             fn teardown(&mut self) {
                 self.port.write_all(&['2' as u8]).unwrap();
+                RUNNING.store(false, Ordering::SeqCst);
                 let end = time::now();
                 let millis = (end - self.start).num_milliseconds() as f64;
                 println!("{} Teensy packets grabbed in {} s ({} FPS)!", self.i, millis/1000.0, 1000.0*(self.i as f64)/millis);

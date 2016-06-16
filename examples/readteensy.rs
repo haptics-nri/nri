@@ -33,7 +33,7 @@ struct Packet {
     count:  u8,
     n_acc:  u8,
     n_gyro: u8,
-    imu:    [XYZ<i16>; 37]
+    imu:    [XYZ<i16>; 63]
 }
 
 impl fmt::Debug for Packet {
