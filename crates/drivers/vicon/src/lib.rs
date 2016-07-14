@@ -18,20 +18,29 @@ group_attr!{
     use std::time::{SystemTime, UNIX_EPOCH};
 
     pub struct Vicon {
+        tx: Sender<CmdFrom>,
         file: String,
         start: time::Tm,
     }
 
+    fn roscmd(cmd: &str) -> bool {
+        Command::new("ssh")
+            .arg("aburka@158.130.11.59")
+            .arg(["source /opt/ros/indigo/setup.bash",
+                  "export ROS_PACKAGE_PATH=/home/aburka/ros:$ROS_PACKAGE_PATH",
+                  cmd]
+                 .join(" && "))
+            .status().unwrap()
+            .success()
+    }
+
     fn rospub(filename: &str, targets: &[&str]) {
-        assert!(Command::new("ssh")
-                .arg("aburka@158.130.11.59")
-                .arg(["source /opt/ros/indigo/setup.bash",
-                      "export ROS_PACKAGE_PATH=/home/aburka/ros:$ROS_PACKAGE_PATH",
-                      &format!(r#"rostopic pub -1 /vicon/targets vicon/Targets '{{filename: "{}", targets: [{}]}}'"#,
-                               filename, targets.iter().map(|s| format!(r#""{}""#, s)).collect::<Vec<_>>().join(", "))]
-                     .join(" && "))
-                .status().unwrap()
-                .success());
+        assert!(roscmd(&format!(r#"rostopic pub -1 /vicon/targets vicon/Targets '{{filename: "{}", targets: [{}]}}'"#,
+                                filename, targets.iter().map(|s| format!(r#""{}""#, s)).collect::<Vec<_>>().join(", "))))
+    }
+
+    fn roscheck(filename: &str) -> bool {
+        roscmd(&format!(r#"wc -l '{}'"#, filename))
     }
 
     fn transfer(filename: &str) -> Vec<u8> {
@@ -47,7 +56,7 @@ group_attr!{
             const NAME: &'static str = "vicon",
             const BLOCK: Block = Block::Infinite,
 
-            fn setup(_: Sender<CmdFrom>, _: Option<String>) -> Vicon {
+            fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Vicon {
                 let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
                 let filename = format!("vicon_{}.{}.csv", now.as_secs(), now.subsec_nanos());
 
@@ -58,7 +67,7 @@ group_attr!{
                                     "proton:NewMarker4",
                                     "proton:Root"]);
 
-                Vicon { file: filename, start: time::now() }
+                Vicon { tx: tx, file: filename, start: time::now() }
             }
 
             fn step(&mut self, _: Option<String>) {
@@ -66,6 +75,9 @@ group_attr!{
 
             fn teardown(&mut self) {
                 rospub("PAUSE", &[]);
+                if !roscheck(&self.file) {
+                    self.tx.send(CmdFrom::Data("send msg Vicon node crashed! No data received for latest dataset.".into())).unwrap();
+                }
                 let readings = transfer(&self.file);
                 let n = readings.iter().filter(|&&b| b == b'\n').count();
 
