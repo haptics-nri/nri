@@ -166,6 +166,7 @@ group_attr!{
     #[allow(dead_code)]
     struct Packet {
         stamp  : time::Timespec,
+        dt     : u32,
         ft     : [u8; 31],
         n_acc  : u8,
         n_gyro : u8,
@@ -192,6 +193,7 @@ group_attr!{
             unsafe fn only_analog(buf: &[u8]) -> Packet {
                 let mut p: Packet = Packet {
                     stamp  : time::get_time(),
+                    dt     : 0,
                     ft     : mem::zeroed::<[u8; 31]>(),
                     n_acc  : 0,
                     n_gyro : 0,
@@ -201,16 +203,47 @@ group_attr!{
                 p
             }
 
+            unsafe fn only_analog_dt(buf: &[u8]) -> Packet {
+                let mut p: Packet = Packet {
+                    stamp  : time::get_time(),
+                    dt     : 0,
+                    ft     : mem::zeroed::<[u8; 31]>(),
+                    n_acc  : 0,
+                    n_gyro : 0,
+                    imu    : mem::zeroed::<[XYZ<i16>; 63]>(),
+                };
+                byte_copy(&buf[..4], mem::transmute::<&mut u32, &mut [u8; 4]>(&mut p.dt));
+                byte_copy(&buf[4..], &mut p.ft);
+                p
+            }
+
             unsafe fn imu_and_analog(buf: &[u8], a: usize, g: usize) -> Packet {
                 let s = 2 + 6*(a + g + 1);
                 let mut p: Packet = Packet {
                     stamp  : time::get_time(),
+                    dt     : 0,
                     ft     : mem::zeroed::<[u8; 31]>(),
                     n_acc  : a as u8,
                     n_gyro : g as u8,
                     imu    : mem::zeroed::<[XYZ<i16>; 63]>()
                 };
                 byte_copy(&buf[s..], &mut p.ft);
+                ptr::copy::<XYZ<i16>>(buf[2..s].as_ptr() as *const XYZ<i16>, p.imu.as_mut_ptr(), (a+g+1) as usize);
+                p
+            }
+
+            unsafe fn imu_and_analog_dt(buf: &[u8], a: usize, g: usize) -> Packet {
+                let s = 2 + 6*(a + g + 1);
+                let mut p: Packet = Packet {
+                    stamp  : time::get_time(),
+                    dt     : 0,
+                    ft     : mem::zeroed::<[u8; 31]>(),
+                    n_acc  : a as u8,
+                    n_gyro : g as u8,
+                    imu    : mem::zeroed::<[XYZ<i16>; 63]>()
+                };
+                byte_copy(&buf[s..s+4], mem::transmute::<&mut u32, &mut [u8; 4]>(&mut p.dt));
+                byte_copy(&buf[s+4..], &mut p.ft);
                 ptr::copy::<XYZ<i16>>(buf[2..s].as_ptr() as *const XYZ<i16>, p.imu.as_mut_ptr(), (a+g+1) as usize);
                 p
             }
@@ -222,14 +255,24 @@ group_attr!{
                     try!(checksum(buf));
                     only_analog(buf)
                 },
+                35 => only_analog_dt(buf),
+                36 => {
+                    try!(checksum(buf));
+                    only_analog_dt(buf)
+                },
                 x => {
                     let a = buf[0] as usize;
                     let g = buf[1] as usize;
                     match x {
                         t if t == 31 + 2 + 6*(a + g + 1) => imu_and_analog(buf, a, g),
+                        t if t == 35 + 2 + 6*(a + g + 1) => imu_and_analog_dt(buf, a, g),
                         t if t == 31 + 2 + 6*(a + g + 1) + 1 => {
                             try!(checksum(buf));
                             imu_and_analog(buf, a, g)
+                        },
+                        t if t == 35 + 2 + 6*(a + g + 1) + 1 => {
+                            try!(checksum(buf));
+                            imu_and_analog_dt(buf, a, g)
                         },
                         _ => return Err(format!("Impossible packet size ({} with a={}, g={}) from Teensy!", x, a, g)),
                     }
@@ -258,7 +301,7 @@ group_attr!{
         }
     }
 
-    const BUF_LEN: usize = 3000;
+    const BUF_LEN: usize = 15_000;
 
     guilty! {
         impl Controllable for Teensy {
@@ -306,6 +349,7 @@ group_attr!{
                                     ft[j] -= 4096;
                                 }
                             }
+                            // proton mini40
                             const BIAS: [f64; 6] = [-0.1884383674, 0.2850118688, -0.180718143, -0.191009933, 0.3639300747, -0.4307167708];
                             const TF: [[f64; 6]; 6] = [[0.00679, 0.01658, -0.04923, 6.20566, 0.15882, -6.19201],
                                                        [0.11638, -7.31729, -0.04322, 3.54949, -0.08024, 3.57115],
@@ -313,8 +357,21 @@ group_attr!{
                                                        [0.00022, -0.0414, 0.14917, 0.02435, -0.15234, 0.01567],
                                                        [-0.16837, -0.00464, 0.08561, -0.03311, 0.08763, 0.03721],
                                                        [0.00128, -0.08962, 0.00085, -0.08785, 0.00204, -0.0879]];
+                             
+                                                       
                             const SCALE: f64 = 0.002;
-                            /*
+                            /* // STB mini40
+                            const BIAS: [f64; 6] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+                            const TF: [[f64; 6]; 6] = [[ 0.165175269,   6.193716635,    -0.05972626,    0.020033203,    -0.136667224,   -6.42215241 ],
+                                  [ 0.002429674,  -3.63579423,    0.466390998,    7.308900211,    -0.18369186,    -3.65179797 ],
+                                  [ -10.5385017,  0.802731009,    -10.1357248,    0.359714766,    -10.0934065,    0.442593679 ],
+                                  [ 0.144765089,  -0.032574325,   0.004132077,    0.038285567,    -0.145061852,   -0.010347366],
+                                  [ -0.089833077, -0.024635731,   0.165602185,    -0.009131771,   -0.080132747,   0.039589968 ],
+                                  [ 0.001846317,  0.085776855,    0.005262967,    0.088317691,    0.001450272,    0.087714269 ]];
+                                  */
+                            
+
+                            /* // zeroed out
                             const BIAS: [f64; 6] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
                             const TF: [[f64; 6]; 6] = [[1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                                                        [0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
@@ -322,8 +379,8 @@ group_attr!{
                                                        [0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
                                                        [0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
                                                        [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]];
-                            const SCALE: f64 = 1.0;
                             */
+
                             fx[i] = (TF[0][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
                                   + (TF[0][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
                                   + (TF[0][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))

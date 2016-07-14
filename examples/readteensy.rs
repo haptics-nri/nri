@@ -29,6 +29,7 @@ struct XYZ<T> {
 #[repr(packed)]
 struct Packet {
     stamp:  time::Timespec,
+    dt:     u32,
     ft:     [u8; 30],
     count:  u8,
     n_acc:  u8,
@@ -43,8 +44,9 @@ impl fmt::Debug for Packet {
 
         match *OUTPUT_MODE.read().unwrap() {
             FT => {
-                try!(write!(f, "{:.9}, {}",
+                try!(write!(f, "{:.9}, {}, {}",
                             self.stamp.sec as f64 + self.stamp.nsec as f64 / 1_000_000_000f64,
+                            self.dt,
                             self.count));
                 for i in 0..30 {
                     try!(write!(f, ", {}", self.ft[i]));
@@ -94,7 +96,7 @@ fn main() {
     let inname = common::parse_in_arg(&mut env::args().skip(1));
 
     *OUTPUT_MODE.write().unwrap() = FT;
-    let mut header = String::from("Timestamp, Packet number");
+    let mut header = String::from("Timestamp, Teensy dt, Packet number");
     for i in 0..30 {
         header.push_str(&format!(", FT{}", i));
     }
