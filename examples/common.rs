@@ -2,11 +2,11 @@ extern crate csv;
 extern crate lodepng;
 extern crate libc;
 
-use std::{env, process, mem, ptr, thread};
+use std::{env, fs, process, mem, ptr, thread};
 use std::io::{Read, Write};
 use std::fs::File;
 use std::fmt::Debug;
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc};
 use std::path::{Path, PathBuf};
 use self::lodepng::{encode_file, ColorType};
 
@@ -164,8 +164,10 @@ pub trait Pixels<T> {
     fn pixel(&self, i: usize) -> T;
 }
 
-pub fn do_camera<T, Data: Debug + Pixels<T>>(width: usize, height: usize, channels: usize, color: ColorType, depth: libc::c_uint) {
+pub fn do_camera<T, Data: Debug + Pixels<T>, F: Fn(String, C) + Send + Sync + 'static, C: Clone + Send + 'static>(name: &str, func: F, param: C, width: usize, height: usize, channels: usize, color: ColorType, depth: libc::c_uint) -> String {
+    let func = Arc::new(func);
     let inname = parse_in_arg(&mut env::args().skip(1));
+    attempt!(fs::create_dir_all(Path::new(&inname).parent().unwrap().join(name)));
 
     let mut csvfile = attempt!(File::open(&inname));
     let mut csvrdr = csv::Reader::from_reader(csvfile).has_headers(false);
@@ -178,11 +180,13 @@ pub fn do_camera<T, Data: Debug + Pixels<T>>(width: usize, height: usize, channe
     for i in 0..N_THREADS {
         print!("{}...", i);
         let (tx, rx) = mpsc::channel::<PathBuf>();
+        let name = String::from(name);
+        let (func, param) = (func.clone(), param.clone());
         threads.push(Some((
             thread::spawn(move || {
                 for dat_path in rx {
                     let dat = dat_path.to_str().unwrap().to_string();
-                    let png = dat_path.with_extension("png").to_str().unwrap().to_string();
+                    let png = dat_path.parent().unwrap().join(&name).join(dat_path.file_name().unwrap()).with_extension("png").to_str().unwrap().to_string();
                     let rows = do_binary::<Data>("", (dat, None));
                     let mut pixels = Vec::with_capacity(height*channels*rows.len());
                     for i in 0..rows.len() {
@@ -190,7 +194,8 @@ pub fn do_camera<T, Data: Debug + Pixels<T>>(width: usize, height: usize, channe
                             pixels.push(rows[i].pixel(j));
                         }
                     }
-                    attempt!(encode_file(png, &pixels, width, rows.len(), color, depth));
+                    attempt!(encode_file(&png, &pixels, width, rows.len(), color, depth));
+                    func(png, param.clone());
                 }
             }),
             tx
@@ -217,7 +222,9 @@ pub fn do_camera<T, Data: Debug + Pixels<T>>(width: usize, height: usize, channe
         attempt!(present.0.join()); // now safe to join the thread
     }
 
-    attempt!(File::create(&inname)).write_all(csvwtr.as_bytes());
+    attempt!(File::create(Path::new(&inname).parent().unwrap().join(name).join(Path::new(&inname).file_name().unwrap()))).write_all(csvwtr.as_bytes());
+
+    inname
 }
 
 
