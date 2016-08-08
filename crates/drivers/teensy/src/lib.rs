@@ -166,7 +166,7 @@ group_attr!{
     #[allow(dead_code)]
     struct Packet {
         stamp  : time::Timespec,
-        dt     : u32,
+        dt     : (u16, u16),
         ft     : [u8; 31],
         n_acc  : u8,
         n_gyro : u8,
@@ -193,7 +193,7 @@ group_attr!{
             unsafe fn only_analog(buf: &[u8]) -> Packet {
                 let mut p: Packet = Packet {
                     stamp  : time::get_time(),
-                    dt     : 0,
+                    dt     : (0, 0),
                     ft     : mem::zeroed::<[u8; 31]>(),
                     n_acc  : 0,
                     n_gyro : 0,
@@ -206,13 +206,13 @@ group_attr!{
             unsafe fn only_analog_dt(buf: &[u8]) -> Packet {
                 let mut p: Packet = Packet {
                     stamp  : time::get_time(),
-                    dt     : 0,
+                    dt     : (0, 0),
                     ft     : mem::zeroed::<[u8; 31]>(),
                     n_acc  : 0,
                     n_gyro : 0,
                     imu    : mem::zeroed::<[XYZ<i16>; 63]>(),
                 };
-                byte_copy(&buf[..4], mem::transmute::<&mut u32, &mut [u8; 4]>(&mut p.dt));
+                byte_copy(&buf[..4], mem::transmute::<&mut (u16, u16), &mut [u8; 4]>(&mut p.dt));
                 byte_copy(&buf[4..], &mut p.ft);
                 p
             }
@@ -221,7 +221,7 @@ group_attr!{
                 let s = 2 + 6*(a + g + 1);
                 let mut p: Packet = Packet {
                     stamp  : time::get_time(),
-                    dt     : 0,
+                    dt     : (0, 0),
                     ft     : mem::zeroed::<[u8; 31]>(),
                     n_acc  : a as u8,
                     n_gyro : g as u8,
@@ -236,13 +236,13 @@ group_attr!{
                 let s = 2 + 6*(a + g + 1);
                 let mut p: Packet = Packet {
                     stamp  : time::get_time(),
-                    dt     : 0,
+                    dt     : (0, 0),
                     ft     : mem::zeroed::<[u8; 31]>(),
                     n_acc  : a as u8,
                     n_gyro : g as u8,
                     imu    : mem::zeroed::<[XYZ<i16>; 63]>()
                 };
-                byte_copy(&buf[s..s+4], mem::transmute::<&mut u32, &mut [u8; 4]>(&mut p.dt));
+                byte_copy(&buf[s..s+4], mem::transmute::<&mut (u16, u16), &mut [u8; 4]>(&mut p.dt));
                 byte_copy(&buf[s+4..], &mut p.ft);
                 ptr::copy::<XYZ<i16>>(buf[2..s].as_ptr() as *const XYZ<i16>, p.imu.as_mut_ptr(), (a+g+1) as usize);
                 p
@@ -281,6 +281,11 @@ group_attr!{
 
             PARK_STATE.store(pkt.ft[pkt.ft.len()-1] as usize, Ordering::SeqCst);
 
+            if pkt.dt.0 > 1000 {
+                println!("Delayed packet from Teensy! Packet follows:");
+                println!("{:#?}", pkt);
+            }
+
             Ok(pkt)
         }
     }
@@ -294,9 +299,24 @@ group_attr!{
 
     impl Debug for Packet {
         fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-            try!(write!(f, "IMU ({} acc, {} gyro, {} mag)", self.n_acc, self.n_gyro, self.n_acc + self.n_gyro > 0));
-            try!(write!(f, "\t"));
-            try!(write!(f, "ft sum={}", self.ft.iter().fold(0, ops::Add::add)));
+            try!(writeln!(f, "Packet {{"));
+            try!(writeln!(f, "\tstamp: {:?}", self.stamp));
+            try!(writeln!(f, "\tdt: {:?}", self.dt));
+            try!(writeln!(f, "\tft: {:?}", self.ft));
+            try!(write!(f, "\tacc: ["));
+            for i in 0..self.n_acc {
+                try!(write!(f, "{:?}, ", self.imu[i as usize]));
+            }
+            try!(writeln!(f, "]"));
+            try!(write!(f, "\tgyro: ["));
+            for i in 0..self.n_gyro {
+                try!(write!(f, "{:?}, ", self.imu[(self.n_acc + i) as usize]));
+            }
+            if self.n_acc + self.n_gyro > 0 {
+                try!(writeln!(f, "\tmag: {:?}", self.imu[(self.n_acc + self.n_gyro) as usize]));
+            }
+            try!(writeln!(f, "]"));
+            try!(write!(f, "}}"));
             Ok(())
         }
     }
@@ -306,7 +326,7 @@ group_attr!{
     guilty! {
         impl Controllable for Teensy {
             const NAME: &'static str = "teensy",
-            const BLOCK: Block = Block::Period(333_333),
+            const BLOCK: Block = Block::Immediate,
 
             fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Teensy {
                 let mut port = serialport();
@@ -335,6 +355,7 @@ group_attr!{
                         let mut tx = [0.0; BUF_LEN];
                         let mut ty = [0.0; BUF_LEN];
                         let mut tz = [0.0; BUF_LEN];
+                        let mut a  = [0.0; BUF_LEN];
                         for i in 0..BUF_LEN {
                             let diff = (vec[i].stamp - start).to_std().unwrap();
                             t[i] = diff.as_secs() as f64 + (diff.subsec_nanos() as f64 / 1.0e9);
@@ -349,6 +370,7 @@ group_attr!{
                                     ft[j] -= 4096;
                                 }
                             }
+                            a[i] = ((((((vec[i].ft[18] as u32) << 8) + (vec[i].ft[19] as u32)) as i32) - 2048) as f64) / 4096.0 * 16.0 * 9.81;
                             // proton mini40
                             const BIAS: [f64; 6] = [-0.1884383674, 0.2850118688, -0.180718143, -0.191009933, 0.3639300747, -0.4307167708];
                             const TF: [[f64; 6]; 6] = [[0.00679, 0.01658, -0.04923, 6.20566, 0.15882, -6.19201],
@@ -430,8 +452,9 @@ group_attr!{
                            .lines(&t as &[_], &tx as &[_], &[PlotOption::Color("orange"), PlotOption::Caption("TX")])
                            .lines(&t as &[_], &ty as &[_], &[PlotOption::Color("pink"),   PlotOption::Caption("TY")])
                            .lines(&t as &[_], &tz as &[_], &[PlotOption::Color("plum"),   PlotOption::Caption("TZ")])
+                           .lines(&t as &[_], &a  as &[_], &[PlotOption::Color("brown"),  PlotOption::Caption("A" )])
                            .set_x_label("Time (s)", &[])
-                           .set_y_label("Force (N) and Torque (Nm)", &[])
+                           .set_y_label("Force (N) and Torque (Nm) and Acc (m/s^2)", &[])
                            .set_legend(Coordinate::Graph(0.9), Coordinate::Graph(0.8), &[], &[])
                            ;
                         fig.show();
