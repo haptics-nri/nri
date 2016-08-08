@@ -14,7 +14,7 @@ group_attr!{
     use scribe::Writer;
     use std::process::Command;
     use std::sync::mpsc::Sender;
-    use std::str;
+    use std::{env, str};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     pub struct Vicon {
@@ -74,6 +74,8 @@ group_attr!{
             }
 
             fn teardown(&mut self) {
+                let dir = env::current_dir().unwrap();
+
                 rospub("PAUSE", &[]);
                 if !roscheck(&self.file) {
                     self.tx.send(CmdFrom::Data("send msg Vicon node crashed! No data received for latest dataset.".into())).unwrap();
@@ -81,7 +83,7 @@ group_attr!{
                 let readings = transfer(&self.file);
                 let n = readings.iter().filter(|&&b| b == b'\n').count();
 
-                Writer::<[u8]>::with_file("vicon.tsv").write(&readings);
+                Writer::<[u8]>::with_file(dir.join("vicon.tsv").to_str().unwrap()).write(&readings);
 
                 let end = time::now();
                 let millis = (end - self.start).num_milliseconds() as f64;
