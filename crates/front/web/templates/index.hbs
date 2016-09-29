@@ -69,10 +69,20 @@
                         $("." + words[1] + ".latest")  .each(function () { this.src       = words[3]; });
                         break;
                     case "panic":
-                        alert("The " + words[1] + " thread crashed! (" + words.slice(2).join(" ") + ")\n\nIf it was running, you may want to click Start again.");
+                        serv = words[1];
+                        $("#light-" + serv).css("background-color", "blue");
+                        alert("The " + serv + " thread crashed! (" + words.slice(2).join(" ") + ")\n\nIf it was running, you may want to click Start again.");
                         break;
                     case "flow":
                         $("#flows").html(event.data.slice(event.data.indexOf(" ")));
+                        break;
+                    case "start":
+                        serv = words[1];
+                        $("#light-" + serv).css("background-color", "green");
+                        break;
+                    case "stop":
+                        serv = words[1];
+                        $("#light-" + serv).css("background-color", "red");
                         break;
                 }
             };
@@ -185,6 +195,27 @@
                     padding-right 1em;
                     background: white;
                     border-top: 1px solid black">
+            <div style="float: right;
+                        padding: 0.5em">
+                <table style="border-spacing: 0.5em;
+                              table-layout: fixed">
+                    <tr>
+                        {{#each services}}
+                            <td id="light-{{shortname}}" style="font-family: monospace;
+                                                                max-width: 1.99em;
+                                                                height: 1em;
+                                                                padding: 0.2em;
+                                                                overflow: hidden;
+                                                                white-space: nowrap;
+                                                                text-transform: uppercase;
+                                                                color: white;
+                                                                background-color: red">
+                                {{shortname}}
+                            </td>
+                        {{/each}}
+                    </tr>
+                </table>
+            </div>
             <h4>NUC Output</h4>
             <iframe name="response" style="width: 95%; height: 2.5em"></iframe>
         </div>

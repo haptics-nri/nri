@@ -2,6 +2,7 @@
 
 #[macro_use] extern crate utils;
 #[macro_use] extern crate comms;
+extern crate scribe;
 extern crate teensy;
 
 #[macro_use] extern crate guilt_by_association;
@@ -12,6 +13,7 @@ use comms::{Controllable, CmdFrom, Power, Block};
 use std::{env, fs, thread};
 use std::io::{self, BufRead, Write};
 use std::process::Command;
+use std::sync::atomic::Ordering;
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 
@@ -72,7 +74,8 @@ guilty!{
                         },
                         "start" => {
                             while let Some(dev) = words.next() {
-                                self.start(dev);
+                                let mut split = dev.splitn(2, '/');
+                                self.start(split.next().unwrap(), split.next());
                             }
                         },
                         "stop" => {
@@ -81,7 +84,8 @@ guilty!{
                             }
                         },
                         "status" => {
-                            println!("{:?}", teensy::ParkState::metermaid());
+                            println!("parked: {:?}", teensy::ParkState::metermaid());
+                            println!("scribe: {:?}", scribe::COUNT.load(Ordering::SeqCst));
                         },
                         "quit" => {
                             self.tx.send(CmdFrom::Quit).unwrap();
@@ -111,8 +115,8 @@ guilty!{
 }
 
 impl CLI {
-    fn start(&self, dev: &str) {
-        if !rpc!(self.tx, CmdFrom::Start, dev.to_owned()).unwrap() {
+    fn start(&self, dev: &str, data: Option<&str>) {
+        if !rpc!(self.tx, CmdFrom::Start, dev.to_owned(), data.map(|s| s.to_owned())).unwrap() {
             errorln!("Failed to start {}", dev);
         }
     }
@@ -160,12 +164,12 @@ impl CLI {
                             if let Ok(_) = fs::create_dir(&epdir) {
                                 if let Ok(_) = env::set_current_dir(&epdir) {
                                     match endeff {
-                                        teensy::ParkState::OptoForce => self.start("optoforce"),
-                                        teensy::ParkState::BioTac    => self.start("biotac"),
+                                        teensy::ParkState::OptoForce => self.start("optoforce", None),
+                                        teensy::ParkState::BioTac    => self.start("biotac", None),
                                         teensy::ParkState::Stick     => {},
                                         _ => unreachable!() // checked above
                                     }
-                                    self.start("teensy");
+                                    self.start("teensy", None);
                                     self.sleep(sec * 1000);
                                     self.stop("teensy");
                                     match endeff { // TODO RAII

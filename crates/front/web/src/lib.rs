@@ -188,6 +188,7 @@ fn index() -> Box<Handler> {
                                   Service::new("OptoForce"       , "optoforce" , "<img class=\"frame optoforce latest\" /><div class=\"optoforce framenum\"></div>"),
                                   Service::new("SynTouch BioTac" , "biotac"    , "<img class=\"frame biotac latest\" /><div class=\"biotac framenum\"></div>"),
                                   Service::new("Teensy"          , "teensy"    , "<img class=\"frame teensy latest\" /><div class=\"teensy framenum\"></div>"),
+                                  Service::new("Vicon"           , "vicon"     , "<img class=\"frame vicon latest\" /><div class=\"vicon framenum\"></div>"),
                       ].to_json());
                       data.insert("flows".to_owned(), FLOWS.read().unwrap().to_json());
                       data.insert("server".to_owned(), format!("{}:{}", req.url.host, config::WS_PORT).to_json());
@@ -257,7 +258,7 @@ fn control(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
                               [POST]);
 
                       Ok(match &*action {
-                              "start" => if rpc!(mtx.lock().unwrap(), CmdFrom::Start, service.clone()).unwrap() {
+                              "start" => if rpc!(mtx.lock().unwrap(), CmdFrom::Start, service.clone(), None).unwrap() {
                                   Response::with((status::Ok, format!("Started {}", service)))
                               } else {
                                   Response::with((status::InternalServerError, format!("Failed to start {}", service)))

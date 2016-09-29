@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use std::io::{Write, BufRead};
 use std::fs::{self, File};
 use std::path::PathBuf;
+use std::process::Command;
 use std::{fmt, env, thread};
 use std::time::Duration;
 use chrono::{DateTime, Local, Timelike};
@@ -70,7 +71,7 @@ pub enum FlowCmd {
         limits: (i32, i32),
         data: Option<i32>,
     },
-    Start(String),
+    Start(String, Option<String>),
     Stop(String),
     Send(String),
     StopSensors,
@@ -250,7 +251,8 @@ impl Flow {
                         },
                         Some("start") => {
                             for word in words {
-                                script.push((FlowCmd::Start(word.to_owned()), None));
+                                let mut split = word.splitn(2, '/');
+                                script.push((FlowCmd::Start(split.next().unwrap().to_owned(), split.next().map(|s| s.to_owned())), None));
                             }
                         },
                         Some(_) => return Err((i, "invalid command")),
@@ -337,9 +339,9 @@ impl FlowCmd {
                                         }
                                     }));
             }
-            FlowCmd::Start(ref service) => {
+            FlowCmd::Start(ref service, ref data) => {
                 println!("Flow starting service {}", service);
-                assert!(rpc!(tx, CmdFrom::Start, service.clone()).unwrap());
+                assert!(rpc!(tx, CmdFrom::Start, service.clone(), data.clone()).unwrap());
                 println!("Flow waiting for service {} to start", service);
                 thread::sleep(Duration::from_millis(2000));
                 println!("Flow done waiting for service {}", service);
@@ -369,7 +371,12 @@ impl FlowCmd {
                 write!(file, "> {:?} ({}..{}) [{:?}]", prompt, low, high, data.unwrap()).unwrap();
                 *data = None;
             },
-            FlowCmd::Start(ref service) => write!(file, "start {}", service).unwrap(),
+            FlowCmd::Start(ref service, ref data) => {
+                write!(file, "start {}", service).unwrap();
+                if let &Some(ref data) = data {
+                    write!(file, "/{}", data).unwrap();
+                }
+            },
             FlowCmd::Stop(ref service) => write!(file, "stop {}", service).unwrap(),
             FlowCmd::Send(ref string) => write!(file, ": {}", string).unwrap(),
             FlowCmd::StopSensors => write!(file, "stop").unwrap(),

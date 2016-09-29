@@ -4,7 +4,7 @@ use libc::{c_void, c_char, c_int};
 use conv::TryFrom;
 use std::ptr;
 use std::mem;
-use std::ffi::CString;
+use std::ffi::{CString, CStr};
 use std::cell::Cell;
 use std::ops::Deref;
 use std::slice;
@@ -27,13 +27,23 @@ custom_derive! {
 
 impl OniStatus {
     fn into_err(self) -> OniError {
-        unsafe { mem::transmute::<OniStatus, OniError>(self) }
+        OniError {
+            code: unsafe { mem::transmute::<OniStatus, OniErrorCode>(self) },
+            extended: unsafe { CStr::from_ptr(oniGetExtendedError()).to_str().unwrap().to_string() }
+        }
     }
 }
 
 #[repr(C)]
 #[derive(Debug)]
-pub enum OniError {
+pub struct OniError {
+    code: OniErrorCode,
+    extended: String
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub enum OniErrorCode {
     Error          = 1,
     NotImplemented = 2,
     NotSupported   = 3,
@@ -218,6 +228,7 @@ impl OniSensorInfo {
 extern "C" {
     fn oniInitialize(apiVersion: i32) -> OniStatus;
     fn oniShutdown();
+    fn oniGetExtendedError() -> *const c_char;
 
     fn oniDeviceOpen(uri: *const c_char, device: *mut *mut c_void) -> OniStatus;
     fn oniDeviceClose(device: *mut c_void) -> OniStatus;
@@ -337,7 +348,7 @@ impl VideoStream {
     pub fn info(&self) -> Result<SensorInfo, OniError> {
         let pinfo = unsafe { oniStreamGetSensorInfo(self.pvs) };
         if pinfo.is_null() {
-            Err(OniError::Error)
+            Err(OniStatus::Error.into_err())
         } else {
             Ok(SensorInfo { pinfo: unsafe { ptr::read(&pinfo) } })
         }

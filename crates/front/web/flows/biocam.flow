@@ -1,4 +1,4 @@
-OptoForce-and-Camera Episode
+BioTac-and-Camera Episode
 
 - Begin
     stop
@@ -8,7 +8,7 @@ OptoForce-and-Camera Episode
     start vicon
     start teensy
     start bluefox structure
-    start optoforce
+    start biotac
     : bluefox disk start
     : structure disk start
     "Now recording!"
@@ -16,7 +16,7 @@ OptoForce-and-Camera Episode
     : bluefox disk stop
     : structure disk stop
     "Writing to disk, please wait..."
-    stop bluefox structure optoforce teensy vicon
+    stop bluefox structure biotac teensy vicon
     "Done!"
 - Wrap up
     > "surface name"

@@ -16,6 +16,7 @@ nightly = [
 [dependencies]
 utils                = { path = "../../utils"          }
 comms                = { path = "../../back/comms"     }
+scribe               = { path = "../../back/scribe"    }
 teensy               = { path = "../../drivers/teensy" }
 guilt-by-association = "0.2"
 

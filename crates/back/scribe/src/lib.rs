@@ -12,6 +12,7 @@ use std::io::Write;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::sync::mpsc;
+use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT, Ordering};
 use std::marker::PhantomData;
 use std::thread;
 use std::convert::Into;
@@ -59,6 +60,7 @@ lazy_static! {
                         },
                         Message::Write(h, data) => {
                             files.get_mut(&h).unwrap().write_all(&data).unwrap();
+                            COUNT.fetch_sub(1, Ordering::SeqCst);
                         },
 
                         Message::Register(s, tx) => {
@@ -75,6 +77,7 @@ lazy_static! {
                             let i = indices[&h];
                             indices.insert(h, i + 1);
                             File::create(patterns[&h].replace("{}", &i.to_string())).unwrap().write_all(&data).unwrap();
+                            COUNT.fetch_sub(1, Ordering::SeqCst);
                         },
                         Message::SetIndex(h, index) => {
                             indices.insert(h, index);
@@ -91,6 +94,8 @@ lazy_static! {
         mutex
     };
 }
+
+pub static COUNT: AtomicUsize = ATOMIC_USIZE_INIT;
 
 #[derive(PartialEq)]
 enum Destination {
@@ -151,11 +156,12 @@ impl<T: Writable + Send + 'static> Writer<T> {
     pub fn write(&mut self, data: T) {
         let mut raw_data = vec![0u8; mem::size_of::<T>()].into_boxed_slice();
         unsafe {
-            ptr::copy::<T>(&data as *const T,
-                           raw_data.deref_mut() as *mut [u8] as *mut T,
-                           1);
+            ptr::copy_nonoverlapping::<T>(&data as *const T,
+                                          raw_data.deref_mut() as *mut [u8] as *mut T,
+                                          1);
         }
 
+        COUNT.fetch_add(1, Ordering::SeqCst);
         send(match self.dst {
                 Destination::Name    => Message::Write(self.handle, raw_data),
                 Destination::Pattern => Message::Packet(self.handle, raw_data),
@@ -172,6 +178,7 @@ impl Writer<[u8]> {
                             data.len());
         }
 
+        COUNT.fetch_add(1, Ordering::SeqCst);
         send(match self.dst {
                 Destination::Name    => Message::Write(self.handle, raw_data),
                 Destination::Pattern => Message::Packet(self.handle, raw_data),

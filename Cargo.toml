@@ -6,7 +6,8 @@ build   = "build.rs"
 exclude = ["src/web/templates/*", "src/web/bootstrap/*", "src/web/flows/*", "data/*", "keepalive"] # TODO take this out before packaging
 
 [profile.release]
-debug = true
+#debug = true
+lto = true
 
 [features]
 nightly = [
@@ -44,6 +45,7 @@ env_logger  = "0.3"
 hprof       = "0.1"
 chrono      = "0.2"
 
+[dev-dependencies]
 # needed for examples (TODO remove)
 lazy_static = "0.2"
 time        = "0.1"

@@ -15,7 +15,7 @@ use libc::{nanosleep, timespec};
 #[derive(Clone)]
 pub enum CmdTo {
     /// Start the service
-    Start,
+    Start(Option<String>),
 
     /// Stop the service (but keep the thread running)
     Stop,
@@ -32,7 +32,7 @@ pub enum CmdTo {
 #[derive(Clone)]
 pub enum CmdFrom {
     /// Start another service
-    Start(String, Sender<bool>),
+    Start(String, Option<String>, Sender<bool>),
 
     /// Stop another service
     Stop(String, Sender<bool>),
@@ -212,7 +212,7 @@ macro_rules! maybe_break {
 /// Called in the case of a command from the main thread when the service is already running
 fn handle_ok<C: Controllable>(cmd: CmdTo, c: &mut C, data: &mut Option<String>) -> Option<Break> {
     match cmd {
-        CmdTo::Start => {}                          // already started
+        CmdTo::Start(_) => {}                       // already started
         CmdTo::Stop => return Some(Break::Running), // shutdown command
         CmdTo::Quit => return handle_err(c),        // real shutdown command
         CmdTo::Data(d) => *data = Some(d),
@@ -259,7 +259,7 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
         'hatching: loop {
             match rx.recv() {
                 Ok(cmd) => match cmd {
-                    CmdTo::Start => break 'hatching,      // let's go!
+                    CmdTo::Start(d) => { data = d; break 'hatching } // let's go!
                     CmdTo::Data(_) => continue 'hatching, // sorry, not listening yet
                     CmdTo::Stop => continue 'hatching,
                     CmdTo::Quit => break 'alive,
@@ -271,6 +271,8 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
         tx.send(CmdFrom::Timeout { thread: guilty!(C::NAME), ms: 1000 }).unwrap();
         let mut c = C::setup(tx.clone(), data);
         tx.send(CmdFrom::Timein { thread: guilty!(C::NAME) }).unwrap();
+
+        tx.send(CmdFrom::Data(format!("to web start {}", guilty!(C::NAME)))).unwrap();
 
         let mut block = guilty!(C::BLOCK);
         let actual_period = match block {
@@ -324,6 +326,7 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
         }
 
         c.teardown();
+        tx.send(CmdFrom::Data(format!("to web stop {}", guilty!(C::NAME)))).unwrap();
     }
 
     println!("\n\n");

@@ -270,8 +270,8 @@ fn send_to(services: &[Service], s: String, cmd: CmdTo) -> bool {
     }
 }
 
-fn start(services: &[Service], s: String) -> bool {
-    send_to(services, s, CmdTo::Start)
+fn start(services: &[Service], s: String, d: Option<String>) -> bool {
+    send_to(services, s, CmdTo::Start(d))
 }
 
 fn stop(services: &[Service], s: String) -> bool {
@@ -304,15 +304,15 @@ fn main() {
 
         thread::sleep(Duration::from_millis(500)); // wait for threads to start
 
-        start(&services, "cli".to_owned());
-        start(&services, "web".to_owned());
+        start(&services, "cli".to_owned(), None);
+        start(&services, "web".to_owned(), None);
 
         loop {
             match reply_rx.recv() {
                 Ok(cmd) => match cmd {
-                    CmdFrom::Start(s, tx) => {
+                    CmdFrom::Start(s, d, tx) => {
                         println!("STARTING {}", s);
-                        tx.send(start(&services, s)).unwrap();
+                        tx.send(start(&services, s, d)).unwrap();
                     },
                     CmdFrom::Stop(s, tx)  => {
                         println!("STOPPING {}", s);
@@ -330,7 +330,7 @@ fn main() {
                     },
                     CmdFrom::Power(power) => {
                         // step 1. delete keepalive file
-                        fs::remove_file("keepalive").unwrap();
+                        let _ = fs::remove_file("keepalive");
 
                         // step 2. stop all services
                         stop_all(&mut services[1..]);

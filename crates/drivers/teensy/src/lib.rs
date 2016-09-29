@@ -526,6 +526,14 @@ group_attr!{
                             Some("kick") => {
                                 self.buf = Some(Vec::with_capacity(BUF_LEN));
                             }
+                            Some("ref int") => {
+                                println!("Switching accelerometers to internal reference.");
+                                self.port.write_all(&['5' as u8]).unwrap();
+                            }
+                            Some("ref ext") => {
+                                println!("Switching accelerometers to external reference.");
+                                self.port.write_all(&['6' as u8]).unwrap();
+                            }
                             _ => {}
                         }
 

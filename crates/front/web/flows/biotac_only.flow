@@ -1,0 +1,16 @@
+BioTac-only Episode
+
+- Begin
+    stop
+    "Starting new episode!"
+
+- Capture
+    start biotac
+    "Now recording!"
+- Finish
+    "Writing to disk, please wait..."
+    stop biotac
+    "Done!"
+- Wrap up
+    > "comment"
+

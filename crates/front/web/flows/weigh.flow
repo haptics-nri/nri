@@ -1,0 +1,15 @@
+End-effector weighing
+
+- Begin
+    stop
+    "Starting data collection"
+
+- Capture
+    start teensy
+    "Now recording!"
+- Finish
+    stop teensy
+    "Done!"
+- Wrap up
+    > "end-effector name"
+

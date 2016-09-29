@@ -1,21 +1,15 @@
-Stick-and-Camera Episode
+Accelerometer Calibration
 
 - Begin
     stop
     "Starting new episode!"
 
 - Capture
-    start vicon
     start teensy
     : teensy ref int
-    start bluefox/15
-    : bluefox disk start
     "Now recording!"
 - Finish
-    : bluefox disk stop
     "Writing to disk, please wait..."
-    stop bluefox teensy vicon
+    stop teensy
     "Done!"
-- Wrap up
-    > "surface name"
 

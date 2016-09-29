@@ -59,13 +59,13 @@ group_attr!{
     guilty!{
         impl Controllable for Bluefox {
             const NAME: &'static str = "bluefox",
-            const BLOCK: Block = Block::Period(133_333_333),
+            const BLOCK: Block = Block::Immediate,
 
-            fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Bluefox {
+            fn setup(tx: Sender<CmdFrom>, data: Option<String>) -> Bluefox {
                 let device = wrapper::Device::new().unwrap();
                 device.request_reset().unwrap();
-                
-                // TODO set desired properties (height, width, pixel format, frame rate)
+
+                let fps = data.and_then(|s| s.parse::<f64>().ok());
 
                 if SETTINGS_DONE.load(Ordering::SeqCst) {
                     // HACK: driver always returns error if we try to modify settings again
@@ -84,7 +84,7 @@ group_attr!{
                     device.set_width(1600).unwrap();
                     device.set_pixel_format(wrapper::settings::PixelFormat::RGB8).unwrap();
                     device.set_acq_fr_enable(true).unwrap();
-                    device.set_acq_fr(7.5).unwrap();
+                    device.set_acq_fr(fps.unwrap_or(7.5)).unwrap();
                     println!("AFTER:\noffset = ({}, {})\nheight = {}\nwidth = {}\npixel format = {:?}\nframe rate = ({}, {})",
                              device.get_offset_x().unwrap(),
                              device.get_offset_y().unwrap(),
