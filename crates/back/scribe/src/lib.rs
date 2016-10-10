@@ -4,7 +4,6 @@
 
 extern crate libc;
 #[macro_use] extern crate lazy_static;
-#[macro_use] extern crate abort_on_panic;
 
 use std::{mem, ptr};
 use std::fs::File;
@@ -17,6 +16,7 @@ use std::marker::PhantomData;
 use std::thread;
 use std::convert::Into;
 use std::ops::DerefMut;
+use std::panic;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Handle(usize);
@@ -210,14 +210,17 @@ impl<T: ?Sized> Drop for Writer<T> {
 extern "C" fn finish_writing() {
     // NB: this function must not panic as that will unwind into libc
 
-    abort_on_panic!("Panic while waiting for scribe thread", {
+    // the only thing that can panic is errorln!, and if that happens there is nothing we can do,
+    // not even printing (the streams are gone during process shutdown, that's what causes the
+    // panic) so just silently exit
+    let _ = panic::catch_unwind(|| {
         errorln!("Scribe thread: waiting for outstanding writes");
 
         // lock the worker thread
         let mut w = match WORKER.lock() {
             Ok(guard)   => guard,
             Err(poison) => {
-                errorln!("Scibe thread: mutex poisoned: {:?}", poison);
+                errorln!("Scribe thread: mutex poisoned: {:?}", poison);
                 return;
             },
         };
@@ -232,7 +235,7 @@ extern "C" fn finish_writing() {
                 Ok(()) => errorln!("Scribe thread: finished"),
                 Err(e) => errorln!("Scribe thread: error while finishing writes: {:?}", e),
             },
-            None         => errorln!("Scribe thread: finish_writing called twice!"),
+            None       => errorln!("Scribe thread: finish_writing called twice!"),
         }
     });
 }
