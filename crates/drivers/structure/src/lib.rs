@@ -16,7 +16,6 @@ group_attr!{
     extern crate image;
     extern crate rustc_serialize as serialize;
     use std::{mem, slice};
-    use std::io::Write;
     use std::sync::Mutex;
     use image::{imageops, ImageBuffer, ColorType, FilterType};
     use image::png::PNGEncoder;

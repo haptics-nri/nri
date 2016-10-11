@@ -59,7 +59,7 @@ group_attr!{
     use std::fs::File;
     use std::thread;
     use std::sync::mpsc::Sender;
-    use std::{u8, ptr, mem, ops};
+    use std::{u8, ptr, mem};
     use std::fmt::{self, Display, Debug, Formatter};
     use std::time::Duration;
     use std::num::Wrapping;

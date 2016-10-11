@@ -18,7 +18,6 @@ group_attr!{
 
     extern crate scribe;
 
-    use std::io::Write;
     use image::{imageops, ImageBuffer, ColorType, FilterType};
     use image::png::PNGEncoder;
     use serialize::base64;

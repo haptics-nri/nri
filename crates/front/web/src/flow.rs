@@ -3,7 +3,6 @@ use std::collections::BTreeMap;
 use std::io::{Write, BufRead};
 use std::fs::{self, File};
 use std::path::PathBuf;
-use std::process::Command;
 use std::{fmt, env, thread};
 use std::time::Duration;
 use chrono::{DateTime, Local, Timelike};
