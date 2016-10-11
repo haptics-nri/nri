@@ -6,7 +6,7 @@
 //! _serial port access_ of all things), and core dumps the first time it is run (after that it
 //! freezes instead). The precompiled GUI application actually runs, which is a major step up, but
 //! it was compiled with an absolute path to the fonts directory in someone's home directory, so it
-//! requires a symlink under /home or an LD_PRELOAD library to display any characters. With that
+//! requires a symlink under /home or an `LD_PRELOAD` library to display any characters. With that
 //! minor annoyance fixed, it shows numbers and plots that confirm the sensor works! It can even
 //! log values to a file, which may be useful for sanity checks later. But this isn't really good
 //! enough for our use case, unless we did some terrible hack such as starting the GUI to write to

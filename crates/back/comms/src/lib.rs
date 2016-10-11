@@ -75,18 +75,18 @@ pub enum Power {
 
 /// Desired blocking mode for a service
 ///
-/// Defines what the go() function does in between calls to Controllable::step()
+/// Defines what the `go()` function does in between calls to `Controllable::step()`
 #[derive(Debug, Copy, Clone)]
 pub enum Block {
-    /// Do not call step() again until there is a command from on high. Used by services that do
+    /// Do not call `step()` again until there is a command from on high. Used by services that do
     /// all the work in background threads or have nothing to do.
     Infinite,
 
-    /// No delay -- call step() again immediately. Used by IO-bound or CPU-bound services.
+    /// No delay -- call `step()` again immediately. Used by IO-bound or CPU-bound services.
     Immediate,
 
-    /// Request a period N (in nanoseconds) managed by go(). Used by services that are not IO-bound
-    /// or CPU-bound.  Assuming each call to step() completes in less than N ns, step() will be
+    /// Request a period N (in nanoseconds) managed by `go()`. Used by services that are not IO-bound
+    /// or CPU-bound.  Assuming each call to `step()` completes in less than N ns, step() will be
     /// called approximately every N ns. A simple proportional controller is used to adjust the
     /// sleep time, to account for unmeasured delays and get as close as possible to the desired
     /// period.
@@ -182,7 +182,7 @@ macro_rules! stub {
     }
 }
 
-/// Represents the two loops in go(), used in conjunction with maybe_break!
+/// Represents the two loops in `go()`, used in conjunction with `maybe_break!`
 enum Break {
     Running,
     Alive,
@@ -254,14 +254,13 @@ fn handle<C: Controllable>(block: bool, c: &mut C, rx: &Receiver<CmdTo>, data: &
 /// calling its setup()/step()/teardown() methods as necessary.
 pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
     'alive: loop {
-        let mut data = None;
+        let mut data;
 
         'hatching: loop {
             match rx.recv() {
                 Ok(cmd) => match cmd {
                     CmdTo::Start(d) => { data = d; break 'hatching } // let's go!
-                    CmdTo::Data(_) => continue 'hatching, // sorry, not listening yet
-                    CmdTo::Stop => continue 'hatching,
+                    CmdTo::Data(_) | CmdTo::Stop => continue 'hatching, // sorry, not listening yet
                     CmdTo::Quit => break 'alive,
                 },
                 Err(_) => return, // main thread exploded?

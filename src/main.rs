@@ -124,7 +124,6 @@ extern crate biotac;
 extern crate vicon;
 
 use std::{fs, process};
-use std::io::{Write, BufRead};
 use std::thread;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{channel, Sender};

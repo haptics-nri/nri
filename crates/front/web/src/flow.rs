@@ -82,6 +82,8 @@ impl Flow {
     }
 
     pub fn run(&mut self, park: ParkState, tx: &mpsc::Sender<CmdFrom>, wsid: usize) -> EventContour {
+        // TODO refactor this confusing function
+
         let mut ret = EventContour::In;
 
         // are we just starting the flow now?
@@ -221,9 +223,8 @@ impl Flow {
                     let s = line[line.find('"').unwrap()+1 .. line.rfind('"').unwrap()].trim();
                     let range = line[line.rfind('"').unwrap()+1 ..].trim();
                     
-                    if range.len() > 0 {
-                        if !(   range.chars().next() == Some('(')
-                             && range.chars().rev().next() == Some(')')) {
+                    if !range.is_empty() {
+                        if !range.starts_with('(') || !range.ends_with(')') {
                             return Err((i, "range not in parentheses"));
                         }
                         let dots = try!(range.find("..").ok_or((i, "not enough dots in range")));
@@ -276,7 +277,7 @@ impl FlowState {
         self.stamp = Some(Local::now());
         for &mut (ref mut c, ref mut stamp) in &mut self.script {
             *stamp = Some(Local::now());
-            c.run(&tx, wsid);
+            c.run(tx, wsid);
         }
         self.done = true;
     }
@@ -372,7 +373,7 @@ impl FlowCmd {
             },
             FlowCmd::Start(ref service, ref data) => {
                 write!(file, "start {}", service).unwrap();
-                if let &Some(ref data) = data {
+                if let Some(ref data) = *data {
                     write!(file, "/{}", data).unwrap();
                 }
             },

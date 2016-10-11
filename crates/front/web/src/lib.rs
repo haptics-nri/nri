@@ -135,7 +135,7 @@ fn watch<T, U, F>(mut thing: T,
                 if let Some(x) = path.extension() {
                     if x == ext {
                         print!("Updating... ({:?} {:?})", path.file_name().expect(&format!("could not get file name of {:?}", path)),
-                                                          evt.op.expect(&format!("no operation for event")));
+                                                          evt.op.expect("no operation for event"));
                         let mut thing = global.write().expect("couldn't get a write lock");
                         update(&mut *thing, &mut f, root, ext);
                         println!(" done.");

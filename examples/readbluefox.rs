@@ -16,7 +16,7 @@ struct Row {
 }
 
 impl fmt::Debug for Row {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, _: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         Err(fmt::Error)
     }
 }
@@ -86,12 +86,12 @@ fn april(fname: String) -> (u32, String, String, String, String, String, String)
 
 fn main() {
     let mut csvwtr = csv::Writer::from_memory();
-    csvwtr.encode(("Frame number", "Tag IDs", "Tag Centers", "Tag P1s", "Tag P2s", "Tag P3s", "Tag P4s"));
+    attempt!(csvwtr.encode(("Frame number", "Tag IDs", "Tag Centers", "Tag P1s", "Tag P2s", "Tag P3s", "Tag P4s")));
     let csvwtr = Arc::new(Mutex::new(csvwtr));
 
     let inname = common::do_camera::<[u8; 3], Row, _, _>("bluefox", |png, csvwtr| csvwtr.lock().unwrap().encode(april(png)).unwrap(), csvwtr.clone(), 1600, 1200, 3, ColorType::LCT_RGB, 8);
 
     let mut csvwtr = Arc::try_unwrap(csvwtr).ok().unwrap().into_inner().unwrap();
-    attempt!(File::create(Path::new(&inname).parent().unwrap().join("bluefox").join("april.csv"))).write_all(csvwtr.as_bytes());
+    attempt!(attempt!(File::create(Path::new(&inname).parent().unwrap().join("bluefox").join("april.csv"))).write_all(csvwtr.as_bytes()));
 }
 

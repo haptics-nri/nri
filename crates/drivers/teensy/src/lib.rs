@@ -365,9 +365,9 @@ group_attr!{
                                           (((vec[i].ft[6]  as u32) << 8) + (vec[i].ft[7]  as u32)) as i32,
                                           (((vec[i].ft[8]  as u32) << 8) + (vec[i].ft[9]  as u32)) as i32,
                                           (((vec[i].ft[10] as u32) << 8) + (vec[i].ft[11] as u32)) as i32];
-                            for j in 0..6 {
-                                if ft[j] >= 2048 {
-                                    ft[j] -= 4096;
+                            for val in &mut ft {
+                                if *val >= 2048 {
+                                    *val -= 4096;
                                 }
                             }
                             a[i] = ((((((vec[i].ft[18] as u32) << 8) + (vec[i].ft[19] as u32)) as i32) - 2048) as f64) / 4096.0 * 16.0 * 9.81;

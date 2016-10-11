@@ -58,7 +58,7 @@ lazy_static! {
                 let mut max_file = Handle::new();
                 let mut max_pattern = Handle::new();
 
-                for msg in rx.into_iter() {
+                for msg in rx {
                     match msg {
                         Message::Open(s, tx) => {
                             max_file = max_file.next();

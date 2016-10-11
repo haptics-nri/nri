@@ -3,10 +3,9 @@ extern crate time;
 
 #[macro_use] mod common;
 
-use std::{fmt, env, mem, ptr, slice};
-use std::io::{self, Read, Write};
+use std::{env, mem, ptr, slice};
+use std::io::{self, Read};
 use std::fs::File;
-use std::path::Path;
 
 trait RFC980: Read {
     fn read_exact(&mut self, mut buf: &mut [u8]) -> io::Result<()> {
@@ -33,21 +32,15 @@ trait RFC980: Read {
 
 impl<T: Read> RFC980 for T {}
 
+#[allow(unused)]
 #[repr(packed)]
 struct XYZ<T> {
     x: T,
     y: T,
     z: T
 }
-#[repr(packed)]
-struct CookedPacket {
-    stamp:  time::Timespec,
-    ft:     [u8; 30],
-    count:  u8,
-    n_acc:  u8,
-    n_gyro: u8,
-    imu:    [XYZ<i16>; 37]
-}
+
+#[allow(unused)]
 #[repr(packed)]
 struct RawPacket {
     ft     : [u8; 31],
@@ -55,6 +48,7 @@ struct RawPacket {
     n_gyro : u8,
     imu    : [XYZ<i16>; 37]
 }
+
 impl RawPacket {
     unsafe fn new(buf: &[u8]) -> Result<RawPacket, String> {
         fn checksum(buf: &[u8]) -> Result<(), String> {
@@ -125,7 +119,7 @@ fn go<R: io::Read, W: io::Write>(mut reader: R, mut writer: W) -> Result<(),io::
                     let mut count = 0;
                     while count < 3 {
                         reader.read_exact(&mut scanning).unwrap();
-                        if scanning[0] == 'a' as u8 {
+                        if scanning[0] == b'a' {
                             count += 1;
                         } else {
                             count = 0;
@@ -144,8 +138,8 @@ fn go<R: io::Read, W: io::Write>(mut reader: R, mut writer: W) -> Result<(),io::
             Ok(()) => {
                 match unsafe { RawPacket::new(&buf) } {
                     Ok(p) => {
-                        writer.write_all(unsafe { slice::from_raw_parts(&time::get_time() as *const _ as *const _, mem::size_of::<time::Timespec>()) });
-                        writer.write_all(unsafe { slice::from_raw_parts(&p as *const _ as *const _, mem::size_of_val(&p)) });
+                        writer.write_all(unsafe { slice::from_raw_parts(&time::get_time() as *const _ as *const _, mem::size_of::<time::Timespec>()) }).unwrap();
+                        writer.write_all(unsafe { slice::from_raw_parts(&p as *const _ as *const _, mem::size_of_val(&p)) }).unwrap();
                     },
                     Err(s) => errorln!("{:?}", s)
                 }
@@ -153,7 +147,6 @@ fn go<R: io::Read, W: io::Write>(mut reader: R, mut writer: W) -> Result<(),io::
             Err(e)  => return Err(e)
         }
     }
-    Ok(())
 }
 
 fn main() {

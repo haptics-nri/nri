@@ -12,8 +12,6 @@ use self::lodepng::{encode_file, ColorType};
 
 /// Semiautomatically-indenting `println!` replacement
 ///
-/// ¡Achtung! Requres `#[macro_use] extern crate lazy_static;` at the crate root!
-///
 /// Example:
 /// 
 /// ```
@@ -25,11 +23,10 @@ use self::lodepng::{encode_file, ColorType};
 /// }
 /// ```
 #[macro_use] pub mod indent {
-    use std::sync::Mutex;
-    lazy_static! {
-        /// Tracks the current indent level
-        pub static ref _INDENT: Mutex<usize> = Mutex::new(0);
-    }
+    use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT, Ordering};
+
+    /// Tracks the current indent level
+    pub static _INDENT: AtomicUsize = ATOMIC_USIZE_INIT;
 
     #[doc(hidden)]
     #[allow(dead_code)]
@@ -37,12 +34,12 @@ use self::lodepng::{encode_file, ColorType};
     #[allow(dead_code)]
     impl IndentGuard {
         pub fn new() -> IndentGuard {
-            IndentGuard { prev: *_INDENT.lock().unwrap() }
+            IndentGuard { prev: _INDENT.load(Ordering::SeqCst) }
         }
     }
     impl Drop for IndentGuard {
         fn drop(&mut self) {
-            *_INDENT.lock().unwrap() = self.prev;
+            _INDENT.store(self.prev, Ordering::SeqCst);
         }
     }
 
@@ -56,10 +53,10 @@ use self::lodepng::{encode_file, ColorType};
         (> $($arg:expr),*) => {
             indentln!($($arg),*);
             let _indent_guard = $crate::common::indent::IndentGuard::new();
-            *$crate::common::indent::_INDENT.lock().unwrap() += 1;
+            $crate::common::indent::_INDENT.fetch_add(1, ::std::sync::atomic::Ordering::SeqCst);
         };
         ($($arg:expr),*)   => {
-            println!("{s: <#w$}{a}", s = "", w = 4 * *$crate::common::indent::_INDENT.lock().unwrap(), a = format!($($arg),*));
+            println!("{s: <#w$}{a}", s = "", w = 4 * $crate::common::indent::_INDENT.load(::std::sync::atomic::Ordering::SeqCst), a = format!($($arg),*));
         }
     }
 }
@@ -169,10 +166,10 @@ pub fn do_camera<T, Data: Debug + Pixels<T>, F: Fn(String, C) + Send + Sync + 's
     let inname = parse_in_arg(&mut env::args().skip(1));
     attempt!(fs::create_dir_all(Path::new(&inname).parent().unwrap().join(name)));
 
-    let mut csvfile = attempt!(File::open(&inname));
+    let csvfile = attempt!(File::open(&inname));
     let mut csvrdr = csv::Reader::from_reader(csvfile).has_headers(false);
     let mut csvwtr = csv::Writer::from_memory();
-    csvwtr.encode(("Frame number", "Filename", "Unix timestamp"));
+    attempt!(csvwtr.encode(("Frame number", "Filename", "Unix timestamp")));
 
     const N_THREADS: usize = 4;
     print!("Creating {} threads...", N_THREADS);
@@ -189,9 +186,9 @@ pub fn do_camera<T, Data: Debug + Pixels<T>, F: Fn(String, C) + Send + Sync + 's
                     let png = dat_path.parent().unwrap().join(&name).join(dat_path.file_name().unwrap()).with_extension("png").to_str().unwrap().to_string();
                     let rows = do_binary::<Data>("", (dat, None));
                     let mut pixels = Vec::with_capacity(height*channels*rows.len());
-                    for i in 0..rows.len() {
+                    for row in &rows {
                         for j in 0..width {
-                            pixels.push(rows[i].pixel(j));
+                            pixels.push(row.pixel(j));
                         }
                     }
                     attempt!(encode_file(&png, &pixels, width, rows.len(), color, depth));
@@ -207,24 +204,23 @@ pub fn do_camera<T, Data: Debug + Pixels<T>, F: Fn(String, C) + Send + Sync + 's
     let mut t = 0;
     for row in csvrdr.decode() {
         println!("reading frame {}...", i);
-        let (num, fname, stamp): (usize, String, f64) = row.ok().expect(&format!("failed to parse row {} of {}", i, inname));
-        csvwtr.encode((num, Path::new(&fname).with_extension("png").to_str().unwrap().to_string(), stamp));
+        let (num, fname, stamp): (usize, String, f64) = row.expect(&format!("failed to parse row {} of {}", i, inname));
+        attempt!(csvwtr.encode((num, Path::new(&fname).with_extension("png").to_str().unwrap().to_string(), stamp)));
         i += 1;
         let dat_path = Path::new(&inname).with_file_name(fname);
-        threads[t].as_ref().unwrap().1.send(dat_path);
+        attempt!(threads[t].as_ref().unwrap().1.send(dat_path));
         t = (t + 1) % 4;
     }
     println!("finished {} frames", i);
 
-    for t in 0..N_THREADS {
-        let present = threads[t].take().unwrap(); // unwrap the present
+    for mut thread in threads {
+        let present = thread.take().unwrap(); // unwrap the present
         drop(present.1); // drop Sender causing the thread to stop looping
         attempt!(present.0.join()); // now safe to join the thread
     }
 
-    attempt!(File::create(Path::new(&inname).parent().unwrap().join(name).join(Path::new(&inname).file_name().unwrap()))).write_all(csvwtr.as_bytes());
+    attempt!(attempt!(File::create(Path::new(&inname).parent().unwrap().join(name).join(Path::new(&inname).file_name().unwrap()))).write_all(csvwtr.as_bytes()));
 
     inname
 }
-
 
