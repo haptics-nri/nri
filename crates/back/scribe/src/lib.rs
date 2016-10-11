@@ -18,21 +18,31 @@ use std::convert::Into;
 use std::ops::DerefMut;
 use std::panic;
 
+/// Helper struct to wrap an auto-incrementing integer.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
-pub struct Handle(usize);
+struct Handle(usize);
 
 impl Handle {
-    pub fn new() -> Handle {
+    /// Make a new handle.
+    fn new() -> Handle {
         Handle(0)
     }
-    pub fn next(self) -> Handle {
+
+    /// Get the next handle in the sequence.
+    fn next(self) -> Handle {
         Handle(self.0 + 1)
     }
 }
 
+/// Worker thread that takes data from other threads and writes them to files.
+///
+/// A singleton thread runs in a lazy static.
 struct Worker {
-    thread : Option<thread::JoinHandle<()>>,
-    tx     : Option<mpsc::Sender<Message>>,
+    /// Handle to running thread
+    thread : thread::JoinHandle<()>,
+
+    /// Sending end of channel that the worker thread listens to
+    tx     : mpsc::Sender<Message>,
 }
 
 lazy_static! {
@@ -40,7 +50,7 @@ lazy_static! {
         let (tx, rx) = mpsc::channel();
 
         let mutex = Mutex::new(Worker {
-            thread: Some(thread::spawn(move || {
+            thread: thread::spawn(move || {
                 let mut files = HashMap::<Handle, File>::new();
                 let mut patterns = HashMap::<Handle, String>::new();
                 let mut indices = HashMap::<Handle, usize>::new();
@@ -84,9 +94,9 @@ lazy_static! {
                         },
                     }
                 }
-            })),
+            }),
 
-            tx: Some(tx)
+            tx: tx
         });
 
         unsafe { libc::atexit(finish_writing) };
@@ -103,7 +113,7 @@ enum Destination {
     Pattern,
 }
 
-pub enum Message {
+enum Message {
     Open(String, mpsc::Sender<Handle>),
     Close(Handle),
     Write(Handle, Box<[u8]>),
@@ -114,8 +124,10 @@ pub enum Message {
     SetIndex(Handle, usize),
 }
 
+/// Marks a type that can be "serialized" by transmuting to `[u8]`
 pub unsafe trait Writable {}
 
+/// Helper type used for writing a sequence of `Writable` packets into a file or files
 pub struct Writer<T: ?Sized> {
     handle : Handle,
     dst    : Destination,
@@ -123,6 +135,9 @@ pub struct Writer<T: ?Sized> {
 }
 
 impl<T: ?Sized> Writer<T> {
+    /// Create a new `Writer` that creates the file `name` and writes `T`s into it.
+    ///
+    /// The file is closed when the `Writer` is dropped.
     pub fn with_file<S: Into<String>>(name: S) -> Writer<T> {
         let (tx, rx) = mpsc::channel();
         send(Message::Open(name.into(), tx));
@@ -134,6 +149,7 @@ impl<T: ?Sized> Writer<T> {
         }
     }
 
+    /// Create a new `Writer` that creates files based on `pattern` for each `T`.
     pub fn with_files<S: Into<String>>(pattern: S) -> Writer<T> {
         let (tx, rx) = mpsc::channel();
         send(Message::Register(pattern.into(), tx));
@@ -145,6 +161,7 @@ impl<T: ?Sized> Writer<T> {
         }
     }
 
+    /// Fix up the internal packet index of an existing `Writer` (in the common case, it is automatically incremented).
     pub fn set_index(&mut self, index: usize) {
         if self.dst == Destination::Pattern {
             send(Message::SetIndex(self.handle, index));
@@ -153,7 +170,10 @@ impl<T: ?Sized> Writer<T> {
 }
 
 impl<T: Writable + Send + 'static> Writer<T> {
+    /// Write a serializable type to disk (into the open file or a new one, according to whether
+    /// this `Writer` was constructed with `with_file` or `with_files`).
     pub fn write(&mut self, data: T) {
+        // "serialize" by copying into a Box<[u8]>
         let mut raw_data = vec![0u8; mem::size_of::<T>()].into_boxed_slice();
         unsafe {
             ptr::copy_nonoverlapping::<T>(&data as *const T,
@@ -161,7 +181,9 @@ impl<T: Writable + Send + 'static> Writer<T> {
                                           1);
         }
 
+        // internal scribe status counter
         COUNT.fetch_add(1, Ordering::SeqCst);
+
         send(match self.dst {
                 Destination::Name    => Message::Write(self.handle, raw_data),
                 Destination::Pattern => Message::Packet(self.handle, raw_data),
@@ -170,7 +192,10 @@ impl<T: Writable + Send + 'static> Writer<T> {
 }
 
 impl Writer<[u8]> {
+    /// Special case for `&[u8]`. Write to disk (into the open file or a new one, according to
+    /// whether this `Writer` was constructed with `with_file` or `with_files`).
     pub fn write(&mut self, data: &[u8]) {
+        // copy to Box<[u8]>
         let mut raw_data = vec![0u8; data.len()].into_boxed_slice();
         unsafe {
             ptr::copy::<u8>(data as *const[u8] as *const u8,
@@ -178,7 +203,9 @@ impl Writer<[u8]> {
                             data.len());
         }
 
+        // internal scribe status counter
         COUNT.fetch_add(1, Ordering::SeqCst);
+
         send(match self.dst {
                 Destination::Name    => Message::Write(self.handle, raw_data),
                 Destination::Pattern => Message::Packet(self.handle, raw_data),
@@ -186,8 +213,9 @@ impl Writer<[u8]> {
     }
 }
 
+/// Convenience method for sending off a message to the worker thread.
 fn send(m: Message) {
-    WORKER.lock().unwrap().tx.as_ref().unwrap().send(m).unwrap();
+    WORKER.lock().unwrap().tx.send(m).unwrap();
 }
 
 impl<T: ?Sized> Drop for Writer<T> {
@@ -205,37 +233,41 @@ impl<T: ?Sized> Drop for Writer<T> {
 /// started).
 ///
 /// Do not call this function twice, as it will panic!
-#[allow(unknown_lints)]
-#[allow(let_unit_value)]
 extern "C" fn finish_writing() {
     // NB: this function must not panic as that will unwind into libc
-
-    // the only thing that can panic is errorln!, and if that happens there is nothing we can do,
-    // not even printing (the streams are gone during process shutdown, that's what causes the
-    // panic) so just silently exit
+    // To prevent such unwinding, we catch panics here. The only possible unintentional panic is
+    // from errorln!, which panics if stderr is not available due to the process shutdown already
+    // in progress. Also, we intentionally panic in order to poison the WORKER mutex. For both of
+    // those the correct action is just to silently exit.
     let _ = panic::catch_unwind(|| {
         errorln!("Scribe thread: waiting for outstanding writes");
 
         // lock the worker thread
-        let mut w = match WORKER.lock() {
+        let w = match WORKER.lock() {
             Ok(guard)   => guard,
-            Err(poison) => {
-                errorln!("Scribe thread: mutex poisoned: {:?}", poison);
+            Err(_) => {
+                errorln!("Scribe thread: ✗ finish_writing called twice!");
                 return;
             },
         };
 
-        // close the channel
-        // this will cause the receiver loop to end once it has processed all outstanding messages
-        drop(w.tx.take());
+        // The following code is unsafe because we use ptr::read to extract owned values from the
+        // mutex. This is sound because we panic in order to poison the mutex, so it can't happen
+        // twice. Reentrancy is also not possible because we hold the mutex guard.
+        unsafe {
+            // close the channel
+            // this will cause the receiver loop to end once it has processed all outstanding messages
+            drop(ptr::read(&w.tx));
 
-        // now join the thread
-        match w.thread.take() {
-            Some(handle) => match handle.join() {
-                Ok(()) => errorln!("Scribe thread: finished"),
-                Err(e) => errorln!("Scribe thread: error while finishing writes: {:?}", e),
-            },
-            None       => errorln!("Scribe thread: finish_writing called twice!"),
+            // now join the thread
+            match ptr::read(&w.thread).join() {
+                Ok(()) => errorln!("Scribe thread: ✓ finished"),
+                Err(e) => errorln!("Scribe thread: ✗ error while finishing writes: {:?}", e),
+            }
+
+            // we are about to panic intentionally, so turn off the panic message
+            panic::set_hook(Box::new(|_| {}));
+            panic!("intentionally poisoning the WORKER mutex");
         }
     });
 }
