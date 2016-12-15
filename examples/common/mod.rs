@@ -1,14 +1,17 @@
 extern crate csv;
 extern crate lodepng;
 extern crate libc;
+extern crate hprof;
 
 use std::{env, fs, process, mem, ptr, thread};
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 use std::fs::File;
 use std::fmt::Debug;
 use std::sync::{mpsc, Arc};
 use std::path::{Path, PathBuf};
+use std::str;
 use self::lodepng::{encode_file, ColorType};
+use self::hprof::Profiler;
 
 /// Semiautomatically-indenting `println!` replacement
 ///
@@ -83,6 +86,24 @@ macro_rules! attempt {
             }
         }*/
         $e.unwrap()
+    }
+}
+
+trait Leakable {
+    type Target: ?Sized;
+
+    fn leak(self) -> &'static Self::Target;
+}
+
+impl Leakable for String {
+    type Target = str;
+
+    fn leak(self) -> &'static str {
+        unsafe {
+            let s = mem::transmute::<&[u8], &'static [u8]>(self.as_bytes());
+            mem::forget(self);
+            str::from_utf8_unchecked(s)
+        }
     }
 }
 
@@ -161,7 +182,7 @@ pub trait Pixels<T> {
     fn pixel(&self, i: usize) -> T;
 }
 
-pub fn do_camera<T, Data: Debug + Pixels<T>, F: Fn(String, C) + Send + Sync + 'static, C: Clone + Send + 'static>(name: &str, func: F, param: C, width: usize, height: usize, channels: usize, color: ColorType, depth: libc::c_uint) -> String {
+pub fn do_camera<T, Data: Debug + Pixels<T>, F: for<'a> Fn(String, C, &'a Profiler) + Send + Sync + 'static, C: Clone + Send + 'static>(name: &str, func: F, param: C, width: usize, height: usize, channels: usize, color: ColorType, depth: libc::c_uint) -> String {
     let func = Arc::new(func);
     let inname = parse_in_arg(&mut env::args().skip(1));
     attempt!(fs::create_dir_all(Path::new(&inname).parent().unwrap().join(name)));
@@ -181,18 +202,38 @@ pub fn do_camera<T, Data: Debug + Pixels<T>, F: Fn(String, C) + Send + Sync + 's
         let (func, param) = (func.clone(), param.clone());
         threads.push(Some((
             thread::spawn(move || {
+                let prof = Profiler::new(format!("thread #{}", i).leak());
                 for dat_path in rx {
+                    let _g = prof.enter("frame");
                     let dat = dat_path.to_str().unwrap().to_string();
                     let png = dat_path.parent().unwrap().join(&name).join(dat_path.file_name().unwrap()).with_extension("png").to_str().unwrap().to_string();
-                    let rows = do_binary::<Data>("", (dat, None));
-                    let mut pixels = Vec::with_capacity(height*channels*rows.len());
-                    for row in &rows {
-                        for j in 0..width {
-                            pixels.push(row.pixel(j));
+                    let rows = {
+                        let _g = prof.enter("do_binary");
+                        do_binary::<Data>("", (dat, None))
+                    };
+                    let pixels = {
+                        let _g = prof.enter("into vec");
+                        let mut pixels = Vec::with_capacity(height*channels*rows.len());
+                        for row in &rows {
+                            for j in 0..width {
+                                pixels.push(row.pixel(j));
+                            }
                         }
+                        pixels
+                    };
+                    {
+                        let _g = prof.enter("encode PNG");
+                        attempt!(encode_file(&png, &pixels, width, rows.len(), color, depth));
                     }
-                    attempt!(encode_file(&png, &pixels, width, rows.len(), color, depth));
-                    func(png, param.clone());
+                    {
+                        let _g = prof.enter("callback");
+                        func(png, param.clone(), &prof);
+                    }
+                }
+                {
+                    let s = io::stdout();
+                    let _g = s.lock();
+                    prof.print_timing();
                 }
             }),
             tx
