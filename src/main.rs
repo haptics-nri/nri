@@ -141,10 +141,16 @@ use vicon::Vicon;
 
 #[macro_use] extern crate log;
 #[macro_use] extern crate env_logger;
+#[macro_use] extern crate error_chain;
 extern crate hprof;
 extern crate chrono;
 
 use chrono::UTC;
+
+mod errors {
+    error_chain! { }
+}
+use errors::*;
 
 /// Helper function for rxspawn! macro
 fn rxspawn<T: Controllable>(reply: &Sender<CmdFrom>) -> Service {
@@ -259,21 +265,24 @@ fn find(services: &[Service], s: String) -> Option<&Service> {
     services.iter().position(|x| x.name.to_lowercase() == s).map(|i| &services[i])
 }
 
-fn send_to(services: &[Service], s: String, cmd: CmdTo) -> bool {
-    match find(services, s) {
+fn send_to(services: &[Service], s: String, cmd: CmdTo) -> Result<bool> {
+    Ok(match find(services, s) {
         Some(srv) => {
-            srv.tx.lock().unwrap().as_ref().map(|s| s.send(cmd).unwrap());
+            srv.tx
+               .lock().unwrap()
+               .as_ref()
+               .map(|s| s.send(cmd).unwrap());
             true
         }
         None => false,
-    }
+    })
 }
 
-fn start(services: &[Service], s: String, d: Option<String>) -> bool {
+fn start(services: &[Service], s: String, d: Option<String>) -> Result<bool> {
     send_to(services, s, CmdTo::Start(d))
 }
 
-fn stop(services: &[Service], s: String) -> bool {
+fn stop(services: &[Service], s: String) -> Result<bool> {
     send_to(services, s, CmdTo::Stop)
 }
 
@@ -286,13 +295,29 @@ fn stop_all(services: &mut [Service]) {
     // TODO wait for writer thread
 }
 
+fn main() {
+    if let Err(e) = try_main() {
+        errorln!("ERROR: {:?}", e);
+
+        for e in e.iter().skip(1) {
+            println!("caused by: {}", e);
+        }
+
+        if let Some(backtrace) = e.backtrace() {
+            println!("backtrace: {:?}", backtrace);
+        }
+
+        process::exit(1);
+    }
+}
+
 /// Main function that does everything
 ///
 /// TODO actually use the logging infrastructure
-fn main() {
+fn try_main() -> Result<()> {
     prof!("main", {
 
-        env_logger::init().unwrap();
+        env_logger::init().chain_err(|| "failed to set up logger")?;
 
         info!("Hello, world!");
 
@@ -303,19 +328,19 @@ fn main() {
 
         thread::sleep(Duration::from_millis(500)); // wait for threads to start
 
-        start(&services, "cli".to_owned(), None);
-        start(&services, "web".to_owned(), None);
+        start(&services, "cli".to_owned(), None)?;
+        start(&services, "web".to_owned(), None)?;
 
         loop {
             match reply_rx.recv() {
                 Ok(cmd) => match cmd {
                     CmdFrom::Start(s, d, tx) => {
                         println!("STARTING {}", s);
-                        tx.send(start(&services, s, d)).unwrap();
+                        tx.send(start(&services, s, d)?).chain_err(|| "could not send start command")?;
                     },
                     CmdFrom::Stop(s, tx)  => {
                         println!("STOPPING {}", s);
-                        tx.send(stop(&services, s)).unwrap();
+                        tx.send(stop(&services, s)?).chain_err(|| "could not send stop command")?;
                     },
                     CmdFrom::Quit         => {
                         println!("STOPPING ALL");
@@ -346,37 +371,36 @@ fn main() {
                                     Power::Reboot   => "org.freedesktop.login1.Manager.Reboot",
                                 })
                             .arg("boolean:true")
-                            .spawn().unwrap()
-                            .wait().unwrap();
+                            .spawn().chain_err(|| "could not start dbus-send process")?
+                            .wait().chain_err(|| "dbus-send process did not complete successfully")?;
                     },
                     CmdFrom::Timeout { thread: who, .. }  => {
                         // TODO actually time the service and do something if it times out
                         if find(&services, who.to_owned()).is_some() {
                             timers.insert(who, UTC::now());
                         } else {
-                            panic!("Nonexistent service asked for timeout");
+                            bail!("Nonexistent service asked for timeout");
                         }
                     },
                     CmdFrom::Timein { thread: who }    => {
-                        if timers.contains_key(who) {
-                            println!("Service {} took {} ms", who, UTC::now() - *timers.get(who).unwrap());
-                            timers.remove(who);
+                        if let Some(then) = timers.remove(who) {
+                            println!("Service {} took {} ms", who, UTC::now() - then);
                         } else {
-                            panic!("Timein with no matching timeout");
+                            bail!("Timein with no matching timeout");
                         }
                     },
                     CmdFrom::Data(d)      => {
                         let mut words = d.split(' ');
-                        match &*words.next().unwrap() {
-                            "send" => { send_to(&services, "web".to_owned(), CmdTo::Data(d[5..].to_owned())); },
-                            "kick" => { send_to(&services, words.next().unwrap().to_owned(), CmdTo::Data("kick".to_owned())); },
-                            "to"   => { send_to(&services, words.next().unwrap().to_owned(), CmdTo::Data(words.collect::<Vec<_>>().join(" "))); },
+                        match &*words.next().unwrap_or("") {
+                            "send" => { send_to(&services, "web".to_owned(), CmdTo::Data(d[5..].to_owned()))?; },
+                            "kick" => { send_to(&services, words.next().unwrap_or("").to_owned(), CmdTo::Data("kick".to_owned()))?; },
+                            "to"   => { send_to(&services, words.next().unwrap_or("").to_owned(), CmdTo::Data(words.collect::<Vec<_>>().join(" ")))?; },
                             _      => { errorln!("Strange message {} received from a service", d); }
                         }
                     },
                     CmdFrom::Panicked { thread: who, panic_reason: why } => {
                         errorln!("Service {} panicked! (reason: {})", who, why);
-                        send_to(&services, "web".to_owned(), CmdTo::Data(format!("panic {} {}", who, why)));
+                        send_to(&services, "web".to_owned(), CmdTo::Data(format!("panic {} {}", who, why)))?;
                     },
                 },
                 Err(_) => { stop_all(&mut services[1..]); break; }
@@ -385,9 +409,12 @@ fn main() {
 
         // we can't really join or kill the CLI thread, because it is waiting on stdin
         // so just exit, and it will be killed
-
-    });
+        
+        Ok::<(), Error>(())
+    })?;
 
     println!("\n\n");
     hprof::profiler().print_timing();
+
+    Ok(())
 }

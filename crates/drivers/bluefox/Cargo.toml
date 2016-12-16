@@ -24,4 +24,5 @@ time                 = "0.1"
 libc                 = "0.2"
 image                = "0.7"
 rustc-serialize      = "0.3" # TODO migrate to serde
+error-chain          = "0.7"
 
