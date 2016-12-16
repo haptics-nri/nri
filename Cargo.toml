@@ -44,6 +44,7 @@ log         = "0.3"
 env_logger  = "0.3"
 hprof       = "0.1"
 chrono      = "0.2"
+error-chain = "0.7"
 
 [dev-dependencies]
 # needed for examples (TODO remove)
