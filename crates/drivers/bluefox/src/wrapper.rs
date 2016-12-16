@@ -205,24 +205,57 @@ pub enum PixelFormat {
     Auto                 = -1,
     Unknown              = -2,
 }
-
 pub mod settings {
     custom_derive! {
         #[repr(C)]
         #[derive(Copy, Clone, Debug, TryFrom(i64))]
-        pub enum PixelFormat {
-            BayerGR8      = 17301512,
-            BayerGR10     = 17825804,
-            BayerGR12     = 17825808,
-            BayerGR16     = 17825838,
-            RGB8Packed    = 35127316,
-            BGR8Packed    = 35127317,
-            BGRA8Packed   = 35651607,
-            BGR10V2Packed = 35651613,
+        pub enum CameraPixelFormat {
+            BayerGR8      = 0x1080008,
+            BayerGR10     = 0x110000C,
+            BayerGR12     = 0x1100010,
+            BayerGR16     = 0x110002E,
+            RGB8Packed    = 0x2180014,
+            BGR8Packed    = 0x2180015,
+            BGRA8Packed   = 0x2200017,
+            BGR10V2Packed = 0x220001D,
             RGB8          = 0,
             BGR8          = 1,
             BGRa8         = 2,
             RGB10p32      = 3,
+        }
+    }
+
+    custom_derive! {
+        #[repr(C)]
+        #[derive(Copy, Clone, Debug, TryFrom(i32))]
+        pub enum DestPixelFormat {
+            Auto                 = 0,
+            Raw                  = 1,
+            Mono8                = 2,
+            Mono10               = 6,
+            Mono12               = 7,
+            Mono12Packed_V1      = 28,
+            Mono12Packed_V2      = 19,
+            Mono14               = 8,
+            Mono16               = 9,
+            BGR888Packed         = 22,
+            BGR101010Packed_V2   = 23,
+            RGB888Packed         = 10,
+            RGB101010Packed      = 14,
+            RGB121212Packed      = 15,
+            RGB141414Packed      = 16,
+            RGB161616Packed      = 17,
+            RGBx888Packed        = 3,
+            RGBx888Planar        = 5,
+            YUV422Packed         = 4,
+            YUV422_UYVYPacked    = 18,
+            YUV422_10Packed      = 20,
+            YUV422_UYVY_10Packed = 21,
+            YUV444_UYVPacked     = 24,
+            YUV444_UYV_10Packed  = 25,
+            YUV444Packed         = 26,
+            YUV444_10Packed      = 27,
+            YUV422Planar         = 13,
         }
     }
 
@@ -325,6 +358,9 @@ pub struct Image<'a> {
     reqnr: c_int,
     parent: &'a Device,
 }
+
+#[link(name = "mvPropHandling")]
+extern "C" { }
 
 #[link(name = "mvDeviceManager")]
 extern "C" {
@@ -443,7 +479,8 @@ impl Device {
     getset!(get_height,        set_height,        HOBJ(0x840005), i64);
     getset!(get_offset_x,      set_offset_x,      HOBJ(0x840006), i64);
     getset!(get_offset_y,      set_offset_y,      HOBJ(0x840007), i64);
-    getset!(get_pixel_format,  set_pixel_format,  HOBJ(0x840008), settings::PixelFormat       as i64);
+    getset!(get_cam_format,    set_cam_format,    HOBJ(0x840008), settings::CameraPixelFormat as i64);
+    getset!(get_dest_format,   set_dest_format,   HOBJ(0x800000), settings::DestPixelFormat   as i32);
     getset!(get_bin_x,         set_bin_x,         HOBJ(0x84000A), i64);
     getset!(get_bin_y,         set_bin_y,         HOBJ(0x84000B), i64);
     getset!(get_decimate_x,    set_decimate_x,    HOBJ(0x84000C), i64);

@@ -31,6 +31,7 @@ group_attr!{
     type PngStuff = (usize, Vec<u8>, (usize, usize), ColorType);
 
     mod wrapper;
+    use self::wrapper::settings::*;
 
     static SETTINGS_DONE: AtomicBool = ATOMIC_BOOL_INIT;
 
@@ -64,32 +65,56 @@ group_attr!{
                 let device = wrapper::Device::new().unwrap();
                 device.request_reset().unwrap();
 
-                let fps = data.and_then(|s| s.parse::<f64>().ok());
+                let mut fps = 7.5;
+                let mut format = (CameraPixelFormat::RGB8, DestPixelFormat::Auto);
+                if let Some(ref data) = data {
+                    let mut parts = data.split(",");
+
+                    if let Some(fps_str) = parts.next() {
+                        if let Ok(fps_num) = fps_str.parse::<f64>() {
+                            fps = fps_num;
+                        } else {
+                            println!("WARNING: invalid FPS {:?}", fps_str);
+                        }
+
+                        if let Some(format_str) = parts.next() {
+                            match format_str {
+                                "raw" => format = (CameraPixelFormat::BayerGR16, DestPixelFormat::Raw),
+                                "rgb" => {},
+                                _     => println!("WARNING: invalid pixel format {:?}", format_str)
+                            }
+                        }
+                    }
+                }
 
                 if SETTINGS_DONE.load(Ordering::SeqCst) {
                     // HACK: driver always returns error if we try to modify settings again
                     println!("settings already set, not modifying");
+                    if data.is_some() {
+                        println!("WARNING: ignoring passed-in settings");
+                    }
                 } else {
-                    println!("BEFORE:\noffset = ({}, {})\nheight = {}\nwidth = {}\npixel format = {:?}\nframe rate = ({}, {})",
+                    println!("BEFORE:\noffset = ({}, {})\nheight = {}\nwidth = {}\npixel format = {:?} -> {:?}\nframe rate = ({}, {})",
                              device.get_offset_x().unwrap(),
                              device.get_offset_y().unwrap(),
                              device.get_height().unwrap(),
                              device.get_width().unwrap(),
-                             device.get_pixel_format().unwrap(),
+                             device.get_cam_format().unwrap(), device.get_dest_format().unwrap(),
                              device.get_acq_fr_enable().unwrap(), device.get_acq_fr().unwrap());
                     device.set_offset_x(0).unwrap();
                     device.set_offset_y(0).unwrap();
                     device.set_height(1200).unwrap();
                     device.set_width(1600).unwrap();
-                    device.set_pixel_format(wrapper::settings::PixelFormat::RGB8).unwrap();
                     device.set_acq_fr_enable(true).unwrap();
-                    device.set_acq_fr(fps.unwrap_or(7.5)).unwrap();
-                    println!("AFTER:\noffset = ({}, {})\nheight = {}\nwidth = {}\npixel format = {:?}\nframe rate = ({}, {})",
+                    device.set_acq_fr(fps).unwrap();
+                    device.set_cam_format(format.0).unwrap();
+                    device.set_dest_format(format.1).unwrap();
+                    println!("AFTER:\noffset = ({}, {})\nheight = {}\nwidth = {}\npixel format = {:?} -> {:?}\nframe rate = ({}, {})",
                              device.get_offset_x().unwrap(),
                              device.get_offset_y().unwrap(),
                              device.get_height().unwrap(),
                              device.get_width().unwrap(),
-                             device.get_pixel_format().unwrap(),
+                             device.get_cam_format().unwrap(), device.get_dest_format().unwrap(),
                              device.get_acq_fr_enable().unwrap(), device.get_acq_fr().unwrap());
                     SETTINGS_DONE.store(true, Ordering::SeqCst);
                 }
