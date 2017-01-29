@@ -2,42 +2,61 @@ use std::collections::HashMap;
 use std::sync::{mpsc, Mutex};
 use std::{thread, str};
 use comms::CmdFrom;
-use super::config;
+use super::{config, flow};
 pub use websocket::{Sender, Receiver, Message};
 use websocket::message::Type as MsgType;
 use websocket::{sender, header, stream, Server, Client};
 use url::Host;
 
 lazy_static! {
-    pub static ref RPC_SENDERS: Mutex<HashMap<usize, mpsc::Sender<String>>>                         = Mutex::new(HashMap::new());
+    pub static ref RPC_SENDERS: Mutex<HashMap<usize, mpsc::Sender<String>>>         = Mutex::new(HashMap::new());
     pub static ref WS_SENDERS:  Mutex<Vec<sender::Sender<stream::WebSocketStream>>> = Mutex::new(Vec::new());
 }
 
-pub fn send(wsid: usize, msg: String) {
-    let mut locked_senders = WS_SENDERS.lock().unwrap();
-
-    locked_senders[wsid].send_message(&Message::text(msg)).unwrap();
+#[derive(Clone)]
+pub struct Comms {
+    wsid: usize
 }
 
-pub fn rpc<T, F: Fn(String) -> Result<T, String>>(wsid: usize, prompt: String, validator: F) -> T {
-    let go = |prompt: &str| -> String {
-        let (tx, rx) = mpsc::channel();
-        println!("Waiting on RPC from WSID {}", wsid);
-        {
-            let mut locked_senders = WS_SENDERS.lock().unwrap();
-            let mut locked_rpcs = RPC_SENDERS.lock().unwrap();
-            locked_rpcs.insert(wsid, tx);
-            locked_senders[wsid].send_message(&Message::text(prompt.to_owned())).unwrap();
+impl Comms {
+    pub fn new(wsid: usize) -> Comms {
+        Comms {
+            wsid: wsid
         }
-        rx.recv().unwrap()
-    };
+    }
+}
 
-    let mut answer = go(&prompt);
-    loop {
-        match validator(answer) {
-            Ok(ret) => return ret,
-            Err(admonish) => {
-                answer = go(&format!("{} {}", admonish, prompt));
+impl flow::Comms for Comms {
+    fn print(&self, msg: String) {
+        println!("{}", msg);
+    }
+
+    fn send(&self, msg: String) {
+        let mut locked_senders = WS_SENDERS.lock().unwrap();
+
+        locked_senders[self.wsid].send_message(&Message::text(msg)).unwrap();
+    }
+
+    fn rpc<T, F: Fn(String) -> Result<T, String>>(&self, prompt: String, validator: F) -> T {
+        let go = |prompt: &str| -> String {
+            let (tx, rx) = mpsc::channel();
+            println!("Waiting on RPC from WSID {}", self.wsid);
+            {
+                let mut locked_senders = WS_SENDERS.lock().unwrap();
+                let mut locked_rpcs = RPC_SENDERS.lock().unwrap();
+                locked_rpcs.insert(self.wsid, tx);
+                locked_senders[self.wsid].send_message(&Message::text(prompt.to_owned())).unwrap();
+            }
+            rx.recv().unwrap()
+        };
+
+        let mut answer = go(&prompt);
+        loop {
+            match validator(answer) {
+                Ok(ret) => return ret,
+                Err(admonish) => {
+                    answer = go(&format!("{} {}", admonish, prompt));
+                }
             }
         }
     }

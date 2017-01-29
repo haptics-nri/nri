@@ -10,5 +10,6 @@ debug = true
 nightly = []
 
 [dependencies]
-hprof = "0.1"
+hprof  = "0.1"
+notify = "2.5"
 

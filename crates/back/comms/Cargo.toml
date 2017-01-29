@@ -10,9 +10,10 @@ debug = true
 nightly = ["utils/nightly"]
 
 [dependencies]
-utils                = { path = "../../utils" }
+utils                = { path = "../../utils"  }
 guilt-by-association = "0.2"
 hprof                = "0.1"
 time                 = "0.1"
 libc                 = "0.2"
+error-chain          = "0.7"
 
