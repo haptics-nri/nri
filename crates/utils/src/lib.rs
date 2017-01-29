@@ -1,3 +1,14 @@
+extern crate notify;
+
+use notify::{Watcher, RecommendedWatcher};
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::ops::Deref;
+use std::sync::{mpsc, RwLock};
+use std::thread;
+
+pub mod config;
+
 /// Just like println!, but prints to stderr
 #[macro_export]
 macro_rules! errorln {
@@ -8,6 +19,61 @@ macro_rules! errorln {
             Err(x) => panic!("Unable to write to stderr: {}", x),
         }
     }}
+}
+
+#[macro_export]
+macro_rules! jsonize {
+    ($map:ident, $selph:ident, $var:ident) => {{
+        $map.insert(stringify!($var).to_owned(), $selph.$var.to_json())
+    }};
+    ($map:ident, $selph:ident; $($var:ident),+) => {{
+        $(jsonize!($map, $selph, $var));+
+    }}
+}
+
+pub fn watch<T, U, F>(mut thing: T,
+                  global: &'static U,
+                  root: &'static Path,
+                  ext: &'static str,
+                  mut f: F) -> RwLock<T>
+    where F: FnMut(&mut T, PathBuf) + Send + 'static,
+          U: Deref<Target=RwLock<T>> + Send + Sync + 'static
+{
+    let update = |thingref: &mut T,
+                  f: &mut F,
+                  root: &'static Path,
+                  ext: &'static str| {
+        fs::read_dir(root).expect(&format!("could not read directory {:?}", root))
+            .take_while(Result::is_ok).map(Result::unwrap)
+            .map(|e| e.path())
+            .filter(|p| match p.extension() { Some(x) if x == ext => true, _ => false })
+            .map(|p| f(thingref, p))
+            .count();
+    };
+
+    update(&mut thing, &mut f, root, ext);
+
+    thread::spawn(move || {
+        let (tx, rx) = mpsc::channel();
+        let mut w: RecommendedWatcher = Watcher::new(tx).expect("failed to crate watcher");
+        w.watch(root).expect("watcher refused to watch");
+
+        for evt in rx {
+            if let Some(path) = evt.path {
+                if let Some(x) = path.extension() {
+                    if x == ext {
+                        print!("Updating... ({:?} {:?})", path.file_name().expect(&format!("could not get file name of {:?}", path)),
+                                                          evt.op.expect("no operation for event"));
+                        let mut thing = global.write().expect("couldn't get a write lock");
+                        update(&mut *thing, &mut f, root, ext);
+                        println!(" done.");
+                    }
+                }
+            }
+        }
+    });
+
+    RwLock::new(thing)
 }
 
 /// Groups a number of items under one conditional-compilation attribute

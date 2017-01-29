@@ -113,6 +113,8 @@
 
 #[macro_use] extern crate utils;
 #[macro_use] extern crate comms;
+#[macro_use] extern crate guilt_by_association;
+#[macro_use] extern crate error_chain;
 extern crate scribe;
 extern crate cli;
 extern crate web;
@@ -123,8 +125,7 @@ extern crate bluefox;
 extern crate biotac;
 extern crate vicon;
 
-use std::{fs, process};
-use std::thread;
+use std::{fs, panic, process, thread};
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{channel, Sender};
 use std::collections::HashMap;
@@ -141,31 +142,27 @@ use vicon::Vicon;
 
 #[macro_use] extern crate log;
 #[macro_use] extern crate env_logger;
-#[macro_use] extern crate error_chain;
 extern crate hprof;
 extern crate chrono;
 
 use chrono::UTC;
 
 mod errors {
-    error_chain! { }
+    error_chain! {
+    }
 }
 use errors::*;
 
 /// Helper function for rxspawn! macro
-fn rxspawn<T: Controllable>(reply: &Sender<CmdFrom>) -> Service {
-    Service {
-        name: <T as Controllable>::NAME(), // FIXME can't use macro here because of UFCS
-        thread: None,
-        tx: Arc::new(Mutex::new(None))
-    }.start::<T>(reply)
+fn rxspawn<T: Controllable>(reply: &Sender<CmdFrom>) -> Result<Service> {
+    Service::new::<T>(reply)
 }
 
 /// Spawn a bunch of service threads
 #[macro_export]
 macro_rules! rxspawn {
     ($reply:expr; $($s:ty),*) => {
-        vec![ $( rxspawn::<$s>(&$reply)),* ]
+        vec![ $( rxspawn::<$s>(&$reply)? ),* ]
     };
 }
 
@@ -193,70 +190,57 @@ struct Service {
     /// short identifier
     name: &'static str,
     /// handle to running thread (actually the middle manager, see Service::start)
-    thread: Option<thread::JoinHandle<()>>,
+    thread: thread::JoinHandle<()>,
     /// synchronized Sender for commands from the master thread
     /// (should always be Some after Service::start runs)
-    tx: Arc<Mutex<Option<Sender<CmdTo>>>>,
+    tx: Arc<Mutex<Sender<CmdTo>>>,
 }
 
 impl Service {
-    /** Here we start two threads: the service itself and a "middle manager".
-     *
-     *  The middle manager's job is to watch the service and restart it if it panics.
-     *  (If the service thread terminates quietly, the middle manager does the same.)
-     *
-     *  In case of panic, the middle manager performs three tasks:
-     *
-     *   - notifies the master thread using CmdFrom::Panicked
-     *   - creates a new channel and replaces self.tx so the master thread doesn't notice
-     *   - starts a new service thread (but does not send CmdTo::Start)
-     *
-     *  This modification from within the middle manager thread is the reason self.tx is such a
-     *  monstrosity of containers.
-     *
-     *  NB: for this scheme to work, the middle manager thread must never panic!
-     */
-    fn start<T: Controllable>(mut self, reply: &Sender<CmdFrom>) -> Service {
+    fn new<T: Controllable>(reply: &Sender<CmdFrom>) -> Result<Self> {
         let master_tx = reply.clone();
+        let (tx, _) = channel();
+        let tx_arc = Arc::new(Mutex::new(tx));
+        let tx_ref = tx_arc.clone();
+        let thread = thread::Builder::new()
+            .name(format!("{} manager", guilty!(T::NAME)))
+            .spawn(move || {
+                loop {
+                    let (thread_tx, thread_rx) = channel::<CmdTo>();
+                    let cloned_master_tx = master_tx.clone();
+                    *tx_ref.lock().expect("mutex poisoned") = thread_tx;
 
-        let name = self.name; // screw you, borrowck
-        let rx_ref = self.tx.clone(); // for concurrent modification from within the middle manager thread
-        self.thread = Some(thread::Builder::new()
-                           .name(format!("{} middle-manager", name))
-                           .spawn(move || {
-                               let mut i = 0; // just for cosmetics: count service thread restarts
-                               loop {
-                                   i += 1;
+                    match panic::catch_unwind(panic::AssertUnwindSafe(|| comms::go::<T>(thread_rx, cloned_master_tx))) {
+                        Ok(Ok(())) => { break }
 
-                                   // create master => service channel
-                                   //   (give receiving end to service thread, swap sending end
-                                   //   into self.tx)
-                                   let (thread_tx, thread_rx) = channel::<CmdTo>();
-                                   // clone sending end of service => master channel
-                                   let cloned_master_tx = master_tx.clone();
-                                   // perform the self.tx swap
-                                   *rx_ref.lock().unwrap() = Some(thread_tx);
+                        Ok(Err(e)) => {
+                            master_tx.send(
+                                CmdFrom::Panicked {
+                                    thread: guilty!(T::NAME),
+                                    panic_reason: format!("{:?}", e)
+                                }).expect("master is dead");
+                        }
 
-                                   // start service thread!
-                                   match thread::Builder::new()
-                                       .name(format!("{} service (incarnation #{})", name, i))
-                                       .spawn(move || {
-                                           comms::go::<T>(thread_rx, cloned_master_tx)
-                                       }).unwrap().join() {
-                                           // service thread died quietly: do the same
-                                           Ok(_) => return,
-                                           // service thread panicked: notify master and restart
-                                           Err(y) => master_tx.send(CmdFrom::Panicked {
-                                               thread: name,
-                                               panic_reason: downcast!(y {
-                                                                            _ => format!("{:?}", y),
-                                                                            String, &str => y.to_string()
-                                                                      })
-                                           }).unwrap()
-                                       };
-                               }
-                           }).unwrap());
-        self
+                        Err(e) => {
+                            master_tx.send(
+                                CmdFrom::Panicked {
+                                    thread: guilty!(T::NAME),
+                                    panic_reason: downcast!(e {
+                                        _ => format!("{:?}", e),
+                                        String, &str => e.to_string()
+                                    })
+                                }).expect("master is dead");
+                        }
+                    }
+                }
+            })
+            .chain_err(|| "thread creation failed")?;
+
+        Ok(Service {
+            name: guilty!(T::NAME),
+            thread: thread,
+            tx: tx_arc
+        })
     }
 }
 
@@ -266,16 +250,15 @@ fn find(services: &[Service], s: String) -> Option<&Service> {
 }
 
 fn send_to(services: &[Service], s: String, cmd: CmdTo) -> Result<bool> {
-    Ok(match find(services, s) {
+    match find(services, s) {
         Some(srv) => {
             srv.tx
-               .lock().unwrap()
-               .as_ref()
-               .map(|s| s.send(cmd).unwrap());
-            true
+               .lock().expect("mutex poisoned")
+               .send(cmd).expect("manager is dead");
+            Ok(true)
         }
-        None => false,
-    })
+        None => Ok(false),
+    }
 }
 
 fn start(services: &[Service], s: String, d: Option<String>) -> Result<bool> {
@@ -286,10 +269,11 @@ fn stop(services: &[Service], s: String) -> Result<bool> {
     send_to(services, s, CmdTo::Stop)
 }
 
-fn stop_all(services: &mut [Service]) {
-    for s in services {
-        s.tx.lock().unwrap().as_ref().map(|s| s.send(CmdTo::Quit).unwrap());
-        s.thread.take().map(|t| t.join().unwrap_or_else(|e| errorln!("Failed to join {} thread: {:?}", s.name, e)));
+fn stop_all<I: Iterator<Item=Service>>(services: I) {
+    for Service { name, thread, tx } in services {
+        tx.lock().expect("mutex poisoned")
+          .send(CmdTo::Quit).expect("manager is dead");
+        thread.join().unwrap_or_else(|e| errorln!("Failed to join {} thread: {:?}", name, e));
     }
 
     // TODO wait for writer thread
@@ -344,7 +328,7 @@ fn try_main() -> Result<()> {
                     },
                     CmdFrom::Quit         => {
                         println!("STOPPING ALL");
-                        stop_all(&mut services[1..]);
+                        stop_all(services.drain(1..));
                         println!("EXITING");
                         break;
                     },
@@ -357,7 +341,7 @@ fn try_main() -> Result<()> {
                         let _ = fs::remove_file("keepalive");
 
                         // step 2. stop all services
-                        stop_all(&mut services[1..]);
+                        stop_all(services.drain(1..));
 
                         // step 3. reboot system through DBUS
                         process::Command::new("dbus-send")
@@ -403,7 +387,7 @@ fn try_main() -> Result<()> {
                         send_to(&services, "web".to_owned(), CmdTo::Data(format!("panic {} {}", who, why)))?;
                     },
                 },
-                Err(_) => { stop_all(&mut services[1..]); break; }
+                Err(_) => { stop_all(services.drain(1..)); break; }
             }
         }
 

@@ -1,5 +1,3 @@
-paths = ["overrides/hprof"]
-
 [build]
 rustflags = ["-Ctarget-cpu=native"]
 

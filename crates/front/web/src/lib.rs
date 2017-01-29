@@ -9,9 +9,6 @@ extern crate teensy;
 #[macro_use] extern crate log;
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate guilt_by_association;
-extern crate time;
-extern crate chrono;
-extern crate uuid;
 
 extern crate iron;
 extern crate handlebars as hbs;
@@ -22,17 +19,15 @@ extern crate urlencoded;
 extern crate url;
 extern crate hyper;
 extern crate rustc_serialize as serialize;
-extern crate notify;
 extern crate websocket;
 
 use std::ops::Deref;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Mutex, RwLock, mpsc};
-use std::thread;
 use std::thread::JoinHandle;
-use std::collections::{HashMap, BTreeMap};
-use std::io::{Read, BufReader};
-use std::fs::{self, File};
+use std::collections::BTreeMap;
+use std::io::Read;
+use std::fs::File;
 use comms::{Controllable, CmdFrom, Power, Block};
 use teensy::ParkState;
 use iron::prelude::*;
@@ -49,27 +44,17 @@ use hyper::server::Listening;
 use hyper::header::ContentType;
 use hyper::mime::{Mime, TopLevel, SubLevel};
 use serialize::json::{ToJson, Json};
-use notify::{Watcher, RecommendedWatcher};
-
-macro_rules! jsonize {
-    ($map:ident, $selph:ident, $var:ident) => {{
-        $map.insert(stringify!($var).to_owned(), $selph.$var.to_json())
-    }};
-    ($map:ident, $selph:ident; $($var:ident),+) => {{
-        $(jsonize!($map, $selph, $var));+
-    }}
-}
 
 /// parsing and running flows
-mod flow;
-/// web server configuration
-mod config;
+extern crate flow;
+/// configuration
+use utils::config;
 /// a few little iron middlewares
 mod middleware;
 /// websocket server and utilities
 mod ws;
 
-use self::flow::Flow;
+use self::flow::{FLOWS, Comms};
 
 /// Service descriptor
 ///
@@ -103,73 +88,15 @@ fn relpath(path: &str) -> String {
     String::from(Path::new(file!()).parent().unwrap().parent().unwrap().join(path).to_str().unwrap())
 }
 
-fn watch<T, U, F>(mut thing: T,
-                  global: &'static U,
-                  root: &'static Path,
-                  ext: &'static str,
-                  mut f: F) -> RwLock<T>
-    where F: FnMut(&mut T, PathBuf) + Send + 'static,
-          U: Deref<Target=RwLock<T>> + Send + Sync + 'static
-{
-    let update = |thingref: &mut T,
-                  f: &mut F,
-                  root: &'static Path,
-                  ext: &'static str| {
-        fs::read_dir(root).expect(&format!("could not read directory {:?}", root))
-            .take_while(Result::is_ok).map(Result::unwrap)
-            .map(|e| e.path())
-            .filter(|p| match p.extension() { Some(x) if x == ext => true, _ => false })
-            .map(|p| f(thingref, p))
-            .count();
-    };
-
-    update(&mut thing, &mut f, root, ext);
-
-    thread::spawn(move || {
-        let (tx, rx) = mpsc::channel();
-        let mut w: RecommendedWatcher = Watcher::new(tx).expect("failed to crate watcher");
-        w.watch(root).expect("watcher refused to watch");
-
-        for evt in rx {
-            if let Some(path) = evt.path {
-                if let Some(x) = path.extension() {
-                    if x == ext {
-                        print!("Updating... ({:?} {:?})", path.file_name().expect(&format!("could not get file name of {:?}", path)),
-                                                          evt.op.expect("no operation for event"));
-                        let mut thing = global.write().expect("couldn't get a write lock");
-                        update(&mut *thing, &mut f, root, ext);
-                        println!(" done.");
-                    }
-                }
-            }
-        }
-    });
-
-    RwLock::new(thing)
-}
-
 lazy_static! {
-    static ref TEMPLATES: RwLock<Handlebars> = watch(Handlebars::new(),
-                                                     &TEMPLATES,
-                                                     Path::new(config::TEMPLATE_PATH),
-                                                     "hbs",
-                                                     |hbs, path| {
+    static ref TEMPLATES: RwLock<Handlebars> = utils::watch(Handlebars::new(),
+                                                            &TEMPLATES,
+                                                            Path::new(config::TEMPLATE_PATH),
+                                                            "hbs",
+                                                            |hbs, path| {
         let mut source = String::from("");
         File::open(&path).unwrap().read_to_string(&mut source).unwrap();
         hbs.register_template_string(path.file_stem().unwrap().to_str().unwrap(), source.into()).ok().unwrap();
-    });
-
-    static ref FLOWS: RwLock<HashMap<String, Flow>> = watch(HashMap::new(),
-                                                            &FLOWS,
-                                                            Path::new(config::FLOW_PATH),
-                                                            "flow",
-                                                            |flows, path| {
-        let flow = Flow::parse(path.file_stem().expect(&format!("no file stem for {:?}", path))
-                                    .to_str().expect(&format!("bad UTF-8 in {:?}", path))
-                                    .to_owned(),
-                               BufReader::new(File::open(&path).expect(&format!("could not open flow {:?}", path))))
-                        .expect(&format!("unable to parse flow {:?}", path));
-        flows.insert(flow.name.clone(), flow);
     });
 }
 
@@ -285,12 +212,13 @@ fn flow(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
                        [GET]
                        [POST wsid]);
                       let wsid = wsid.parse().unwrap();
+                      let comms = ws::Comms::new(wsid);
 
                       let resp = Ok(match &*action {
                               "start" | "continue" => {
                                   let mut locked_flows = FLOWS.write().unwrap();
                                   if let Some(found) = locked_flows.get_mut(&flow) {
-                                      let contour = found.run(ParkState::None, mtx.lock().unwrap().deref(), wsid);
+                                      let contour = found.run(ParkState::None, mtx.lock().unwrap().deref(), comms.clone());
                                       Response::with((status::Ok, format!("{:?} \"{}\" flow", contour, flow)))
                                   } else {
                                       Response::with((status::BadRequest, format!("Could not find \"{}\" flow", flow)))
@@ -301,7 +229,7 @@ fn flow(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
 
                       let mut data = BTreeMap::<String, Json>::new();
                       data.insert("flows".to_owned(), FLOWS.read().unwrap().to_json());
-                      ws::send(wsid, String::from("flow ") + &render("flows", data));
+                      comms.send(format!("flow {}", render("flows", data)));
 
                       resp
                   })

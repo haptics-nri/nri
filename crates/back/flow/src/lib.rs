@@ -1,18 +1,48 @@
+#[macro_use] extern crate lazy_static;
+#[macro_use] extern crate utils;
+#[macro_use] extern crate comms;
+extern crate teensy;
+extern crate chrono;
+extern crate uuid;
+extern crate rustc_serialize as serialize;
+
 use std::sync::mpsc;
-use std::collections::BTreeMap;
-use std::io::{Write, BufRead};
+use std::collections::{BTreeMap, HashMap};
+use std::io::{Write, BufRead, BufReader};
 use std::fs::{self, File};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::{fmt, env, thread};
+use std::sync::RwLock;
 use std::time::Duration;
 use chrono::{DateTime, Local, Timelike};
 use teensy::ParkState;
+use utils::config;
 use comms::CmdFrom;
-use super::ws;
 use uuid::Uuid;
 use serialize::json::{ToJson, Json};
 
-#[derive(Debug)]
+lazy_static! {
+    pub static ref FLOWS: RwLock<HashMap<String, Flow>> = utils::watch(HashMap::new(),
+                                                                       &FLOWS,
+                                                                       Path::new(config::FLOW_PATH),
+                                                                       "flow",
+                                                                       |flows, path| {
+        let flow = Flow::parse(path.file_stem().expect(&format!("no file stem for {:?}", path))
+                                    .to_str().expect(&format!("bad UTF-8 in {:?}", path))
+                                    .to_owned(),
+                               BufReader::new(File::open(&path).expect(&format!("could not open flow {:?}", path))))
+                        .expect(&format!("unable to parse flow {:?}", path));
+        flows.insert(flow.shortname.clone(), flow);
+    });
+}
+
+pub trait Comms: Clone {
+    fn print(&self, msg: String);
+    fn send(&self, msg: String);
+    fn rpc<T, F: Fn(String) -> Result<T, String>>(&self, prompt: String, validator: F) -> T;
+}
+
+#[derive(Debug, PartialEq)]
 pub enum EventContour {
     Starting,
     Continuing,
@@ -81,14 +111,14 @@ impl Flow {
         Flow { name: name, shortname: shortname, active: false, almostdone: false, states: states, stamp: None, dir: None, id: None }
     }
 
-    pub fn run(&mut self, park: ParkState, tx: &mpsc::Sender<CmdFrom>, wsid: usize) -> EventContour {
+    pub fn run<C: Comms>(&mut self, park: ParkState, tx: &mpsc::Sender<CmdFrom>, comms: C) -> EventContour {
         // TODO refactor this confusing function
 
         let mut ret = EventContour::In;
 
         // are we just starting the flow now?
         if !self.active {
-            println!("Beginning flow {}!", self.name);
+            comms.print(format!("Beginning flow {}!", self.name));
 
             // need a timestamp and ID
             self.stamp = Some(Local::now());
@@ -122,15 +152,15 @@ impl Flow {
         if let Some(state) = self.states.iter_mut().skip_while(|s| s.done).next() {
             if state.park.map_or(true, |p| p == park) {
                 ret = EventContour::Continuing;
-                println!("Executing state {}", state.name);
-                state.run(tx, wsid);
-                println!("Finished executing state {}", state.name);
+                comms.print(format!("Executing state {}", state.name));
+                state.run(tx, comms.clone());
+                comms.print(format!("Finished executing state {}", state.name));
             } else if state.park.is_some() {
-                println!("Waiting for parking lot state to be {:?} (currently {:?})", state.park, park);
-                ws::send(wsid, format!("msg Please insert {:?} end-effector", state.park.unwrap()));
+                comms.print(format!("Waiting for parking lot state to be {:?} (currently {:?})", state.park, park));
+                comms.send(format!("msg Please insert {:?} end-effector", state.park.unwrap()));
             }
         } else {
-            println!("No applicable states.");
+            comms.print(format!("No applicable states."));
         }
 
         let almostdone = match self.states.last() {
@@ -273,11 +303,11 @@ impl FlowState {
         FlowState { name: name, park: park, script: script, stamp: None, done: false }
     }
 
-    pub fn run(&mut self, tx: &mpsc::Sender<CmdFrom>, wsid: usize) {
+    pub fn run<C: Comms>(&mut self, tx: &mpsc::Sender<CmdFrom>, comms: C) {
         self.stamp = Some(Local::now());
         for &mut (ref mut c, ref mut stamp) in &mut self.script {
             *stamp = Some(Local::now());
-            c.run(tx, wsid);
+            c.run(tx, comms.clone());
         }
         self.done = true;
     }
@@ -304,12 +334,12 @@ impl FlowCmd {
         FlowCmd::Int { prompt: prompt, limits: limits, data: None }
     }
 
-    pub fn run(&mut self, tx: &mpsc::Sender<CmdFrom>, wsid: usize) {
+    pub fn run<C: Comms>(&mut self, tx: &mpsc::Sender<CmdFrom>, comms: C) {
         match *self {
-            FlowCmd::Message(ref msg) => ws::send(wsid, format!("msg {}", msg)),
+            FlowCmd::Message(ref msg) => comms.send(format!("msg {}", msg)),
             FlowCmd::Str { ref prompt, ref mut data } => {
                 assert!(data.is_none());
-                *data = Some(ws::rpc(wsid,
+                *data = Some(comms.rpc(
                                     format!("prompt Please enter {}",
                                             prompt),
                                     |x| {
@@ -322,11 +352,11 @@ impl FlowCmd {
             }
             FlowCmd::Int { ref prompt, limits: (low, high), ref mut data } => {
                 assert!(data.is_none());
-                *data = Some(ws::rpc(wsid,
+                *data = Some(comms.rpc(
                                     format!("prompt Please select {} ({}-{} scale)",
                                             prompt, low, high),
                                     |x| {
-                                        match x.parse() {
+                                        match x.trim().parse() {
                                             Ok(i) if i >= low && i <= high => {
                                                 Ok(i)
                                             }
@@ -340,11 +370,11 @@ impl FlowCmd {
                                     }));
             }
             FlowCmd::Start(ref service, ref data) => {
-                println!("Flow starting service {}", service);
+                comms.print(format!("Flow starting service {}", service));
                 assert!(rpc!(tx, CmdFrom::Start, service.clone(), data.clone()).unwrap());
-                println!("Flow waiting for service {} to start", service);
+                comms.print(format!("Flow waiting for service {} to start", service));
                 thread::sleep(Duration::from_millis(2000));
-                println!("Flow done waiting for service {}", service);
+                comms.print(format!("Flow done waiting for service {}", service));
             }
             FlowCmd::Stop(ref service) => {
                 assert!(rpc!(tx, CmdFrom::Stop, service.clone()).unwrap());
@@ -387,7 +417,7 @@ impl FlowCmd {
 impl ToJson for Flow {
     fn to_json(&self) -> Json {
         let mut m: BTreeMap<String, Json> = BTreeMap::new();
-        jsonize!(m, self; name, states, active, almostdone);
+        jsonize!(m, self; name, shortname, states, active, almostdone);
         m.to_json()
     }
 }
@@ -399,4 +429,5 @@ impl ToJson for FlowState {
         m.to_json()
     }
 }
+
 

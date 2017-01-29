@@ -2,6 +2,7 @@
 
 #[macro_use] extern crate guilt_by_association;
 #[macro_use] extern crate utils;
+#[macro_use] extern crate error_chain;
 extern crate time;
 extern crate libc;
 extern crate hprof;
@@ -10,6 +11,17 @@ use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError, SendError};
 use std::thread;
 use std::{mem, ptr};
 use libc::{nanosleep, timespec};
+
+mod errors {
+    use std::sync::mpsc::SendError;
+
+    error_chain! {
+        foreign_links {
+            MPSC(SendError<Box<Send + 'static>>);
+        }
+    }
+}
+pub use errors::*;
 
 /// Commands sent from the supervisor thread to services
 #[derive(Clone)]
@@ -60,7 +72,7 @@ pub enum CmdFrom {
         thread: &'static str,
     },
 
-    /// Service thread panicked (obviously, this would only be sent from the middle-manager thread
+    /// Service thread panicked (obviously, this would only be sent from the middle-manager thread)
     Panicked {
         thread: &'static str,
         panic_reason: String,
@@ -252,7 +264,7 @@ fn handle<C: Controllable>(block: bool, c: &mut C, rx: &Receiver<CmdTo>, data: &
 ///
 /// Runs in a loop receiving commands from the supervisor thread. Manages a Controllable instance,
 /// calling its setup()/step()/teardown() methods as necessary.
-pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
+pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) -> Result<()> {
     'alive: loop {
         let mut data;
 
@@ -263,7 +275,7 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
                     CmdTo::Data(_) | CmdTo::Stop => continue 'hatching, // sorry, not listening yet
                     CmdTo::Quit => break 'alive,
                 },
-                Err(_) => return, // main thread exploded?
+                Err(_) => bail!("main thread exploded"),
             }
         }
 
@@ -334,6 +346,8 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) {
             prof.print_timing();
         }
     });
+
+    Ok(())
 }
 
 /// Container for a thread that repeatedly performs some action in response to input. Can be
@@ -394,11 +408,11 @@ impl<Data: Send + 'static> RestartableThread<Data> {
     /// Send some input to the thread. Nonblocking.
     /// Returns a SendError if Sender::send() fails or if the private Sender has somehow
     /// disappeared (which is impossible).
-    pub fn send(&self, d: Data) -> Result<(), SendError<Data>> {
+    pub fn send(&self, d: Data) -> Result<()> {
         if let Some(ref s) = self.tx {
-            s.send(d)
+            s.send(d).map_err(|SendError(d)| ErrorKind::MPSC(SendError(Box::new(d))).into())
         } else {
-            Err(SendError(d))
+            Err(ErrorKind::MPSC(SendError(Box::new(d))).into())
         }
     }
 }

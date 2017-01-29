@@ -4,13 +4,13 @@
             {{#if active}}
                 {{#if almostdone}}
                     <div style="float: right; margin-top: -0.5em">
-                        <button formaction="/flow/{{name}}/continue"
+                        <button formaction="/flow/{{shortname}}/continue"
                                 type="submit"
                                 class="btn btn-success">Finish</button>
                     </div>
                 {{else}}
                     <div style="float: right; margin-top: -0.5em">
-                        <button formaction="/flow/{{name}}/continue"
+                        <button formaction="/flow/{{shortname}}/continue"
                                 type="submit"
                                 class="btn btn-success">Next</button>
                     </div>
@@ -27,7 +27,7 @@
                 </ol>
             {{else}}
                 <div style="float: right; margin-top: -0.5em">
-                    <button formaction="/flow/{{name}}/start"
+                    <button formaction="/flow/{{shortname}}/start"
                             type="submit"
                             class="btn btn-success">Start</button>
                 </div>

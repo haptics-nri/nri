@@ -2,6 +2,7 @@
 
 #[macro_use] extern crate utils;
 #[macro_use] extern crate comms;
+extern crate flow;
 extern crate scribe;
 extern crate teensy;
 
@@ -10,6 +11,8 @@ extern crate teensy;
 extern crate chrono;
 
 use comms::{Controllable, CmdFrom, Power, Block};
+use flow::{FLOWS, Comms};
+use teensy::ParkState;
 use std::{env, fs, thread};
 use std::io::{self, BufRead, Write};
 use std::process::Command;
@@ -43,7 +46,7 @@ guilty!{
                 Command::new("sh").args(&["-c", &line[1..]]).status().unwrap();
             } else {
                 for command in line.split(";") {
-                    let mut words = command.trim().split(" ");
+                    let mut words = command.trim().split_whitespace(); // TODO use shell quoting
                     match words.next().unwrap_or("") {
                         "" => {},
                         "episode" =>
@@ -59,6 +62,12 @@ guilty!{
                                 }
                             } else {
                                 errorln!("No surface (episode <surface> <sec>)");
+                            },
+                        "flow" =>
+                            if let Some(flowname) = words.next() {
+                                self.flow(Some(flowname));
+                            } else {
+                                self.flow(None);
                             },
                         "cd" => { env::set_current_dir(words.next().unwrap()).unwrap(); },
                         "sleep" => {
@@ -200,6 +209,48 @@ impl CLI {
                 } else {
                     errorln!("No data directory");
                 }
+        }
+    }
+
+    fn flow(&self, name: Option<&str>) {
+        #[derive(Clone)] struct CLIComms;
+        impl Comms for CLIComms {
+            fn print(&self, _: String) {
+                /* quiet */
+            }
+
+            fn send(&self, msg: String) {
+                print!("\t{} ", &msg[4..]);
+                io::stdout().flush().unwrap();
+                io::stdin().read_line(&mut String::new()).unwrap();
+            }
+
+            fn rpc<T, F: Fn(String) -> Result<T, String>>(&self, prompt: String, validator: F) -> T {
+                loop {
+                    print!("\t{}: ", &prompt[7..]);
+                    io::stdout().flush().unwrap();
+                    let mut input = String::new();
+                    io::stdin().read_line(&mut input).unwrap();
+                    match validator(input.clone()) {
+                        Ok(ret) => return ret,
+                        Err(msg) => println!("\t{}", &msg[7..])
+                    }
+                }
+            }
+        }
+
+        if let Some(name) = name {
+            let mut locked_flows = FLOWS.write().unwrap();
+            if let Some(found) = locked_flows.get_mut(&*name) {
+                while found.run(ParkState::None, &self.tx, CLIComms) != flow::EventContour::Finishing {}
+            } else {
+                println!("\tERROR: flow \"{}\" not found!", name);
+            }
+        } else {
+            let locked_flows = FLOWS.read().unwrap();
+            for (_, flow) in locked_flows.iter() {
+                println!("\t{} => {}", flow.shortname, flow.name);
+            }
         }
     }
 }
