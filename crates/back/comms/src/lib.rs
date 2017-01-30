@@ -14,10 +14,25 @@ use libc::{nanosleep, timespec};
 
 mod errors {
     use std::sync::mpsc::SendError;
+    use std::thread;
 
     error_chain! {
+        errors {
+            MpscCmd(thread: Option<&'static str>) {
+                description("broken connection to thread")
+                display("broken connection to {} thread",
+                    if let &Some(name) = thread {
+                        name.to_owned()
+                    } else if let Some(name) = thread::current().name() {
+                        name.to_owned()
+                    } else {
+                        "[unknown]".to_owned()
+                    })
+            }
+        }
+
         foreign_links {
-            MPSC(SendError<Box<Send + 'static>>);
+            MpscInput(SendError<Box<Send + 'static>>);
         }
     }
 }
@@ -150,14 +165,18 @@ guilty!{
 ///     - name = name of a CmdFrom variant that has a Sender<T> as the last parameter
 ///     - params = any other parameters for the CmdFrom variant
 /// * Outputs:
-///     - Result\<T, mpsc::RecvError> = the response received (or not) from the main thread
+///     - comms::Result\<T> = the response received (or not) from the main thread
 #[macro_export]
 macro_rules! rpc {
-    ($tx:expr, CmdFrom::$name:ident, $($param:expr),*) => {{
-        let (msg_tx, msg_rx) = ::std::sync::mpsc::channel();
-        $tx.send($crate::CmdFrom::$name($($param),*, msg_tx)).unwrap();
-        msg_rx.recv()
-    }}
+    ($tx:expr, CmdFrom::$name:ident, $($param:expr),*) => {
+        (|| -> $crate::Result<_> {
+            use $crate::ResultExt;
+
+            let (msg_tx, msg_rx) = ::std::sync::mpsc::channel();
+            $tx.send($crate::CmdFrom::$name($($param),*, msg_tx)).chain_err(|| $crate::ErrorKind::MpscCmd(None))?;
+            msg_rx.recv().chain_err(|| $crate::ErrorKind::MpscCmd(None))
+        })()
+    }
 }
 
 /// Convenience macro for defining a stub service that doesn't do anything (yet). Defines a
@@ -279,11 +298,11 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) -> Result<(
             }
         }
 
-        tx.send(CmdFrom::Timeout { thread: guilty!(C::NAME), ms: 1000 }).unwrap();
+        tx.send(CmdFrom::Timeout { thread: guilty!(C::NAME), ms: 1000 }).chain_err(|| ErrorKind::MpscCmd(Some(guilty!(C::NAME))))?;
         let mut c = C::setup(tx.clone(), data);
-        tx.send(CmdFrom::Timein { thread: guilty!(C::NAME) }).unwrap();
+        tx.send(CmdFrom::Timein { thread: guilty!(C::NAME) }).chain_err(|| ErrorKind::MpscCmd(Some(guilty!(C::NAME))))?;
 
-        tx.send(CmdFrom::Data(format!("to web start {}", guilty!(C::NAME)))).unwrap();
+        tx.send(CmdFrom::Data(format!("to web start {}", guilty!(C::NAME)))).chain_err(|| ErrorKind::MpscCmd(Some(guilty!(C::NAME))))?;
 
         let mut block = guilty!(C::BLOCK);
         let actual_period = match block {
@@ -337,7 +356,7 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) -> Result<(
         }
 
         c.teardown();
-        tx.send(CmdFrom::Data(format!("to web stop {}", guilty!(C::NAME)))).unwrap();
+        tx.send(CmdFrom::Data(format!("to web stop {}", guilty!(C::NAME)))).chain_err(|| ErrorKind::MpscCmd(Some(guilty!(C::NAME))))?;
     }
 
     println!("\n\n");
@@ -410,9 +429,9 @@ impl<Data: Send + 'static> RestartableThread<Data> {
     /// disappeared (which is impossible).
     pub fn send(&self, d: Data) -> Result<()> {
         if let Some(ref s) = self.tx {
-            s.send(d).map_err(|SendError(d)| ErrorKind::MPSC(SendError(Box::new(d))).into())
+            s.send(d).map_err(|SendError(d)| ErrorKind::MpscInput(SendError(Box::new(d))).into())
         } else {
-            Err(ErrorKind::MPSC(SendError(Box::new(d))).into())
+            Err(ErrorKind::MpscInput(SendError(Box::new(d))).into())
         }
     }
 }

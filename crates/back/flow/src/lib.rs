@@ -1,4 +1,5 @@
 #[macro_use] extern crate lazy_static;
+#[macro_use] extern crate guilt_by_association;
 #[macro_use] extern crate utils;
 #[macro_use] extern crate comms;
 extern crate teensy;

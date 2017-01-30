@@ -147,11 +147,8 @@ extern crate chrono;
 
 use chrono::UTC;
 
-mod errors {
-    error_chain! {
-    }
+error_chain! {
 }
-use errors::*;
 
 /// Helper function for rxspawn! macro
 fn rxspawn<T: Controllable>(reply: &Sender<CmdFrom>) -> Result<Service> {
