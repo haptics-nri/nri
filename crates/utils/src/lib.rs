@@ -44,7 +44,7 @@ pub fn watch<T, U, F>(mut thing: T,
                   root: &'static Path,
                   ext: &'static str| {
         fs::read_dir(root).expect(&format!("could not read directory {:?}", root))
-            .take_while(Result::is_ok).map(Result::unwrap)
+            .filter_map(Result::ok)
             .map(|e| e.path())
             .filter(|p| match p.extension() { Some(x) if x == ext => true, _ => false })
             .map(|p| f(thingref, p))
