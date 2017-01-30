@@ -17,6 +17,34 @@
     </head>
     <body>
         <script type="text/javascript">
+            var ACTIONS = [];
+            var RUNNING = false;
+            function next() {
+                RUNNING = false;
+
+                var after = ACTIONS.shift();
+                if (after !== undefined) {
+                    handle_rpc(after);
+                }
+            }
+
+            function handle_rpc(data) {
+                if (RUNNING) {
+                    ACTIONS.push(data);
+                } else {
+                    RUNNING = true;
+                    words = data.split(' ');
+                    switch (words[0]) {
+                        case "msg":
+                            alert(data.slice(data.indexOf(" ")));
+                            break;
+                        case "prompt":
+                            prompt(data.slice(data.indexOf(" ")), function (s) { send("RPC" + window.wsid + " " + s); });
+                            break;
+                    }
+                }
+            }
+
             function alert(text, then) {
                 then = then || function () { console.log("alert modal dismissed by clicking OK"); };
 
@@ -39,7 +67,7 @@
 
                 $("#prompt #text").html(text);
                 $("#prompt #input").val("");
-                $("#prompt #ok").unbind('click.prompt').bind('click.prompt', function () { return thenok($("#prompt #input").val()); });
+                $("#prompt #ok").unbind('click.prompt').bind('click.prompt', function () { thenok($("#prompt #input").val()); });
                 $("#prompt #cancel").unbind('click.prompt').bind('click.prompt', thencancel);
                 $("#prompt").modal("show");
             }
@@ -77,6 +105,12 @@
                 $("#timer").html(min + "m" + sec + "s");
             }
 
+            window.onload = function() {
+                $("#alert").on("hidden.bs.modal", next);
+                $("#confirm").on("hidden.bs.modal", next);
+                $("#prompt").on("hidden.bs.modal", next);
+            };
+
             window.socket = new WebSocket("ws://{{server}}", "rust-websocket");
             window.socket.onmessage = function (event) {
                 console.log(event.data.slice(0, 50).replace(/\n+/g, ''));
@@ -87,10 +121,8 @@
                         $(".wsid").each(function () { this.value = words[1]; });
                         break;
                     case "msg":
-                        alert(event.data.slice(event.data.indexOf(" ")));
-                        break;
                     case "prompt":
-                        prompt(event.data.slice(event.data.indexOf(" ")), function (s) { send("RPC" + window.wsid + " " + s); });
+                        handle_rpc(event.data);
                         break;
                     case "kick":
                         $("." + words[1] + ".framenum").each(function () { this.innerHTML = words[2]; });
