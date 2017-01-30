@@ -7,10 +7,9 @@ extern crate libc;
 
 use std::{mem, ptr};
 use std::fs::File;
-use std::io::Write;
+use std::io::{self, Write};
 use std::collections::HashMap;
-use std::sync::Mutex;
-use std::sync::mpsc;
+use std::sync::{self, mpsc, Mutex};
 use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT, Ordering};
 use std::marker::PhantomData;
 use std::thread;
@@ -45,6 +44,46 @@ struct Worker {
     tx     : mpsc::Sender<Message>,
 }
 
+trait NoFail<T> {
+    fn nofail(self) -> T;
+}
+
+macro_rules! impl_nofail {
+    (<> $err:ty, $msg:expr) => {
+        impl_nofail!(@go [] [$err] [$msg]);
+    };
+
+    (<$($gen:tt),+> $err:ty, $msg:expr) => {
+        impl_nofail!(@go [$($gen),*] [$err] [$msg]);
+    };
+
+    (@go [$($gen:tt)*] [$err:ty] [$msg:expr]) => {
+        impl<T $(, $gen)*> NoFail<T> for Result<T, $err> {
+            fn nofail(self) -> T {
+                match self {
+                    Ok(t) => t,
+                    Err(e) => {
+                        println!(concat!("ERROR: ", $msg));
+                        panic!("[scribe] {:?}", e);
+                    }
+                }
+            }
+        }
+    };
+}
+
+impl_nofail!(<U> mpsc::SendError<U>,   "Internal channel broken. Latest data may not have been written to disk."             );
+impl_nofail!(<>  mpsc::RecvError,      "Internal channel broken. Latest data may not have been written to disk."             );
+impl_nofail!(<U> sync::PoisonError<U>, "Mutex poisoned. This can't happen."                                                  );
+impl_nofail!(<>  io::Error,            "I/O error. Latest data may not have been written to disk."                           );
+impl_nofail!(<>  (),                   "Invalid handle sent to scribe thread. Latest data may not have been written to disk.");
+
+impl<'a> NoFail<&'a mut File> for Option<&'a mut File> {
+    fn nofail(self) -> &'a mut File {
+        self.ok_or(()).nofail()
+    }
+}
+
 lazy_static! {
     static ref WORKER: Mutex<Worker> = {
         let (tx, rx) = mpsc::channel();
@@ -62,14 +101,14 @@ lazy_static! {
                     match msg {
                         Message::Open(s, tx) => {
                             max_file = max_file.next();
-                            files.insert(max_file, File::create(&s).unwrap());
-                            tx.send(max_file).unwrap();
+                            files.insert(max_file, File::create(&s).nofail());
+                            tx.send(max_file).nofail();
                         },
                         Message::Close(h) => {
                             files.remove(&h);
                         },
                         Message::Write(h, data) => {
-                            files.get_mut(&h).unwrap().write_all(&data).unwrap();
+                            files.get_mut(&h).nofail().write_all(&data).nofail();
                             COUNT.fetch_sub(1, Ordering::SeqCst);
                         },
 
@@ -77,7 +116,7 @@ lazy_static! {
                             max_pattern = max_pattern.next();
                             patterns.insert(max_pattern, s);
                             indices.insert(max_pattern, 1);
-                            tx.send(max_pattern).unwrap();
+                            tx.send(max_pattern).nofail();
                         },
                         Message::Unregister(h) => {
                             patterns.remove(&h);
@@ -86,7 +125,7 @@ lazy_static! {
                         Message::Packet(h, data) => {
                             let i = indices[&h];
                             indices.insert(h, i + 1);
-                            File::create(patterns[&h].replace("{}", &i.to_string())).unwrap().write_all(&data).unwrap();
+                            File::create(patterns[&h].replace("{}", &i.to_string())).nofail().write_all(&data).nofail();
                             COUNT.fetch_sub(1, Ordering::SeqCst);
                         },
                         Message::SetIndex(h, index) => {
@@ -143,7 +182,7 @@ impl<T: ?Sized> Writer<T> {
         send(Message::Open(name.into(), tx));
 
         Writer {
-            handle: rx.recv().unwrap(),
+            handle: rx.recv().nofail(),
             dst: Destination::Name,
             _ghost: PhantomData
         }
@@ -155,7 +194,7 @@ impl<T: ?Sized> Writer<T> {
         send(Message::Register(pattern.into(), tx));
 
         Writer {
-            handle: rx.recv().unwrap(),
+            handle: rx.recv().nofail(),
             dst: Destination::Pattern,
             _ghost: PhantomData
         }
@@ -215,7 +254,7 @@ impl Writer<[u8]> {
 
 /// Convenience method for sending off a message to the worker thread.
 fn send(m: Message) {
-    WORKER.lock().unwrap().tx.send(m).unwrap();
+    WORKER.lock().nofail().tx.send(m).nofail();
 }
 
 impl<T: ?Sized> Drop for Writer<T> {
