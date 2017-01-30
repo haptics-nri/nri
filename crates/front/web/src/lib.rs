@@ -276,6 +276,10 @@ guilty!{
 
             let listening = Iron::new(chain).http(("0.0.0.0", config::HTTP_PORT)).unwrap();
 
+            // make sure the watchers get started
+            &*FLOWS;
+            &*TEMPLATES;
+
             Web { listening: listening, websocket: Some(thread), wstx: Some(wstx) }
         }
 
