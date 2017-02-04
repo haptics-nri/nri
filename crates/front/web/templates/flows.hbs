@@ -6,12 +6,14 @@
                     <div style="float: right; margin-top: -0.5em">
                         <button formaction="/flow/{{name}}/continue"
                                 type="submit"
+                                onclick="clear_timer()"
                                 class="btn btn-success">Finish</button>
                     </div>
                 {{else}}
                     <div style="float: right; margin-top: -0.5em">
                         <button formaction="/flow/{{name}}/continue"
                                 type="submit"
+                                onclick="start_timer()"
                                 class="btn btn-success">Next</button>
                     </div>
                 {{/if}}
@@ -29,6 +31,7 @@
                 <div style="float: right; margin-top: -0.5em">
                     <button formaction="/flow/{{name}}/start"
                             type="submit"
+                            onclick="start_timer()"
                             class="btn btn-success">Start</button>
                 </div>
                 {{name}}
