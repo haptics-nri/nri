@@ -2,16 +2,10 @@
 name = "scribe"
 version = "0.1.0"
 dependencies = [
- "abort_on_panic 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "lazy_static 0.1.15 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lazy_static 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "utils 0.1.0",
 ]
-
-[[package]]
-name = "abort_on_panic"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "clock_ticks"
@@ -32,7 +26,7 @@ dependencies = [
 
 [[package]]
 name = "lazy_static"
-version = "0.1.15"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
@@ -60,3 +54,10 @@ dependencies = [
  "hprof 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
+[metadata]
+"checksum clock_ticks 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "da9bd98fefcf1904a3f80ead86d366d9373c34db7b8a8e48c1fdcaac4787800d"
+"checksum hprof 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "815c861e280a7d7868dddfaf9aa836996c79c0bc39aa7e57aaf7eccc7ababb09"
+"checksum lazy_static 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "49247ec2a285bb3dcb23cbd9c35193c025e7251bfce77c1d5da97e6362dffe7f"
+"checksum libc 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)" = "e32a70cf75e5846d53a673923498228bbec6a8624708a9ea5645f075d6276122"
+"checksum libc 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "9fe40c82db71d8e4db6910989256d407abc151586aa10b8bce68bf84108af5ce"
+"checksum log 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)" = "fbb9a8cc55c114657af9fd2297fad569cb0d126851aa9a132b1e93b5789d67f9"
