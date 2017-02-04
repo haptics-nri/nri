@@ -5,10 +5,11 @@ End-effector weighing
     "Starting data collection"
 
 - Capture
+    start vicon
     start teensy
     "Now recording!"
 - Finish
-    stop teensy
+    stop teensy vicon
     "Done!"
 - Wrap up
     > "end-effector name"
