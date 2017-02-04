@@ -290,7 +290,7 @@ fn flow(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
                               "start" | "continue" => {
                                   let mut locked_flows = FLOWS.write().unwrap();
                                   if let Some(found) = locked_flows.get_mut(&flow) {
-                                      let contour = found.run(ParkState::None, mtx.lock().unwrap().deref(), wsid);
+                                      let contour = found.run(ParkState::metermaid().unwrap(), mtx.lock().unwrap().deref(), wsid);
                                       Response::with((status::Ok, format!("{:?} \"{}\" flow", contour, flow)))
                                   } else {
                                       Response::with((status::BadRequest, format!("Could not find \"{}\" flow", flow)))
