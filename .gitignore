@@ -13,3 +13,4 @@ Session.vim
 cargo-doc-command
 *.zip
 screenlog.*
+crates/bluefox/drivers/mvacquire/
