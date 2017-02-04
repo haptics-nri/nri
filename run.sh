@@ -1,12 +1,13 @@
 #!/bin/bash
 
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:./crates/drivers/optoforce
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:./crates/drivers/structure
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:./crates/drivers/biotac/src/wrapper
 export RUST_BACKTRACE=1
 
 if [ "$#" -eq 0 ]; then 
     rlwrap cargo run --release
-    #target/release/nri
+    #gdb target/release/nri
 elif [ "$1" == "all" ]; then
     DIR="$2"
     echo -e "\nProcessing all data files in $DIR\n"
