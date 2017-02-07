@@ -112,7 +112,7 @@
 #![cfg_attr(feature = "nightly", feature(const_fn))]
 
 #[macro_use] extern crate utils;
-#[macro_use] extern crate comms;
+extern crate comms;
 #[macro_use] extern crate guilt_by_association;
 #[macro_use] extern crate error_chain;
 extern crate scribe;
@@ -141,7 +141,7 @@ use biotac::Biotac;
 use vicon::Vicon;
 
 #[macro_use] extern crate log;
-#[macro_use] extern crate env_logger;
+extern crate env_logger;
 extern crate hprof;
 extern crate chrono;
 

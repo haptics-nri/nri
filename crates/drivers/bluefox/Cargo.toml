@@ -18,8 +18,6 @@ comms                = { path = "../../back/comms"        }
 scribe               = { path = "../../back/scribe"       }
 utils                = { path = "../../utils"             }
 guilt-by-association = "0.2"
-custom_derive        = "0.1"
-conv                 = "0.3"
 time                 = "0.1"
 libc                 = "0.2"
 image                = "0.7"

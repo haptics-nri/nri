@@ -89,8 +89,6 @@ name = "bluefox"
 version = "0.1.0"
 dependencies = [
  "comms 0.1.0",
- "conv 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "custom_derive 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "guilt-by-association 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "image 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -305,7 +303,6 @@ version = "0.1.0"
 dependencies = [
  "chrono 0.2.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "comms 0.1.0",
- "guilt-by-association 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-serialize 0.3.22 (registry+https://github.com/rust-lang/crates.io-index)",
  "teensy 0.1.0",
@@ -1040,8 +1037,6 @@ name = "structure"
 version = "0.1.0"
 dependencies = [
  "comms 0.1.0",
- "conv 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "custom_derive 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "guilt-by-association 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "image 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.20 (registry+https://github.com/rust-lang/crates.io-index)",
