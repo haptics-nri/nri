@@ -1,4 +1,5 @@
 #[macro_use] extern crate lazy_static;
+#[macro_use] extern crate error_chain;
 #[macro_use] extern crate utils;
 #[macro_use] extern crate comms;
 extern crate teensy;
@@ -6,12 +7,14 @@ extern crate chrono;
 extern crate uuid;
 extern crate rustc_serialize as serialize;
 
+use std::{env, fmt, mem, thread};
 use std::sync::mpsc;
 use std::collections::{BTreeMap, HashMap};
 use std::io::{Write, BufRead, BufReader};
+use std::ffi::OsString;
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
-use std::{fmt, env, thread};
+use std::result::Result as StdResult;
 use std::sync::RwLock;
 use std::time::Duration;
 use chrono::{DateTime, Local, Timelike};
@@ -20,6 +23,46 @@ use utils::config;
 use comms::CmdFrom;
 use uuid::Uuid;
 use serialize::json::{ToJson, Json};
+
+error_chain! {
+    errors {
+        Io(action: String) {
+            description("I/O error")
+            display("I/O error while trying to {}", action)
+        }
+
+        ParseFlow(line: usize, error: &'static str) {
+            description("syntax error in flow")
+            display("flow syntax error: line {}: {}", line, error)
+        }
+    }
+}
+
+trait OptionExt<T> {
+    fn put(&mut self, it: T) -> &mut T;
+}
+
+impl<T> OptionExt<T> for Option<T> {
+    fn put(&mut self, it: T) -> &mut T {
+        *self = Some(it);
+        self.as_mut().unwrap()
+    }
+}
+
+#[derive(Debug)]
+struct OsStringError(OsString);
+
+impl ::std::error::Error for OsStringError {
+    fn description(&self) -> &str {
+        "invalid UTF-8"
+    }
+}
+
+impl fmt::Display for OsStringError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
 
 lazy_static! {
     pub static ref FLOWS: RwLock<HashMap<String, Flow>> = utils::watch(HashMap::new(),
@@ -39,7 +82,7 @@ lazy_static! {
 pub trait Comms: Clone {
     fn print(&self, msg: String);
     fn send(&self, msg: String);
-    fn rpc<T, F: Fn(String) -> Result<T, String>>(&self, prompt: String, validator: F) -> T;
+    fn rpc<T, F: Fn(String) -> StdResult<T, String>>(&self, prompt: String, validator: F) -> T;
 }
 
 #[derive(Debug, PartialEq)]
@@ -111,8 +154,10 @@ impl Flow {
         Flow { name: name, shortname: shortname, active: false, almostdone: false, states: states, stamp: None, dir: None, id: None }
     }
 
-    pub fn run<C: Comms>(&mut self, park: ParkState, tx: &mpsc::Sender<CmdFrom>, comms: C) -> EventContour {
+    pub fn run<C: Comms>(&mut self, park: ParkState, tx: &mpsc::Sender<CmdFrom>, comms: C) -> Result<EventContour> {
         // TODO refactor this confusing function
+        
+        use self::ErrorKind::*;
 
         let mut ret = EventContour::In;
 
@@ -121,29 +166,28 @@ impl Flow {
             comms.print(format!("Beginning flow {}!", self.name));
 
             // need a timestamp and ID
-            self.stamp = Some(Local::now());
+            let stamp = self.stamp.put(Local::now());
             self.id = Some(Uuid::new_v4());
             self.active = true;
 
-            let datedir = self.stamp.unwrap().format("%Y%m%d").to_string();
+            let datedir = stamp.format("%Y%m%d").to_string();
             let fldir = format!("data/{}/{}", datedir, self.shortname); // TODO use PathBuf::push
-            fs::create_dir_all(&fldir).unwrap();
-            self.dir = Some(env::current_dir().unwrap());
-            env::set_current_dir(&fldir).unwrap();
+            fs::create_dir_all(&fldir).chain_err(|| Io(format!("create episode directory {:?}", fldir)))?;
+            self.dir = Some(env::current_dir().chain_err(|| Io("get current directory".into()))?);
+            env::set_current_dir(&fldir).chain_err(|| Io(format!("set current directory to {:?}", fldir)))?;
             let mut epnum = 1;
-            for entry in fs::read_dir(".").unwrap() {
-                let entry = entry.unwrap();
-                if entry.file_type().unwrap().is_dir()
-                {
-                    let name = entry.file_name().into_string().unwrap();
-                    let num = name.parse::<u64>().unwrap() + 1;
+            for entry in fs::read_dir(".").chain_err(|| Io("list current directory".into()))? {
+                let entry = entry.chain_err(|| Io("read directory entry".into()))?;
+                if entry.file_type().chain_err(|| Io(format!("read metadata of {:?}", entry.file_name())))?.is_dir() {
+                    let name = entry.file_name().into_string().map_err(OsStringError).chain_err(|| Io(format!("invalid UTF-8 in dir name {:?}", entry.file_name())))?;
+                    let num = 1 + name.parse::<u64>().chain_err(|| Io(format!("non-numeric directory {:?}", name)))?;
                     if num > epnum {
                         epnum = num;
                     }
                 }
             }
-            fs::create_dir(epnum.to_string()).unwrap();
-            env::set_current_dir(epnum.to_string()).unwrap();
+            fs::create_dir(epnum.to_string()).chain_err(|| Io(format!("create directory \"{}\"", epnum)))?;
+            env::set_current_dir(epnum.to_string()).chain_err(|| Io(format!("set current directory to \"{}\"", epnum)))?;
 
             ret = EventContour::Starting;
         }
@@ -155,9 +199,9 @@ impl Flow {
                 comms.print(format!("Executing state {}", state.name));
                 state.run(tx, comms.clone());
                 comms.print(format!("Finished executing state {}", state.name));
-            } else if state.park.is_some() {
-                comms.print(format!("Waiting for parking lot state to be {:?} (currently {:?})", state.park, park));
-                comms.send(format!("msg Please insert {:?} end-effector", state.park.unwrap()));
+            } else if let Some(goal) = state.park {
+                comms.print(format!("Waiting for parking lot state to be {:?} (currently {:?})", goal, park));
+                comms.send(format!("msg Please insert {:?} end-effector", goal));
             }
         } else {
             comms.print(format!("No applicable states."));
@@ -171,18 +215,22 @@ impl Flow {
             if self.almostdone {
                 // the flow is over! clear everything!
 
-                let mut file = File::create(format!("{}.flow", self.shortname)).unwrap();
-                writeln!(file, "{} [{}]", self.name, StampPrinter(self.stamp.unwrap())).unwrap();
-                writeln!(file, "").unwrap();
+                let mut file = File::create(format!("{}.flow", self.shortname)).chain_err(|| Io(format!("create flow file \"{}.flow\"", self.shortname)))?;
+                writeln!(file, "{} [{}]", self.name, StampPrinter(self.stamp.expect("timestamp missing"))).chain_err(|| Io(format!("write to flow file \"{}.flow\"", self.shortname)))?;
+                writeln!(file, "").chain_err(|| Io(format!("write to flow file \"{}.flow\"", self.shortname)))?;
 
                 self.active = false;
                 self.almostdone = false;
-                for state in &mut self.states {
+                let mut states = mem::replace(&mut self.states, vec![]);
+                for state in &mut states {
                     state.finalize(&mut file);
-                    writeln!(file, "").unwrap();
+                    writeln!(file, "").chain_err(|| Io(format!("write to flow file \"{}.flow\"", self.shortname)))?;
                 }
+                self.states = states;
 
-                env::set_current_dir(self.dir.take().unwrap()).unwrap();
+                if let Some(dir) = self.dir.take() {
+                    env::set_current_dir(&dir).chain_err(|| Io(format!("set current directory to {:?}", dir)))?;
+                }
 
                 ret = EventContour::Finishing;
             } else {
@@ -190,18 +238,20 @@ impl Flow {
             }
         }
 
-        ret
+        Ok(ret)
     }
 
-    pub fn parse<R: BufRead>(shortname: String, reader: R) -> Result<Flow, (u32, &'static str)> {
-        let lines = try!(reader.lines()
-                               .collect::<Result<Vec<_>,_>>()
-                               .map_err(|_| (0, "I/O error")));
+    pub fn parse<R: BufRead>(shortname: String, reader: R) -> Result<Flow> {
+        use self::ErrorKind::*;
+
+        let lines = reader.lines()
+                          .collect::<StdResult<Vec<_>, _>>()
+                          .chain_err(|| ParseFlow(0, "I/O error"))?;
         let mut lines = lines.into_iter()
-                               .map(|s| s.trim_right().to_owned())
-                               .peekable();
+                             .map(|s| s.trim_right().to_owned())
+                             .peekable();
                           
-        let name = try!(lines.find(|s| !s.is_empty()).ok_or((0, "Empty file")));
+        let name = lines.find(|s| !s.is_empty()).ok_or(ParseFlow(0, "Empty file"))?;
         let mut states = vec![];
         
         let mut i = 0;
@@ -211,12 +261,12 @@ impl Flow {
             
             if header.is_empty() { continue; }
             let header = header.split("=>").collect::<Vec<_>>();
-            if header.len() > 2 { return Err((i, "too many arrows")); }
+            if header.len() > 2 { Err(ParseFlow(i, "too many arrows"))?; }
             
             match header[0].chars().next() {
                 Some('-') => {},
-                Some(' ') => return Err((i, "command outside of state")),
-                _ => return Err((i, "unindented line")),
+                Some(' ') => Err(ParseFlow(i, "command outside of state"))?,
+                _ => Err(ParseFlow(i, "unindented line"))?,
             }
             
             let (name, park) = match header.len() {
@@ -227,11 +277,11 @@ impl Flow {
                                 "BioTac"    => ParkState::BioTac,
                                 "OptoForce" => ParkState::OptoForce,
                                 "Stick"     => ParkState::Stick,
-                                _           => return Err((i, "bad trigger")),
+                                _           => Err(ParseFlow(i, "bad trigger"))?,
                             })
                         )
                       },
-                _ => unreachable!(),
+                _ => unreachable!(), // due to early return above
             };
             
             let mut script = vec![];
@@ -246,20 +296,18 @@ impl Flow {
                 } else if line.starts_with('"') {
                     script.push((FlowCmd::Message(line[1..line.len()-1].to_owned()), None));
                 } else if line.starts_with('>') {
-                    let nquotes = line.replace("\\\"", "").matches('"').count();
-                    if nquotes == 1 { return Err((i, "unterminated string")); }
-                    if nquotes > 2 { return Err((i, "too many strings")); }
-                    
-                    let s = line[line.find('"').unwrap()+1 .. line.rfind('"').unwrap()].trim();
-                    let range = line[line.rfind('"').unwrap()+1 ..].trim();
+                    let q1 = line.find('"').ok_or(ParseFlow(i, "expected quoted string"))?;
+                    let q2 = line.rfind('"').ok_or(ParseFlow(i, "unterminated string"))?;
+                    let s = line[q1+1 .. q2].trim();
+                    let range = line[q2+1 ..].trim();
                     
                     if !range.is_empty() {
                         if !range.starts_with('(') || !range.ends_with(')') {
-                            return Err((i, "range not in parentheses"));
+                            Err(ParseFlow(i, "range not in parentheses"))?;
                         }
-                        let dots = try!(range.find("..").ok_or((i, "not enough dots in range")));
-                        let low = try!(range[1..dots].parse().map_err(|_| (i, "bad start of range")));
-                        let high = try!(range[dots+2..range.len()-1].parse().map_err(|_| (i, "bad end of range")));
+                        let dots = range.find("..").ok_or(ParseFlow(i, "not enough dots in range"))?;
+                        let low = range[1..dots].parse().chain_err(|| ParseFlow(i, "bad start of range"))?;
+                        let high = range[dots+2..range.len()-1].parse().chain_err(|| ParseFlow(i, "bad end of range"))?;
                         
                         script.push((FlowCmd::int(s.to_owned(), (low, high)), None));
                     } else {
@@ -268,7 +316,7 @@ impl Flow {
                 } else {
                     let mut words = line.split(' ').map(str::trim);
                     match words.next() {
-                        None | Some("") => return Err((i, "empty command")),
+                        None | Some("") => Err(ParseFlow(i, "empty command"))?,
                         Some("stop") => {
                             let mut words = words.peekable();
                             if words.peek().is_some() {
@@ -285,7 +333,7 @@ impl Flow {
                                 script.push((FlowCmd::Start(split.next().unwrap().to_owned(), split.next().map(|s| s.to_owned())), None));
                             }
                         },
-                        Some(_) => return Err((i, "invalid command")),
+                        Some(_) => Err(ParseFlow(i, "invalid command"))?,
                     }
                 }
             }

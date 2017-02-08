@@ -170,11 +170,9 @@ guilty!{
 macro_rules! rpc {
     ($tx:expr, CmdFrom::$name:ident, $($param:expr),*) => {
         (|| -> $crate::Result<_> {
-            use $crate::ResultExt;
-
             let (msg_tx, msg_rx) = ::std::sync::mpsc::channel();
-            $tx.send($crate::CmdFrom::$name($($param),*, msg_tx)).chain_err(|| $crate::ErrorKind::MpscCmd(None))?;
-            msg_rx.recv().chain_err(|| $crate::ErrorKind::MpscCmd(None))
+            $crate::ResultExt::chain_err($tx.send($crate::CmdFrom::$name($($param),*, msg_tx)), || $crate::ErrorKind::MpscCmd(None))?;
+            $crate::ResultExt::chain_err(msg_rx.recv(), || $crate::ErrorKind::MpscCmd(None))
         })()
     }
 }

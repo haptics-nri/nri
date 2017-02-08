@@ -242,7 +242,13 @@ impl CLI {
         if let Some(name) = name {
             let mut locked_flows = FLOWS.write().unwrap();
             if let Some(found) = locked_flows.get_mut(&*name) {
-                while found.run(ParkState::None, &self.tx, CLIComms) != flow::EventContour::Finishing {}
+                loop {
+                    match found.run(ParkState::None, &self.tx, CLIComms) {
+                        Ok(flow::EventContour::Finishing) => break,
+                        Ok(_) => continue,
+                        Err(e) => { println!("Error while running flow: {:?}", e); break; }
+                    }
+                }
             } else {
                 println!("\tERROR: flow \"{}\" not found!", name);
             }
