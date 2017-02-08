@@ -18,9 +18,8 @@ nightly = [
 utils                = { path = "../../utils"          }
 comms                = { path = "../comms"             }
 teensy               = { path = "../../drivers/teensy" }
-guilt-by-association = "0.2"
 lazy_static          = "0.2"
-chrono               = "0.2"
+chrono               = "0.3"
 uuid                 = "0.2"
 rustc-serialize      = "0.3" # TODO migrate to serde
 

@@ -4,8 +4,6 @@
 #[macro_use] extern crate comms;
 
 #[macro_use] extern crate guilt_by_association;
-#[macro_use] extern crate custom_derive;
-#[macro_use] extern crate conv;
 
 group_attr!{
     #[cfg(target_os = "linux")]
