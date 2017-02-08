@@ -55,9 +55,9 @@ impl HOBJ {
     }
 }
 
-custom_derive! {
+macro_attr! {
     #[repr(C)]
-    #[derive(Debug, TryFrom(i32))]
+    #[derive(Debug, TryFrom!(i32))]
     pub enum TDMR_ERROR {
         DMR_NO_ERROR                             = 0,
         DMR_DEV_NOT_FOUND                        = -2100,
@@ -112,9 +112,9 @@ custom_derive! {
     }
 }
 
-custom_derive! {
+macro_attr! {
     #[repr(C)]
-    #[derive(Debug, TryFrom(i32))]
+    #[derive(Debug, TryFrom!(i32))]
     pub enum TPROPHANDLING_ERROR {
         PROPHANDLING_NO_ERROR                           = 0,
         PROPHANDLING_NOT_A_LIST                         = -2000,
@@ -206,9 +206,9 @@ pub enum PixelFormat {
     Unknown              = -2,
 }
 pub mod settings {
-    custom_derive! {
+    macro_attr! {
         #[repr(C)]
-        #[derive(Copy, Clone, Debug, TryFrom(i64))]
+        #[derive(Copy, Clone, Debug, TryFrom!(i64))]
         pub enum CameraPixelFormat {
             BayerGR8      = 0x1080008,
             BayerGR10     = 0x110000C,
@@ -225,9 +225,9 @@ pub mod settings {
         }
     }
 
-    custom_derive! {
+    macro_attr! {
         #[repr(C)]
-        #[derive(Copy, Clone, Debug, TryFrom(i32))]
+        #[derive(Copy, Clone, Debug, TryFrom!(i32))]
         pub enum DestPixelFormat {
             Auto                 = 0,
             Raw                  = 1,
@@ -259,9 +259,9 @@ pub mod settings {
         }
     }
 
-    custom_derive! {
+    macro_attr! {
         #[repr(C)]
-        #[derive(Copy, Clone, Debug, TryFrom(i32))]
+        #[derive(Copy, Clone, Debug, TryFrom!(i32))]
         pub enum ColorProc {
             Auto             = 0,
             Raw              = 1,
@@ -271,9 +271,9 @@ pub mod settings {
         }
     }
 
-    custom_derive! {
+    macro_attr! {
         #[repr(C)]
-        #[derive(Copy, Clone, Debug, TryFrom(i32))]
+        #[derive(Copy, Clone, Debug, TryFrom!(i32))]
         pub enum InterpolationMode {
             NearestNeighbor = 0,
             Linear          = 1,

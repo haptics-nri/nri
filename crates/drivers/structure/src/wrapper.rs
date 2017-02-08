@@ -10,9 +10,9 @@ use std::ops::Deref;
 use std::slice;
 //use std::time::Duration;
 
-custom_derive! {
+macro_attr! {
     #[repr(C)]
-    #[derive(PartialEq, Debug, TryFrom(i32))]
+    #[derive(PartialEq, Debug, TryFrom!(i32))]
     enum OniStatus {
         Ok             = 0,
         Error          = 1,

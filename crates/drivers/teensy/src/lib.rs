@@ -1,15 +1,15 @@
 //! Service to read data from the Teensy and attached sensors
 
 #[macro_use] extern crate utils;
-#[macro_use] extern crate comms;
+extern crate comms;
 
 #[macro_use] extern crate guilt_by_association;
-#[macro_use] extern crate custom_derive;
+#[macro_use] extern crate macro_attr;
 #[macro_use] extern crate conv;
 
-custom_derive! {
+macro_attr! {
     /// Which end effector is in use (i.e. not parked)
-    #[derive(Copy, Clone, Eq, PartialEq, Debug, TryFrom(u8))]
+    #[derive(Copy, Clone, Eq, PartialEq, Debug, TryFrom!(u8))]
     pub enum ParkState {
         /// All end effectors parked
         None = 0,

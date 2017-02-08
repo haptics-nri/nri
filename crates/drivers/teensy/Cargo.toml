@@ -18,7 +18,7 @@ comms                = { path = "../../back/comms"  }
 scribe               = { path = "../../back/scribe" }
 utils                = { path = "../../utils"       }
 guilt-by-association = "0.2"
-custom_derive        = "0.1"
+macro-attr           = "0.2"
 conv                 = "0.3"
 time                 = "0.1"
 serial               = "0.3"
