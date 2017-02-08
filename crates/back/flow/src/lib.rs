@@ -35,6 +35,11 @@ error_chain! {
             description("syntax error in flow")
             display("flow syntax error: line {}: {}", line, error)
         }
+
+        Rpc(action: String) {
+            description("RPC error")
+            display("RPC error while trying to {}", action)
+        }
     }
 }
 
@@ -197,7 +202,7 @@ impl Flow {
             if state.park.map_or(true, |p| p == park) {
                 ret = EventContour::Continuing;
                 comms.print(format!("Executing state {}", state.name));
-                state.run(tx, comms.clone());
+                state.run(tx, comms.clone())?;
                 comms.print(format!("Finished executing state {}", state.name));
             } else if let Some(goal) = state.park {
                 comms.print(format!("Waiting for parking lot state to be {:?} (currently {:?})", goal, park));
@@ -223,7 +228,7 @@ impl Flow {
                 self.almostdone = false;
                 let mut states = mem::replace(&mut self.states, vec![]);
                 for state in &mut states {
-                    state.finalize(&mut file);
+                    state.finalize(&mut file)?;
                     writeln!(file, "").chain_err(|| Io(format!("write to flow file \"{}.flow\"", self.shortname)))?;
                 }
                 self.states = states;
@@ -351,25 +356,31 @@ impl FlowState {
         FlowState { name: name, park: park, script: script, stamp: None, done: false }
     }
 
-    pub fn run<C: Comms>(&mut self, tx: &mpsc::Sender<CmdFrom>, comms: C) {
+    pub fn run<C: Comms>(&mut self, tx: &mpsc::Sender<CmdFrom>, comms: C) -> Result<()> {
         self.stamp = Some(Local::now());
         for &mut (ref mut c, ref mut stamp) in &mut self.script {
             *stamp = Some(Local::now());
-            c.run(tx, comms.clone());
+            c.run(tx, comms.clone())?;
         }
         self.done = true;
+        
+        Ok(())
     }
 
-    pub fn finalize(&mut self, file: &mut File) {
+    pub fn finalize(&mut self, file: &mut File) -> Result<()> {
+        use self::ErrorKind::*;
+
         writeln!(file, "- {} [{}]", self.name, StampPrinter(self.stamp.unwrap())).unwrap();
         for &mut (ref mut c, ref mut stamp) in &mut self.script {
-            write!(file, "    ").unwrap();
-            c.finalize(file);
-            writeln!(file, " [{}]", StampPrinter(stamp.unwrap())).unwrap();
+            write!(file, "    ").chain_err(|| Io("write to flow file".into()))?;
+            c.finalize(file)?;
+            writeln!(file, " [{}]", StampPrinter(stamp.unwrap())).chain_err(|| Io("write to flow file".into()))?;
             *stamp = None;
         }
         self.done = false;
         self.stamp = None;
+
+        Ok(())
     }
 }
 
@@ -382,7 +393,9 @@ impl FlowCmd {
         FlowCmd::Int { prompt: prompt, limits: limits, data: None }
     }
 
-    pub fn run<C: Comms>(&mut self, tx: &mpsc::Sender<CmdFrom>, comms: C) {
+    pub fn run<C: Comms>(&mut self, tx: &mpsc::Sender<CmdFrom>, comms: C) -> Result<()> {
+        use self::ErrorKind::*;
+
         match *self {
             FlowCmd::Message(ref msg) => comms.send(format!("msg {}", msg)),
             FlowCmd::Str { ref prompt, ref mut data } => {
@@ -419,46 +432,52 @@ impl FlowCmd {
             }
             FlowCmd::Start(ref service, ref data) => {
                 comms.print(format!("Flow starting service {}", service));
-                assert!(rpc!(tx, CmdFrom::Start, service.clone(), data.clone()).unwrap());
+                rpc!(tx, CmdFrom::Start, service.clone(), data.clone()).chain_err(|| Rpc(format!("start {}", service)))?;
                 comms.print(format!("Flow waiting for service {} to start", service));
                 thread::sleep(Duration::from_millis(2000));
                 comms.print(format!("Flow done waiting for service {}", service));
             }
             FlowCmd::Stop(ref service) => {
-                assert!(rpc!(tx, CmdFrom::Stop, service.clone()).unwrap());
+                rpc!(tx, CmdFrom::Stop, service.clone()).chain_err(|| Rpc(format!("stop {}", service)))?;
             }
             FlowCmd::Send(ref string) => {
                 tx.send(CmdFrom::Data(String::from("to ") + string)).unwrap();
             }
             FlowCmd::StopSensors => {
                 for &svc in &["bluefox", "structure", "biotac", "optoforce", "teensy"] {
-                    assert!(rpc!(tx, CmdFrom::Stop, svc.to_owned()).unwrap());
+                    rpc!(tx, CmdFrom::Stop, svc.to_owned()).chain_err(|| Rpc(format!("stop {}", svc)))?;
                 }
             }
         }
+
+        Ok(())
     }
     
-    pub fn finalize(&mut self, file: &mut File) {
+    pub fn finalize(&mut self, file: &mut File) -> Result<()> {
+        use self::ErrorKind::*;
+
         match *self {
-            FlowCmd::Message(ref msg) => write!(file, "{:?}", msg).unwrap(),
+            FlowCmd::Message(ref msg) => write!(file, "{:?}", msg).chain_err(|| Io("write to flow file".into()))?,
             FlowCmd::Str { ref prompt, ref mut data } => {
-                write!(file, "> {:?} [{:?}]", prompt, data.as_ref().unwrap()).unwrap();
+                write!(file, "> {:?} [{:?}]", prompt, data.as_ref().unwrap()).chain_err(|| Io("write to flow file".into()))?;
                 *data = None;
             },
             FlowCmd::Int { ref prompt, limits: (low, high), ref mut data } => {
-                write!(file, "> {:?} ({}..{}) [{:?}]", prompt, low, high, data.unwrap()).unwrap();
+                write!(file, "> {:?} ({}..{}) [{:?}]", prompt, low, high, data.unwrap()).chain_err(|| Io("write to flow file".into()))?;
                 *data = None;
             },
             FlowCmd::Start(ref service, ref data) => {
-                write!(file, "start {}", service).unwrap();
+                write!(file, "start {}", service).chain_err(|| Io("write to flow file".into()))?;
                 if let Some(ref data) = *data {
-                    write!(file, "/{}", data).unwrap();
+                    write!(file, "/{}", data).chain_err(|| Io("write to flow file".into()))?;
                 }
             },
-            FlowCmd::Stop(ref service) => write!(file, "stop {}", service).unwrap(),
-            FlowCmd::Send(ref string) => write!(file, ": {}", string).unwrap(),
-            FlowCmd::StopSensors => write!(file, "stop").unwrap(),
+            FlowCmd::Stop(ref service) => write!(file, "stop {}", service).chain_err(|| Io("write to flow file".into()))?,
+            FlowCmd::Send(ref string) => write!(file, ": {}", string).chain_err(|| Io("write to flow file".into()))?,
+            FlowCmd::StopSensors => write!(file, "stop").chain_err(|| Io("write to flow file".into()))?,
         }
+
+        Ok(())
     }
 }
 
