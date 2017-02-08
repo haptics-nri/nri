@@ -97,6 +97,8 @@ name = "bluefox"
 version = "0.1.0"
 dependencies = [
  "comms 0.1.0",
+ "conv 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "custom_derive 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "guilt-by-association 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "image 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -425,11 +427,16 @@ dependencies = [
 [[package]]
 name = "hprof"
 version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "clock_ticks 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "hprof"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+replace = "hprof 0.1.3"
 
 [[package]]
 name = "httparse"
@@ -1072,6 +1079,8 @@ name = "structure"
 version = "0.1.0"
 dependencies = [
  "comms 0.1.0",
+ "conv 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "custom_derive 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "guilt-by-association 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "image 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.20 (registry+https://github.com/rust-lang/crates.io-index)",
