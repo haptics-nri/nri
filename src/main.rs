@@ -365,7 +365,7 @@ fn try_main() -> Result<()> {
                     },
                     CmdFrom::Timein { thread: who }    => {
                         if let Some(then) = timers.remove(who) {
-                            println!("Service {} took {} ms", who, UTC::now() - then);
+                            println!("Service {} took {} ms", who, UTC::now().signed_duration_since(then));
                         } else {
                             bail!("Timein with no matching timeout");
                         }
