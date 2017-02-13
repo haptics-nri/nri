@@ -139,9 +139,7 @@ guilty!{
         ///
         /// In the case of a device driver, this corresponds to gathering one frame or sample of data.
         ///
-        /// Return true if we should wait for a command from the supervisor thread before calling
-        /// step() again. Return false to call step() again right away (unless there is a pending
-        /// command).
+        /// Blocking mode controls the delay between steps.
         fn step(&mut self, data: Option<String>);
 
         /// Tear down the service.
