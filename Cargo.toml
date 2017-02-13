@@ -40,7 +40,7 @@ vicon       = { path = "crates/drivers/vicon"     }
 utils       = { path = "crates/utils"             }
 
 # external deps
-guilt-by-association = "0.2"
+guilt-by-association = "0.4"
 log         = "0.3"
 env_logger  = "0.4"
 hprof       = "0.1"

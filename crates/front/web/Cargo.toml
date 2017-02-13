@@ -19,7 +19,7 @@ comms                = { path = "../../back/comms"     }
 utils                = { path = "../../utils"          }
 flow                 = { path = "../../back/flow"      }
 teensy               = { path = "../../drivers/teensy" }
-guilt-by-association = "0.2"
+guilt-by-association = "0.4"
 lazy_static          = "0.2"
 log                  = "0.3"
 

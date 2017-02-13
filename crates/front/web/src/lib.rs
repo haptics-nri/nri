@@ -249,8 +249,8 @@ pub struct Web {
 
 guilty!{
     impl Controllable for Web {
-        const NAME: &'static str = "web",
-        const BLOCK: Block = Block::Infinite,
+        const NAME: &'static str = "web";
+        const BLOCK: Block = Block::Infinite;
 
         fn setup(tx: mpsc::Sender<CmdFrom>, _: Option<String>) -> Web {
             let (wstx, wsrx) = mpsc::channel();

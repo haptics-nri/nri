@@ -29,8 +29,8 @@ pub struct CLI {
 
 guilty!{
     impl Controllable for CLI {
-        const NAME: &'static str = "cli",
-        const BLOCK: Block = Block::Immediate,
+        const NAME: &'static str = "cli";
+        const BLOCK: Block = Block::Immediate;
 
         fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> CLI {
             CLI { tx: tx }

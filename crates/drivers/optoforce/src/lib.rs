@@ -96,8 +96,8 @@ group_attr!{
 
     guilty!{
         impl Controllable for Optoforce {
-            const NAME: &'static str = "optoforce",
-            const BLOCK: Block = Block::Period(1_000_000),
+            const NAME: &'static str = "optoforce";
+            const BLOCK: Block = Block::Period(1_000_000);
 
             fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Optoforce {
                 let dev = wrapper::Device::new(Default::default());

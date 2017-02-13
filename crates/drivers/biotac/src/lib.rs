@@ -43,8 +43,8 @@ group_attr! {
 
     guilty! {
         impl Controllable for Biotac {
-            const NAME: &'static str = "biotac",
-            const BLOCK: Block = Block::Period(10_000_000),
+            const NAME: &'static str = "biotac";
+            const BLOCK: Block = Block::Period(10_000_000);
 
             fn setup(_: Sender<CmdFrom>, _: Option<String>) -> Biotac {
                 // initialize Cheetah

@@ -58,8 +58,8 @@ group_attr!{
 
     guilty!{
         impl Controllable for Structure {
-            const NAME: &'static str = "structure",
-            const BLOCK: Block = Block::Immediate,
+            const NAME: &'static str = "structure";
+            const BLOCK: Block = Block::Immediate;
 
             fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Structure {
                 wrapper::initialize().unwrap();

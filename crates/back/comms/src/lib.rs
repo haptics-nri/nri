@@ -123,11 +123,10 @@ pub enum Block {
 guilty!{
     /// A service that can be setup and torn down based on commands from a higher power.
     pub trait Controllable {
-        // FIXME no docs allowed yet on guilty consts
-        // Human-readable name of the service
-        const NAME: &'static str,
-        // Desired blocking mode (see documentation for the Block enum)
-        const BLOCK: Block,
+        /// Human-readable name of the service
+        const NAME: &'static str;
+        /// Desired blocking mode (see documentation for the Block enum)
+        const BLOCK: Block;
 
         /// Setup the service.
         ///
@@ -191,8 +190,8 @@ macro_rules! stub {
         use ::comms::{Controllable, Block, CmdFrom};
         guilty!{
             impl Controllable for $t {
-                const NAME: &'static str = stringify!($t),
-                const BLOCK: Block = Block::Infinite,
+                const NAME: &'static str = stringify!($t);
+                const BLOCK: Block = Block::Infinite;
 
                 fn setup(_: ::std::sync::mpsc::Sender<CmdFrom>, _: Option<String>) -> $t {
                     $t

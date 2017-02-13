@@ -58,8 +58,8 @@ group_attr!{
 
     guilty!{
         impl Controllable for Bluefox {
-            const NAME: &'static str = "bluefox",
-            const BLOCK: Block = Block::Immediate,
+            const NAME: &'static str = "bluefox";
+            const BLOCK: Block = Block::Immediate;
 
             fn setup(tx: Sender<CmdFrom>, data: Option<String>) -> Bluefox {
                 let device = wrapper::Device::new().unwrap();

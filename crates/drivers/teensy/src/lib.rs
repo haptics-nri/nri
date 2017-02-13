@@ -325,8 +325,8 @@ group_attr!{
 
     guilty! {
         impl Controllable for Teensy {
-            const NAME: &'static str = "teensy",
-            const BLOCK: Block = Block::Immediate,
+            const NAME: &'static str = "teensy";
+            const BLOCK: Block = Block::Immediate;
 
             fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Teensy {
                 let mut port = serialport();

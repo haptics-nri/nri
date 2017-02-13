@@ -53,8 +53,8 @@ group_attr!{
 
     guilty! {
         impl Controllable for Vicon {
-            const NAME: &'static str = "vicon",
-            const BLOCK: Block = Block::Infinite,
+            const NAME: &'static str = "vicon";
+            const BLOCK: Block = Block::Infinite;
 
             fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Vicon {
                 let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
