@@ -182,7 +182,7 @@ pub trait Pixels<T> {
     fn pixel(&self, i: usize) -> T;
 }
 
-pub fn do_camera<T, Data: Debug + Pixels<T>, F: for<'a> Fn(String, C, &'a Profiler) + Send + Sync + 'static, C: Clone + Send + 'static>(name: &str, func: F, param: C, width: usize, height: usize, channels: usize, color: ColorType, depth: libc::c_uint) -> String {
+pub fn do_camera<T: Copy, Data: Debug + Pixels<T>, F: for<'a> Fn(String, C, &'a Profiler) + Send + Sync + 'static, C: Clone + Send + 'static>(name: &str, func: F, param: C, width: usize, height: usize, channels: usize, color: ColorType, depth: libc::c_uint) -> String {
     let func = Arc::new(func);
     let inname = parse_in_arg(&mut env::args().skip(1));
     attempt!(fs::create_dir_all(Path::new(&inname).parent().unwrap().join(name)));
