@@ -9,6 +9,7 @@ extern crate teensy;
 #[macro_use] extern crate guilt_by_association;
 
 extern crate chrono;
+extern crate shlex;
 
 use comms::{Controllable, CmdFrom, Power, Block};
 use flow::{FLOWS, Comms};
@@ -19,6 +20,7 @@ use std::process::Command;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::Sender;
 use std::time::Duration;
+use shlex::Shlex;
 
 /// Controllable struct for the CLI
 pub struct CLI {
@@ -46,14 +48,14 @@ guilty!{
                 Command::new("sh").args(&["-c", &line[1..]]).status().unwrap();
             } else {
                 for command in line.split(";") {
-                    let mut words = command.trim().split_whitespace(); // TODO use shell quoting
-                    match words.next().unwrap_or("") {
-                        "" => {},
-                        "episode" =>
+                    let mut words = Shlex::new(command.trim());
+                    match words.next().as_ref().map(|s| &s[..]) {
+                        None => {},
+                        Some("episode") =>
                             if let Some(surface) = words.next() {
                                 if let Some(sec_str) = words.next() {
                                     if let Ok(sec) = sec_str.parse::<u64>() {
-                                        self.episode(surface, sec);
+                                        self.episode(&surface, sec);
                                     } else {
                                         errorln!("Invalid duration value (episode <surface> <sec>)");
                                     }
@@ -63,14 +65,14 @@ guilty!{
                             } else {
                                 errorln!("No surface (episode <surface> <sec>)");
                             },
-                        "flow" =>
+                        Some("flow") =>
                             if let Some(flowname) = words.next() {
-                                self.flow(Some(flowname));
+                                self.flow(Some(&flowname));
                             } else {
                                 self.flow(None);
                             },
-                        "cd" => { env::set_current_dir(words.next().unwrap()).unwrap(); },
-                        "sleep" => {
+                        Some("cd") => { env::set_current_dir(words.next().unwrap()).unwrap(); },
+                        Some("sleep") => {
                             if let Some(ms_str) = words.next() {
                                 if let Ok(ms) = ms_str.parse::<u64>() {
                                     self.sleep(ms);
@@ -81,34 +83,34 @@ guilty!{
                                 errorln!("No millisecond value (sleep <ms>)");
                             }
                         },
-                        "start" => {
+                        Some("start") => {
                             while let Some(dev) = words.next() {
                                 let mut split = dev.splitn(2, '/');
                                 self.start(split.next().unwrap(), split.next());
                             }
                         },
-                        "stop" => {
+                        Some("stop") => {
                             while let Some(dev) = words.next() {
-                                self.stop(dev);
+                                self.stop(&dev);
                             }
                         },
-                        "status" => {
+                        Some("status") => {
                             println!("parked: {:?}", teensy::ParkState::metermaid());
                             println!("scribe: {:?}", scribe::COUNT.load(Ordering::SeqCst));
                         },
-                        "quit" => {
+                        Some("quit") => {
                             self.tx.send(CmdFrom::Quit).unwrap();
                         },
-                        "panic" => {
+                        Some("panic") => {
                             self.tx.send(CmdFrom::Panic).unwrap();
                         },
-                        "reboot" => {
+                        Some("reboot") => {
                             self.tx.send(CmdFrom::Power(Power::Reboot)).unwrap();
                         }
-                        "poweroff" => {
+                        Some("poweroff") => {
                             self.tx.send(CmdFrom::Power(Power::PowerOff)).unwrap();
                         }
-                        "data" => {
+                        Some("data") => {
                             self.tx.send(CmdFrom::Data(words.collect::<Vec<_>>().join(" "))).unwrap();
                         },
                         _ => println!("Unknown command!")
@@ -220,9 +222,7 @@ impl CLI {
             }
 
             fn send(&self, msg: String) {
-                print!("\t{} ", &msg[4..]);
-                io::stdout().flush().unwrap();
-                io::stdin().read_line(&mut String::new()).unwrap();
+                println!("\t{} ", &msg[4..]);
             }
 
             fn rpc<T, F: Fn(String) -> Result<T, String>>(&self, prompt: String, validator: F) -> T {
@@ -242,7 +242,11 @@ impl CLI {
         if let Some(name) = name {
             let mut locked_flows = FLOWS.write().unwrap();
             if let Some(found) = locked_flows.get_mut(&*name) {
+                println!("Starting {}!", found.name);
                 loop {
+                    print!("\t(press enter to continue) ");
+                    io::stdout().flush().unwrap();
+                    io::stdin().read_line(&mut String::new()).unwrap();
                     match found.run(ParkState::None, &self.tx, CLIComms) {
                         Ok(flow::EventContour::Finishing) => break,
                         Ok(_) => continue,
