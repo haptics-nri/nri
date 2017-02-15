@@ -55,6 +55,10 @@ libc        = "0.2"
 csv         = "0.15"
 lodepng     = "0.13" # TODO migrate to image
 
+[build-dependencies]
+foreman     = { git = "https://github.com/durka/foreman" }
+
 [replace]
 "hprof:0.1.3" = { path = "overrides/hprof" }
+"strum_macros:0.1.0" = { git = "https://github.com/durka/strum", branch = "abs-paths" }
 
