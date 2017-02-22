@@ -5,15 +5,16 @@ Stick-and-Camera Episode
     "Starting new episode!"
 
 - Capture
-    start teensy
+    start teensy bluefox/15 structure
     : teensy ref int
-    start bluefox/15
     : bluefox disk start
+    : structure disk start
     "Now recording!"
 - Finish
+    : structure disk stop
     : bluefox disk stop
     "Writing to disk, please wait..."
-    stop bluefox teensy
+    stop structure bluefox teensy
     "Done!"
 - Wrap up
     > "surface name"

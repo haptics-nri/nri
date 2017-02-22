@@ -1,0 +1,10 @@
+Test
+
+- Begin
+    stop
+    "Starting!"
+
+- Questions
+    > "hardness"     (1..5)
+    > "smoothness"   (1..5)
+

@@ -1,20 +1,21 @@
-OptoForce-and-Camera Episode
+Stick-and-Camera Episode
 
 - Begin
     stop
     "Starting new episode!"
 
 - Capture
-    start teensy optoforce bluefox/15 structure
-    : teensy ref int
+    start structure
+    start bluefox
+    start teensy
     : bluefox disk start
     : structure disk start
     "Now recording!"
 - Finish
-    : structure disk stop
     : bluefox disk stop
+    : structure disk stop
     "Writing to disk, please wait..."
-    stop structure bluefox optoforce teensy
+    stop teensy bluefox structure
     "Done!"
 - Wrap up
     > "surface name"

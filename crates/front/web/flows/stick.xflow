@@ -1,0 +1,19 @@
+Stick-only Episode
+
+- Begin
+    stop
+    "Starting new episode!"
+
+- Capture
+    start vicon
+    start teensy
+    "Now recording!"
+- Finish
+    "Writing to disk, please wait..."
+    stop teensy vicon
+    "Done!"
+- Wrap up 1
+    > "surface name"
+- Wrap up 2
+    > "tooling ball diameter"
+

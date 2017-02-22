@@ -1,15 +1,14 @@
-End-effector weighing
+Stick-only (not even Vicon) Episode
 
 - Begin
     stop
-    "Starting data collection"
+    "Starting new episode!"
 
 - Capture
     start teensy
     "Now recording!"
 - Finish
+    "Writing to disk, please wait..."
     stop teensy
     "Done!"
-- Wrap up
-    > "end-effector name"
 
