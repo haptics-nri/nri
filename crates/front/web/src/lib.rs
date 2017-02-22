@@ -26,8 +26,10 @@ use std::path::Path;
 use std::sync::{Mutex, RwLock, mpsc};
 use std::thread::JoinHandle;
 use std::collections::BTreeMap;
+use std::{env, str};
 use std::io::Read;
 use std::fs::File;
+use std::process::Command;
 use comms::{Controllable, CmdFrom, Power, Block};
 use teensy::ParkState;
 use iron::prelude::*;
@@ -230,9 +232,25 @@ fn flow(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
                       let mut data = BTreeMap::<String, Json>::new();
                       data.insert("flows".to_owned(), FLOWS.read().unwrap().to_json());
                       comms.send(format!("flow {}", render("flows", data)));
+                      comms.send(format!("diskfree {}", disk_free()));
 
                       resp
                   })
+}
+
+/// Measure free disk space in gigabytes
+fn disk_free() -> String {
+    str::from_utf8(
+        &Command::new("df") // measure disk free space
+            .arg("-h")     // human-readable units
+            .arg("--output=avail") // only print free space
+            .arg(env::current_dir().unwrap().to_str().unwrap()) // device corresponding to $PWD
+            .output().unwrap().stdout).unwrap() // read all output
+        .split("\n") // split lines
+        .skip(1) // skip first line
+        .next().unwrap() // use second line
+        .trim() // trim whitespace
+        .to_owned()
 }
 
 /// Controllable struct for the web server

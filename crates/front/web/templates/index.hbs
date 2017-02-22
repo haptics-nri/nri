@@ -144,6 +144,9 @@
                         serv = words[1];
                         $("#light-" + serv).css("background-color", "red");
                         break;
+                    case "diskfree":
+                        $("#diskfree").html(words[1]);
+                        break;
                 }
             };
             window.socket.onopen = function (event) {
@@ -260,6 +263,7 @@
                 <table style="border-spacing: 0.5em;
                               table-layout: fixed">
                     <tr>
+                        <td id="diskfree" style="padding-right: 0.5em"></span>
                         <td id="timer" style="padding-right: 0.5em" onclick="start_timer()"></td>
                         {{#each services}}
                             <td id="light-{{shortname}}" style="font-family: monospace;
