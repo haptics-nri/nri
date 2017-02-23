@@ -50,7 +50,7 @@ trait OptionExt<T> {
 impl<T> OptionExt<T> for Option<T> {
     fn put(&mut self, it: T) -> &mut T {
         *self = Some(it);
-        self.as_mut().unwrap()
+        self.as_mut().unwrap() // ok since the value is put in on the line above
     }
 }
 
@@ -262,7 +262,7 @@ impl Flow {
         let mut i = 0;
         while lines.peek().is_some() {
             i += 1;
-            let header = lines.next().unwrap();
+            let header = lines.next().unwrap(); // ok because of the peek in the loop condition
             
             if header.is_empty() { continue; }
             let header = header.split("=>").collect::<Vec<_>>();
@@ -291,9 +291,10 @@ impl Flow {
             
             let mut script = vec![];
             
-            while lines.peek().is_some() && lines.peek().unwrap().starts_with(' ') {
+            while lines.peek().is_some()
+                  && lines.peek().unwrap().starts_with(' ') { // ok because of the peek
                 i += 1;
-                let line = lines.next().unwrap();
+                let line = lines.next().unwrap(); // ok because of the peek in the loop condition
                 let line = line.trim();
                 
                 if        line.starts_with(':') {
@@ -335,7 +336,9 @@ impl Flow {
                         Some("start") => {
                             for word in words {
                                 let mut split = word.splitn(2, '/');
-                                script.push((FlowCmd::Start(split.next().unwrap().to_owned(), split.next().map(|s| s.to_owned())), None));
+                                script.push((FlowCmd::Start(split.next().unwrap().to_owned(),
+                                                // ok because splitn always returns at least one
+                                             split.next().map(|s| s.to_owned())), None));
                             }
                         },
                         Some(_) => Err(ParseFlow(i, "invalid command"))?,
@@ -370,11 +373,11 @@ impl FlowState {
     pub fn finalize(&mut self, file: &mut File) -> Result<()> {
         use self::ErrorKind::*;
 
-        writeln!(file, "- {} [{}]", self.name, StampPrinter(self.stamp.unwrap())).unwrap();
+        writeln!(file, "- {} [{}]", self.name, StampPrinter(self.stamp.ok_or("FlowState::finalize called before FlowState::run")?)).chain_err(|| Io("write to flow file".into()))?;
         for &mut (ref mut c, ref mut stamp) in &mut self.script {
             write!(file, "    ").chain_err(|| Io("write to flow file".into()))?;
             c.finalize(file)?;
-            writeln!(file, " [{}]", StampPrinter(stamp.unwrap())).chain_err(|| Io("write to flow file".into()))?;
+            writeln!(file, " [{}]", StampPrinter(stamp.ok_or("FlowState::finalize called before FlowState::run")?)).chain_err(|| Io("write to flow file".into()))?;
             *stamp = None;
         }
         self.done = false;
@@ -441,7 +444,7 @@ impl FlowCmd {
                 rpc!(tx, CmdFrom::Stop, service.clone()).chain_err(|| Rpc(format!("stop {}", service)))?;
             }
             FlowCmd::Send(ref string) => {
-                tx.send(CmdFrom::Data(String::from("to ") + string)).unwrap();
+                tx.send(CmdFrom::Data(String::from("to ") + string)).chain_err(|| Rpc(format!("send to {}", string)))?;
             }
             FlowCmd::StopSensors => {
                 for &svc in &["bluefox", "structure", "biotac", "optoforce", "teensy"] {
@@ -459,11 +462,11 @@ impl FlowCmd {
         match *self {
             FlowCmd::Message(ref msg) => write!(file, "{:?}", msg).chain_err(|| Io("write to flow file".into()))?,
             FlowCmd::Str { ref prompt, ref mut data } => {
-                write!(file, "> {:?} [{:?}]", prompt, data.as_ref().unwrap()).chain_err(|| Io("write to flow file".into()))?;
+                write!(file, "> {:?} [{:?}]", prompt, data.as_ref().ok_or("FlowCmd::finalize called before FlowCmd::run")?).chain_err(|| Io("write to flow file".into()))?;
                 *data = None;
             },
             FlowCmd::Int { ref prompt, limits: (low, high), ref mut data } => {
-                write!(file, "> {:?} ({}..{}) [{:?}]", prompt, low, high, data.unwrap()).chain_err(|| Io("write to flow file".into()))?;
+                write!(file, "> {:?} ({}..{}) [{:?}]", prompt, low, high, data.ok_or("FlowCmd::finalize called before FlowCmd::run")?).chain_err(|| Io("write to flow file".into()))?;
                 *data = None;
             },
             FlowCmd::Start(ref service, ref data) => {
