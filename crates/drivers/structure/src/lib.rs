@@ -62,7 +62,7 @@ group_attr!{
             const BLOCK: Block = Block::Immediate;
 
             fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Structure {
-                wrapper::initialize().unwrap();
+                utils::in_original_dir(|| wrapper::initialize().unwrap());
                 let device = wrapper::Device::new(None).unwrap();
 
                 let depth = wrapper::VideoStream::new(&device, wrapper::OniSensorType::Depth).unwrap();

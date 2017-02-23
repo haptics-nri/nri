@@ -61,7 +61,7 @@ group_attr! {
 
                 let cheetah = unsafe {
                     let mut cheetah: wrapper::biotac::Cheetah = mem::zeroed::<wrapper::biotac::Cheetah>();
-                    assert!(0 == wrapper::biotac::bt_cheetah_initialize(&info, &mut cheetah));
+                    assert!(0 == utils::in_original_dir(|| wrapper::biotac::bt_cheetah_initialize(&info, &mut cheetah)).unwrap());
                     cheetah
                 };
 

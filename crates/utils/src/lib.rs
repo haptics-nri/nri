@@ -1,13 +1,24 @@
+#[macro_use] extern crate lazy_static;
 extern crate notify;
 
 use notify::{Watcher, RecommendedWatcher};
-use std::fs;
+use std::{env, fs, io};
 use std::path::{Path, PathBuf};
 use std::ops::Deref;
 use std::sync::{mpsc, RwLock};
 use std::thread;
 
 pub mod config;
+
+lazy_static! { static ref ORIGINAL_DIR: PathBuf = env::current_dir().unwrap(); }
+
+pub fn in_original_dir<F: FnOnce() -> R, R>(f: F) -> io::Result<R> {
+    let before = env::current_dir()?;
+    env::set_current_dir(&*ORIGINAL_DIR)?;
+    let ret = f();
+    env::set_current_dir(before)?;
+    Ok(ret)
+}
 
 /// Just like println!, but prints to stderr
 #[macro_export]

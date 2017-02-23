@@ -7,9 +7,10 @@ authors = ["Alex Burka <aburka@seas.upenn.edu>"]
 debug = true
 
 [features]
-nightly = []
+nightly = ["lazy_static/nightly"]
 
 [dependencies]
+lazy_static = "0.2"
 hprof  = "0.1"
 notify = "2.5"
 
