@@ -5,7 +5,7 @@ OptoForce-and-Camera Episode
     "Starting new episode!"
 
 - Capture
-    start teensy optoforce bluefox/15 structure
+    start teensy optoforce
     : teensy ref int
     : bluefox disk start
     : structure disk start
@@ -14,7 +14,7 @@ OptoForce-and-Camera Episode
     : structure disk stop
     : bluefox disk stop
     "Writing to disk, please wait..."
-    stop structure bluefox optoforce teensy
+    stop optoforce teensy
     "Done!"
 - Wrap up
     > "surface name"

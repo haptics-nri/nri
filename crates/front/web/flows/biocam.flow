@@ -5,7 +5,7 @@ BioTac-and-Camera Episode
     "Starting new episode!"
 
 - Capture
-    start teensy biotac bluefox/15 structure
+    start teensy biotac
     : teensy ref int
     : bluefox disk start
     : structure disk start
@@ -14,7 +14,7 @@ BioTac-and-Camera Episode
     : structure disk stop
     : bluefox disk stop
     "Writing to disk, please wait..."
-    stop structure bluefox biotac teensy
+    stop biotac teensy
     "Done!"
 - Wrap up
     > "surface name"
