@@ -1,7 +1,6 @@
 Stick-and-Camera Episode
 
 - Begin
-    stop
     "Starting new episode!"
 
 - Capture
@@ -18,4 +17,5 @@ Stick-and-Camera Episode
     "Done!"
 - Wrap up
     > "surface name"
+    > "slippery/sticky" (1..5)
 
