@@ -1,20 +1,11 @@
 #![allow(dead_code)] // these are full bindings to the adapter lib
 
 use libc::{c_void, c_int, c_char, c_uchar, c_float, c_double};
+use std::{f32, fmt, thread};
 use std::default::Default;
-use std::f32;
 use std::ffi::CString;
-use std::fmt;
 use std::ops::Deref;
-
-// FIXME this is totally undefined behavior all the time!
-// for literals: b"str\0".as_ptr()
-// for strings: keep the CString alive until the C function returns
-macro_rules! c_str {
-    ($s:expr) => {
-        CString::new($s).unwrap().as_ptr()
-    }
-}
+use std::time::Duration;
 
 macro_rules! try_opt {
     ($e:expr) => {
@@ -84,7 +75,8 @@ impl Device {
     }
 
     pub fn connect(&self, opt: ConnectOptions) -> Result<(), ()> {
-        if unsafe { lofa_sensor_connect(self.pdev, c_str!(opt.path), opt.baud) } {
+        let path = CString::new(opt.path).unwrap();
+        if unsafe { lofa_sensor_connect(self.pdev, path.as_ptr(), opt.baud) } {
             Ok(())
         } else {
             Err(())
@@ -291,7 +283,8 @@ impl Default for Settings {
 impl Drop for Device {
     fn drop(&mut self) {
         unsafe {
-            lofa_sensor_disconnect(self.pdev, false);
+            lofa_sensor_disconnect(self.pdev, true);
+            thread::sleep(Duration::from_millis(250));
             lofa_free_sensor(self.pdev);
         }
     }
