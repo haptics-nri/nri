@@ -279,6 +279,13 @@ fn handle<C: Controllable>(block: bool, c: &mut C, rx: &Receiver<CmdTo>, data: &
 /// Runs in a loop receiving commands from the supervisor thread. Manages a Controllable instance,
 /// calling its setup()/step()/teardown() methods as necessary.
 pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) -> Result<()> {
+    let mut block = guilty!(C::BLOCK);
+    let actual_period = match block {
+        Block::Immediate      => 0,
+        Block::Infinite       => -1,
+        Block::Period(period) => period,
+    };
+
     'alive: loop {
         let mut data;
 
@@ -298,13 +305,6 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) -> Result<(
         tx.send(CmdFrom::Timein { thread: guilty!(C::NAME) }).chain_err(|| ErrorKind::MpscCmd(Some(guilty!(C::NAME))))?;
 
         tx.send(CmdFrom::Data(format!("to web start {}", guilty!(C::NAME)))).chain_err(|| ErrorKind::MpscCmd(Some(guilty!(C::NAME))))?;
-
-        let mut block = guilty!(C::BLOCK);
-        let actual_period = match block {
-            Block::Immediate      => 0,
-            Block::Infinite       => -1,
-            Block::Period(period) => period,
-        };
 
         utils::PROF.with(|wrapped_prof| {
             *wrapped_prof.borrow_mut() = Some(hprof::Profiler::new(guilty!(C::NAME)));
