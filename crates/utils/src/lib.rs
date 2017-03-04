@@ -5,14 +5,20 @@ use notify::{Watcher, RecommendedWatcher};
 use std::{env, fs, io};
 use std::path::{Path, PathBuf};
 use std::ops::Deref;
-use std::sync::{mpsc, RwLock};
+use std::sync::{mpsc, RwLock, Mutex};
 use std::thread;
 
 pub mod config;
 
-lazy_static! { static ref ORIGINAL_DIR: PathBuf = env::current_dir().unwrap(); }
-
 pub fn in_original_dir<F: FnOnce() -> R, R>(f: F) -> io::Result<R> {
+    lazy_static! {
+        static ref ORIGINAL_DIR: PathBuf = env::current_dir().unwrap();
+        static ref CRITICAL_SECTION: Mutex<()> = Mutex::new(());
+    }
+
+    // ensure that two threads don't fight over the current dir
+    let _guard = CRITICAL_SECTION.lock().unwrap();
+
     let before = env::current_dir()?;
     env::set_current_dir(&*ORIGINAL_DIR)?;
     let ret = f();
