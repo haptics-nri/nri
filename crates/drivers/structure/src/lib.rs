@@ -126,6 +126,7 @@ group_attr!{
                 match cmd.as_ref().map(|s| s as &str) {
                     Some("disk start") => {
                         println!("Started Structure recording.");
+                        self.stampfile = Writer::with_file("structure_times.csv");
                         self.writing = true;
                         self.writer.set_index(self.i);
                     },

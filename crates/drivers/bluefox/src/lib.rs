@@ -166,6 +166,7 @@ group_attr!{
                 match data.as_ref().map(|s| s as &str) {
                     Some("disk start") => {
                         println!("Started Bluefox recording.");
+                        self.stampfile = Writer::with_file("bluefox_times.csv");
                         self.writing = true;
                         self.writer.set_index(self.i);
                     },
