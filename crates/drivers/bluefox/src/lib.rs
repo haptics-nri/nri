@@ -65,7 +65,7 @@ group_attr!{
                 let device = wrapper::Device::new().unwrap();
                 device.request_reset().unwrap();
 
-                let mut fps = 7.5;
+                let mut fps = 15.0;
                 let mut format = (CameraPixelFormat::RGB8, DestPixelFormat::Auto);
                 if let Some(ref data) = data {
                     let mut parts = data.split(",");
