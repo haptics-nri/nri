@@ -16,6 +16,3 @@
 [submodule "hprof"]
 	path = overrides/hprof
 	url = git@github.com:cmr/hprof
-[submodule "bolt"]
-	path = crates/drivers/biotac/bolt
-	url = git@github.com:IanTheEngineer/Penn-haptics-bolt
