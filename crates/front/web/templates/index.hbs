@@ -63,13 +63,16 @@
             }
             function prompt(text, thenok, thencancel) {
                 thenok = thenok || function (s) { console.log("prompt modal dismissed by clicking OK, contents \"" + s + "\""); };
-                thencancel = thencancel || function () { console.log("prompt modal cancelled"); };
 
                 $("#prompt #text").html(text);
                 $("#prompt #input").val("");
+                if (text.endsWith("scale)")) {
+                    $("#prompt #input").attr("type", "number");
+                } else {
+                    $("#prompt #input").attr("type", "text");
+                }
                 $("#prompt #ok").unbind('click.prompt').bind('click.prompt', function () { thenok($("#prompt #input").val()); });
-                $("#prompt #cancel").unbind('click.prompt').bind('click.prompt', thencancel);
-                $("#prompt").modal("show");
+                $("#prompt").modal({ show: true, backdrop: "static" });
             }
 
             function send(s) {
@@ -109,6 +112,12 @@
                 $("#alert").on("hidden.bs.modal", next);
                 $("#confirm").on("hidden.bs.modal", next);
                 $("#prompt").on("hidden.bs.modal", next);
+                $("#prompt").on("keypress", function (e) {
+                    if (e.which == 13) {
+                        $("#prompt #ok").click();
+                        e.preventDefault();
+                    }
+                });
             };
 
             window.socket = new WebSocket("ws://{{server}}", "rust-websocket");
@@ -328,12 +337,11 @@
                     <div class="modal-body">
                         <div id="text"></div>
                         <form>
-                            <input type="text" id="input"/>
+                            <input type="text" id="input" autofocus />
                         </form>
                     </div>
                     <div class="modal-footer">
                         <a href="#" class="btn btn-primary" data-dismiss="modal" id="ok">OK</a>
-                        <a href="#" class="btn btn-primary" data-dismiss="modal" id="cancel">Cancel</a>
                     </div>
                 </div>
             </div>
