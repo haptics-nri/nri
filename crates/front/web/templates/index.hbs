@@ -36,33 +36,48 @@
                     words = data.split(' ');
                     switch (words[0]) {
                         case "msg":
-                            alert(data.slice(data.indexOf(" ")));
+                            alert(data.slice(data.indexOf(" ")),
+                                    null,
+                                    function () {
+                                        $("#abort").click();
+                                    });
                             break;
                         case "prompt":
-                            prompt(data.slice(data.indexOf(" ")), function (s) { send("RPC" + window.wsid + " " + s); });
+                            prompt(data.slice(data.indexOf(" ")),
+                                    function (s) {
+                                        send("RPC" + window.wsid + " " + s);
+                                    },
+                                    function () {
+                                        send("RPC" + window.wsid + " ABORT");
+                                    });
                             break;
                     }
                 }
             }
 
-            function alert(text, then) {
+            function alert(text, thenok, thencancel) {
                 then = then || function () { console.log("alert modal dismissed by clicking OK"); };
+                thencancel = thencancel || function () { console.log("alert modal cancelled"); };
 
                 $("#alert .modal-body").html(text);
                 $("#alert #ok").unbind('click.alert').bind('click.alert', then);
+                $("#alert #cancel").unbind('click.alert').bind('click.alert', thencancel);
                 $("#alert").modal("show");
             }
-            function confirm(text, thenyes, thenno) {
+            function confirm(text, thenyes, thenno, thencancel) {
                 thenyes = thenyes || function () { console.log("confirm modal dismissed by clicking Yes"); };
                 thenno = thenno || function () { console.log("confirm modal dismissed by clicking No"); };
+                thencancel = thencancel || function () { console.log("confirm modal cancelled"); };
 
                 $("#confirm .modal-body").html(text);
                 $("#confirm #yes").unbind('click.confirm').bind('click.confirm', thenyes);
                 $("#confirm #no").unbind('click.confirm').bind('click.confirm', thenno);
+                $("#confirm #cancel").unbind('click.confirm').bind('click.confirm', thencancel);
                 $("#confirm").modal("show");
             }
             function prompt(text, thenok, thencancel) {
                 thenok = thenok || function (s) { console.log("prompt modal dismissed by clicking OK, contents \"" + s + "\""); };
+                thencancel = thencancel || function () { console.log("prompt modal cancelled"); };
 
                 $("#prompt #text").html(text);
                 $("#prompt #input").val("");
@@ -72,6 +87,7 @@
                     $("#prompt #input").attr("type", "text");
                 }
                 $("#prompt #ok").unbind('click.prompt').bind('click.prompt', function () { thenok($("#prompt #input").val()); });
+                $("#prompt #cancel").unbind('click.prompt').bind('click.prompt', thencancel);
                 $("#prompt").modal({ show: true, backdrop: "static" });
             }
 
@@ -305,6 +321,7 @@
                     </div>
                     <div class="modal-footer">
                         <a href="#" class="btn btn-primary" data-dismiss="modal" id="ok">OK</a>
+                        <a href="#" class="btn btn-primary" data-dismiss="modal" id="cancel">Cancel</a>
                     </div>
                 </div>
             </div>
@@ -322,6 +339,7 @@
                     <div class="modal-footer">
                         <a href="#" class="btn btn-primary" data-dismiss="modal" id="yes">Yes</a>
                         <a href="#" class="btn btn-primary" data-dismiss="modal" id="no">No</a>
+                        <a href="#" class="btn btn-primary" data-dismiss="modal" id="cancel">Cancel</a>
                     </div>
                 </div>
             </div>
@@ -342,6 +360,7 @@
                     </div>
                     <div class="modal-footer">
                         <a href="#" class="btn btn-primary" data-dismiss="modal" id="ok">OK</a>
+                        <a href="#" class="btn btn-primary" data-dismiss="modal" id="cancel">Cancel</a>
                     </div>
                 </div>
             </div>

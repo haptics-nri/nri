@@ -225,14 +225,14 @@ impl CLI {
                 println!("\t{} ", &msg[4..]);
             }
 
-            fn rpc<T, F: Fn(String) -> Result<T, String>>(&self, prompt: String, validator: F) -> T {
+            fn rpc<T, F: Fn(String) -> Result<T, String>>(&self, prompt: String, validator: F) -> Option<T> {
                 loop {
                     print!("\t{}: ", &prompt[7..]);
                     io::stdout().flush().unwrap();
                     let mut input = String::new();
                     io::stdin().read_line(&mut input).unwrap();
                     match validator(input.clone()) {
-                        Ok(ret) => return ret,
+                        Ok(ret) => return Some(ret),
                         Err(msg) => println!("\t{}", &msg[7..])
                     }
                 }

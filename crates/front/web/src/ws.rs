@@ -9,7 +9,7 @@ use websocket::{sender, header, stream, Server, Client};
 use url::Host;
 
 lazy_static! {
-    pub static ref RPC_SENDERS: Mutex<HashMap<usize, mpsc::Sender<String>>>         = Mutex::new(HashMap::new());
+    pub static ref RPC_SENDERS: Mutex<HashMap<usize, mpsc::Sender<Option<String>>>> = Mutex::new(HashMap::new());
     pub static ref WS_SENDERS:  Mutex<Vec<sender::Sender<stream::WebSocketStream>>> = Mutex::new(Vec::new());
 }
 
@@ -37,8 +37,8 @@ impl flow::Comms for Comms {
         locked_senders[self.wsid].send_message(&Message::text(msg)).unwrap();
     }
 
-    fn rpc<T, F: Fn(String) -> Result<T, String>>(&self, prompt: String, validator: F) -> T {
-        let go = |prompt: &str| -> String {
+    fn rpc<T, F: Fn(String) -> Result<T, String>>(&self, prompt: String, validator: F) -> Option<T> {
+        let go = |prompt: &str| -> Option<String> {
             let (tx, rx) = mpsc::channel();
             println!("Waiting on RPC from WSID {}", self.wsid);
             {
@@ -50,13 +50,17 @@ impl flow::Comms for Comms {
             rx.recv().unwrap()
         };
 
-        let mut answer = go(&prompt);
+        let mut maybe_answer = go(&prompt);
         loop {
-            match validator(answer) {
-                Ok(ret) => return ret,
-                Err(admonish) => {
-                    answer = go(&format!("{} {}", admonish, prompt));
+            if let Some(answer) = maybe_answer {
+                match validator(answer) {
+                    Ok(ret) => return Some(ret),
+                    Err(admonish) => {
+                        maybe_answer = go(&format!("{} {}", admonish, prompt));
+                    }
                 }
+            } else {
+                return None;
             }
         }
     }
@@ -139,7 +143,11 @@ pub fn spawn(ctx: mpsc::Sender<CmdFrom>, wsrx: mpsc::Receiver<Message<'static>>)
                                         let locked_rpcs = RPC_SENDERS.lock().unwrap();
                                         println!("Received RPC for WSID {}: {}", wsid, msg);
                                         if let Some(rpc) = locked_rpcs.get(&id) {
-                                            rpc.send(msg).unwrap();
+                                            if msg == "ABORT" {
+                                                rpc.send(None).unwrap();
+                                            } else {
+                                                rpc.send(Some(msg)).unwrap();
+                                            }
                                         } else {
                                             locked_senders[id].send_message(&Message::text("RPC ERROR: nobody listening".to_owned())).unwrap();
                                         }

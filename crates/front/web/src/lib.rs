@@ -217,11 +217,16 @@ fn flow(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
                       let comms = ws::Comms::new(wsid);
 
                       let resp = Ok(match &*action {
-                              "start" | "continue" => {
+                              a @ "start" | a @ "continue" | a @ "abort" => {
                                   let mut locked_flows = FLOWS.write().unwrap();
                                   if let Some(found) = locked_flows.get_mut(&*flow) {
-                                      let contour = found.run(ParkState::metermaid().unwrap(), mtx.lock().unwrap().deref(), comms.clone());
-                                      Response::with((status::Ok, format!("{:?} \"{}\" flow", contour, flow)))
+                                      if a == "abort" {
+                                          found.abort(comms.clone()).unwrap();
+                                          Response::with((status::Ok, format!("Aborting \"{}\" flow", flow)))
+                                      } else {
+                                          let contour = found.run(ParkState::metermaid().unwrap(), mtx.lock().unwrap().deref(), comms.clone()).unwrap();
+                                          Response::with((status::Ok, format!("{:?} \"{}\" flow", contour, flow)))
+                                      }
                                   } else {
                                       Response::with((status::BadRequest, format!("Could not find \"{}\" flow", flow)))
                                   }

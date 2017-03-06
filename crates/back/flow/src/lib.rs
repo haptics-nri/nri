@@ -40,6 +40,8 @@ error_chain! {
             description("RPC error")
             display("RPC error while trying to {}", action)
         }
+
+        FlowCanceled {}
     }
 }
 
@@ -87,7 +89,7 @@ lazy_static! {
 pub trait Comms: Clone {
     fn print(&self, msg: String);
     fn send(&self, msg: String);
-    fn rpc<T, F: Fn(String) -> StdResult<T, String>>(&self, prompt: String, validator: F) -> T;
+    fn rpc<T, F: Fn(String) -> StdResult<T, String>>(&self, prompt: String, validator: F) -> Option<T>;
 }
 
 #[derive(Debug, PartialEq)]
@@ -158,6 +160,29 @@ impl Flow {
     pub fn new(name: String, shortname: String, states: Vec<FlowState>) -> Flow {
         Flow { name: name, shortname: shortname, active: false, almostdone: false, states: states, stamp: None, dir: None, id: None }
     }
+    
+    pub fn abort<C: Comms>(&mut self, comms: C) -> Result<()> {
+        use self::ErrorKind::*;
+        // flow canceled! clear everything!
+
+        comms.print("Aborting flow.".into());
+
+        self.active = false;
+        self.almostdone = false;
+        let cap = Vec::with_capacity(self.states.len());
+        let states = mem::replace(&mut self.states, cap);
+        for state in states {
+            let FlowState { name, park, script, .. } = state;
+            self.states.push(FlowState::new(name, park, script));
+        }
+        if let Some(dir) = self.dir.take() {
+            let epdir = env::current_dir().chain_err(|| Io("get current directory".into()))?;
+            env::set_current_dir(&dir).chain_err(|| Io(format!("set current directory to {:?}", dir)))?;
+            fs::remove_dir_all(&epdir).chain_err(|| Io(format!("delete directory {:?}", epdir)))?;
+        }
+
+        Ok(())
+    }
 
     pub fn run<C: Comms>(&mut self, park: ParkState, tx: &mpsc::Sender<CmdFrom>, comms: C) -> Result<EventContour> {
         // TODO refactor this confusing function
@@ -198,11 +223,16 @@ impl Flow {
         }
 
         // find the next eligible state (if there is one)
+        let mut abort = false;
         if let Some(state) = self.states.iter_mut().skip_while(|s| s.done).next() {
             if state.park.map_or(true, |p| p == park) {
                 ret = EventContour::Continuing;
                 comms.print(format!("Executing state {}", state.name));
-                state.run(tx, comms.clone())?;
+                match state.run(tx, comms.clone()) {
+                    Ok(()) => (),
+                    Err(Error(ErrorKind::FlowCanceled, ..)) => abort = true,
+                    Err(e) => return Err(e)
+                }
                 comms.print(format!("Finished executing state {}", state.name));
             } else if let Some(goal) = state.park {
                 comms.print(format!("Waiting for parking lot state to be {:?} (currently {:?})", goal, park));
@@ -210,6 +240,11 @@ impl Flow {
             }
         } else {
             comms.print(format!("No applicable states."));
+        }
+
+        if abort {
+            self.abort(comms)?;
+            return Ok(EventContour::Finishing);
         }
 
         let almostdone = match self.states.last() {
@@ -403,35 +438,35 @@ impl FlowCmd {
             FlowCmd::Message(ref msg) => comms.send(format!("msg {}", msg)),
             FlowCmd::Str { ref prompt, ref mut data } => {
                 assert!(data.is_none());
-                *data = Some(comms.rpc(
-                                    format!("prompt Please enter {}",
-                                            prompt),
-                                    |x| {
-                                        if x.is_empty() {
-                                            Err("prompt That's an empty string!".to_owned())
-                                        } else {
-                                            Ok(x)
-                                        }
-                                    }));
+                *data = Some(comms.rpc(format!("prompt Please enter {}",
+                                               prompt),
+                                       |x| {
+                                           if x.is_empty() {
+                                               Err("prompt That's an empty string!".to_owned())
+                                           } else {
+                                               Ok(x)
+                                           }
+                                       })
+                                       .ok_or(ErrorKind::FlowCanceled)?);
             }
             FlowCmd::Int { ref prompt, limits: (low, high), ref mut data } => {
                 assert!(data.is_none());
-                *data = Some(comms.rpc(
-                                    format!("prompt Please select {} ({}-{} scale)",
-                                            prompt, low, high),
-                                    |x| {
-                                        match x.trim().parse() {
-                                            Ok(i) if i >= low && i <= high => {
-                                                Ok(i)
-                                            }
-                                            Ok(_) => {
-                                                Err("prompt Out of range!".to_owned())
-                                            }
-                                            Err(_) => {
-                                                Err("prompt Not an integer!".to_owned())
-                                            }
-                                        }
-                                    }));
+                *data = Some(comms.rpc(format!("prompt Please select {} ({}-{} scale)",
+                                               prompt, low, high),
+                                       |x| {
+                                           match x.trim().parse() {
+                                               Ok(i) if i >= low && i <= high => {
+                                                   Ok(i)
+                                               }
+                                               Ok(_) => {
+                                                   Err("prompt Out of range!".to_owned())
+                                               }
+                                               Err(_) => {
+                                                   Err("prompt Not an integer!".to_owned())
+                                               }
+                                           }
+                                       })
+                                       .ok_or(ErrorKind::FlowCanceled)?);
             }
             FlowCmd::Start(ref service, ref data) => {
                 comms.print(format!("Flow starting service {}", service));
