@@ -56,11 +56,11 @@
             }
 
             function alert(text, thenok, thencancel) {
-                then = then || function () { console.log("alert modal dismissed by clicking OK"); };
+                thenok = thenok || function () { console.log("alert modal dismissed by clicking OK"); };
                 thencancel = thencancel || function () { console.log("alert modal cancelled"); };
 
                 $("#alert .modal-body").html(text);
-                $("#alert #ok").unbind('click.alert').bind('click.alert', then);
+                $("#alert #ok").unbind('click.alert').bind('click.alert', thenok);
                 $("#alert #cancel").unbind('click.alert').bind('click.alert', thencancel);
                 $("#alert").modal("show");
             }
