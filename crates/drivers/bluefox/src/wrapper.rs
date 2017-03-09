@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code, non_camel_case_types)]
 
 use libc::{c_void, c_int, c_uint, c_char, c_double};
 use conv::TryFrom;
@@ -280,6 +280,16 @@ pub mod settings {
             Cubic           = 2,
         }
     }
+
+    macro_attr! {
+        #[repr(C)]
+        #[derive(Copy, Clone, Debug, TryFrom!(i64))]
+        pub enum WhiteBalanceMode {
+            Off        = 0,
+            Once       = 1,
+            Continuous = 2,
+        }
+    }
 }
 
 #[repr(C)]
@@ -489,6 +499,11 @@ impl Device {
     getset!(get_reverse_y,     set_reverse_y,     HOBJ(0x84000F), b: bool => b as i32, i: i32 => i == 1);
     getset!(get_acq_fr_enable, set_acq_fr_enable, HOBJ(0x850017), b: bool => b as i64, i: i64 => i == 1);
     getset!(get_acq_fr,        set_acq_fr,        HOBJ(0x850018), f64);
+    getset!(get_exposure_time, set_exposure_time, HOBJ(0x850005), f64);
+    getset!(get_auto_exposure, set_auto_exposure, HOBJ(0x850006), b: bool => b as i64, i: i64 => i == 1);
+    getset!(get_auto_gain,     set_auto_gain,     HOBJ(0x870003), b: bool => b as i64, i: i64 => i == 1);
+    getset!(get_white_balance, set_white_balance, HOBJ(0x870012), settings::WhiteBalanceMode as i64);
+    getset!(get_average_grey,  set_average_grey,  HOBJ(0x870006), i64);
 
     fn set_prop<T: ObjProp>(&self, prop: HOBJ, value: T, index: c_int) -> Result<(), TPROPHANDLING_ERROR> {
         prop_status2result!(unsafe { T::set(prop, value, index) })

@@ -94,28 +94,32 @@ group_attr!{
                         println!("WARNING: ignoring passed-in settings");
                     }
                 } else {
-                    println!("BEFORE:\noffset = ({}, {})\nheight = {}\nwidth = {}\npixel format = {:?} -> {:?}\nframe rate = ({}, {})",
-                             device.get_offset_x().unwrap(),
-                             device.get_offset_y().unwrap(),
-                             device.get_height().unwrap(),
-                             device.get_width().unwrap(),
-                             device.get_cam_format().unwrap(), device.get_dest_format().unwrap(),
-                             device.get_acq_fr_enable().unwrap(), device.get_acq_fr().unwrap());
+                    fn print_settings(tag: &str, device: &wrapper::Device) {
+                        println!("{}:\noffset = ({}, {})\nheight = {}\nwidth = {}\nframe rate = ({}, {})\n{} exposure, {} gain ({}% grey)\npixel format = {:?} -> {:?}",
+                                 tag,
+                                 device.get_offset_x().unwrap(),
+                                 device.get_offset_y().unwrap(),
+                                 device.get_height().unwrap(),
+                                 device.get_width().unwrap(),
+                                 device.get_acq_fr_enable().unwrap(), device.get_acq_fr().unwrap(),
+                                 if device.get_auto_exposure().unwrap() { "auto" } else { "manual" },
+                                 if device.get_auto_gain().unwrap() { "auto" } else { "manual" },
+                                 device.get_average_grey().unwrap(),
+                                 device.get_cam_format().unwrap(), device.get_dest_format().unwrap());
+                    }
+                    print_settings("BEFORE", &device);
                     device.set_offset_x(0).unwrap();
                     device.set_offset_y(0).unwrap();
                     device.set_height(1200).unwrap();
                     device.set_width(1600).unwrap();
                     device.set_acq_fr_enable(true).unwrap();
                     device.set_acq_fr(fps).unwrap();
+                    device.set_auto_exposure(true).unwrap();
+                    device.set_auto_gain(true).unwrap();
+                    device.set_average_grey(90).unwrap(); // FIXME need to change this on the fly!
                     device.set_cam_format(format.0).unwrap();
                     device.set_dest_format(format.1).unwrap();
-                    println!("AFTER:\noffset = ({}, {})\nheight = {}\nwidth = {}\npixel format = {:?} -> {:?}\nframe rate = ({}, {})",
-                             device.get_offset_x().unwrap(),
-                             device.get_offset_y().unwrap(),
-                             device.get_height().unwrap(),
-                             device.get_width().unwrap(),
-                             device.get_cam_format().unwrap(), device.get_dest_format().unwrap(),
-                             device.get_acq_fr_enable().unwrap(), device.get_acq_fr().unwrap());
+                    print_settings("AFTER", &device);
                     SETTINGS_DONE.store(true, Ordering::SeqCst);
                 }
 
