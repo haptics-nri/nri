@@ -8,6 +8,7 @@ debug = true
 # TODO build script
 
 [features]
+hardware = []
 nightly = [
     "comms/nightly",
     "scribe/nightly",

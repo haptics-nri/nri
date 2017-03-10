@@ -8,6 +8,7 @@ authors = ["Alex Burka <aburka@seas.upenn.edu>"]
 debug = true
 
 [features]
+hardware = []
 nightly = [
     "comms/nightly",
     "scribe/nightly",

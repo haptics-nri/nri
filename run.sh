@@ -5,8 +5,15 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:./crates/drivers/structure
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:./crates/drivers/biotac/src/wrapper
 export RUST_BACKTRACE=1
 
-if [ "$#" -eq 0 ]; then 
-    rlwrap cargo run --release
+if [ $(hostname) == "nri-desktop" ]; then
+    FEAT=
+else
+    FEAT=--no-default-features
+fi
+
+if [ "$#" -eq 0 -o "$1" == "--" ]; then 
+    cargo test --no-run --release
+    rlwrap cargo run --release $FEAT
     #gdb target/release/nri
 elif [ "$1" == "all" ]; then
     DIR="$2"
@@ -35,7 +42,7 @@ elif [ "$1" == "all" ]; then
 else
     DEV=$1
     shift
-    rlwrap cargo run --release --example read$DEV -- "$@"
+    rlwrap cargo run --release $FEAT --example read$DEV -- "$@"
     #target/release/examples/read$DEV "$@"
 fi
 
