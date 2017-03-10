@@ -49,11 +49,16 @@ error-chain = "0.7" # skip v0.8 because of the Sync bound
 
 [dev-dependencies]
 # needed for examples (TODO remove)
-lazy_static = "0.2"
-time        = "0.1"
-libc        = "0.2"
-csv         = "0.15"
-lodepng     = "0.13" # TODO migrate to image
+lazy_static  = "0.2"
+time         = "0.1"
+libc         = "0.2"
+csv          = "0.15"
+lodepng      = "0.13" # TODO migrate to image
+serde        = "0.9"
+serde_json   = "0.9"
+serde_derive = "0.9"
+macro-attr   = "0.2"
+conv         = "0.3"
 
 [build-dependencies]
 foreman     = "0.2"

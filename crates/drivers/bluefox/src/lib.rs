@@ -15,6 +15,8 @@ group_attr!{
     extern crate time;
     extern crate image;
     extern crate rustc_serialize as serialize;
+    #[macro_use] extern crate serde_derive;
+    extern crate serde_json;
 
     extern crate scribe;
 
@@ -22,8 +24,10 @@ group_attr!{
     use image::png::PNGEncoder;
     use serialize::base64;
     use serialize::base64::ToBase64;
+    use std::env;
+    use std::io::Write;
+    use std::process::{Command, Stdio};
     use std::sync::Mutex;
-    use std::sync::atomic::{AtomicBool, ATOMIC_BOOL_INIT, Ordering};
     use std::sync::mpsc::Sender;
     use comms::{Controllable, CmdFrom, Block, RestartableThread};
     use scribe::Writer;
@@ -32,8 +36,6 @@ group_attr!{
 
     mod wrapper;
     use self::wrapper::settings::*;
-
-    static SETTINGS_DONE: AtomicBool = ATOMIC_BOOL_INIT;
 
     /// Controllable struct for the camera
     pub struct Bluefox {
@@ -56,15 +58,30 @@ group_attr!{
         writer: Writer<[u8]>
     }
 
+    fn set_settings(settings: Settings) {
+        let mut exe = env::current_exe().unwrap();
+        exe.set_file_name("");
+        exe.push("examples");
+        exe.push("bluefox_settings");
+
+        let settings_str = serde_json::to_string(&settings).unwrap();
+        println!("{:?} '{}'", exe, settings_str);
+
+        let mut child = Command::new(&exe)
+                                .stdin(Stdio::piped())
+                                .spawn().unwrap();
+
+        writeln!(child.stdin.as_mut().unwrap(), "{}", settings_str).unwrap();
+        
+        assert!(child.wait().unwrap().success());
+    }
+
     guilty!{
         impl Controllable for Bluefox {
             const NAME: &'static str = "bluefox";
             const BLOCK: Block = Block::Immediate;
 
             fn setup(tx: Sender<CmdFrom>, data: Option<String>) -> Bluefox {
-                let device = wrapper::Device::new().unwrap();
-                device.request_reset().unwrap();
-
                 let mut fps = 15.0;
                 let mut format = (CameraPixelFormat::RGB8, DestPixelFormat::Auto);
                 if let Some(ref data) = data {
@@ -87,41 +104,16 @@ group_attr!{
                     }
                 }
 
-                if SETTINGS_DONE.load(Ordering::SeqCst) {
-                    // HACK: driver always returns error if we try to modify settings again
-                    println!("settings already set, not modifying");
-                    if data.is_some() {
-                        println!("WARNING: ignoring passed-in settings");
-                    }
-                } else {
-                    fn print_settings(tag: &str, device: &wrapper::Device) {
-                        println!("{}:\noffset = ({}, {})\nheight = {}\nwidth = {}\nframe rate = ({}, {})\n{} exposure, {} gain ({}% grey)\npixel format = {:?} -> {:?}",
-                                 tag,
-                                 device.get_offset_x().unwrap(),
-                                 device.get_offset_y().unwrap(),
-                                 device.get_height().unwrap(),
-                                 device.get_width().unwrap(),
-                                 device.get_acq_fr_enable().unwrap(), device.get_acq_fr().unwrap(),
-                                 if device.get_auto_exposure().unwrap() { "auto" } else { "manual" },
-                                 if device.get_auto_gain().unwrap() { "auto" } else { "manual" },
-                                 device.get_average_grey().unwrap(),
-                                 device.get_cam_format().unwrap(), device.get_dest_format().unwrap());
-                    }
-                    print_settings("BEFORE", &device);
-                    device.set_offset_x(0).unwrap();
-                    device.set_offset_y(0).unwrap();
-                    device.set_height(1200).unwrap();
-                    device.set_width(1600).unwrap();
-                    device.set_acq_fr_enable(true).unwrap();
-                    device.set_acq_fr(fps).unwrap();
-                    device.set_auto_exposure(true).unwrap();
-                    device.set_auto_gain(true).unwrap();
-                    device.set_average_grey(90).unwrap(); // FIXME need to change this on the fly!
-                    device.set_cam_format(format.0).unwrap();
-                    device.set_dest_format(format.1).unwrap();
-                    print_settings("AFTER", &device);
-                    SETTINGS_DONE.store(true, Ordering::SeqCst);
-                }
+                set_settings(some!(Settings {
+                    offset_x: 0, offset_y: 0,
+                    height: 1200, width: 1600,
+                    acq_fr_enable: true, acq_fr: fps,
+                    auto_exposure: true, auto_gain: true, average_grey: 90,
+                    cam_format: format.0, dest_format: format.1,
+                }));
+
+                let device = wrapper::Device::new().unwrap();
+                device.request_reset().unwrap();
 
                 let mtx = Mutex::new(tx);
                 Bluefox {

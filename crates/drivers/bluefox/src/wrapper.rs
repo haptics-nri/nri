@@ -205,92 +205,6 @@ pub enum PixelFormat {
     Auto                 = -1,
     Unknown              = -2,
 }
-pub mod settings {
-    macro_attr! {
-        #[repr(C)]
-        #[derive(Copy, Clone, Debug, TryFrom!(i64))]
-        pub enum CameraPixelFormat {
-            BayerGR8      = 0x1080008,
-            BayerGR10     = 0x110000C,
-            BayerGR12     = 0x1100010,
-            BayerGR16     = 0x110002E,
-            RGB8Packed    = 0x2180014,
-            BGR8Packed    = 0x2180015,
-            BGRA8Packed   = 0x2200017,
-            BGR10V2Packed = 0x220001D,
-            RGB8          = 0,
-            BGR8          = 1,
-            BGRa8         = 2,
-            RGB10p32      = 3,
-        }
-    }
-
-    macro_attr! {
-        #[repr(C)]
-        #[derive(Copy, Clone, Debug, TryFrom!(i32))]
-        pub enum DestPixelFormat {
-            Auto                 = 0,
-            Raw                  = 1,
-            Mono8                = 2,
-            Mono10               = 6,
-            Mono12               = 7,
-            Mono12Packed_V1      = 28,
-            Mono12Packed_V2      = 19,
-            Mono14               = 8,
-            Mono16               = 9,
-            BGR888Packed         = 22,
-            BGR101010Packed_V2   = 23,
-            RGB888Packed         = 10,
-            RGB101010Packed      = 14,
-            RGB121212Packed      = 15,
-            RGB141414Packed      = 16,
-            RGB161616Packed      = 17,
-            RGBx888Packed        = 3,
-            RGBx888Planar        = 5,
-            YUV422Packed         = 4,
-            YUV422_UYVYPacked    = 18,
-            YUV422_10Packed      = 20,
-            YUV422_UYVY_10Packed = 21,
-            YUV444_UYVPacked     = 24,
-            YUV444_UYV_10Packed  = 25,
-            YUV444Packed         = 26,
-            YUV444_10Packed      = 27,
-            YUV422Planar         = 13,
-        }
-    }
-
-    macro_attr! {
-        #[repr(C)]
-        #[derive(Copy, Clone, Debug, TryFrom!(i32))]
-        pub enum ColorProc {
-            Auto             = 0,
-            Raw              = 1,
-            ColorBayer       = 2,
-            ColorBayerToMono = 3,
-            RawToPlanes      = 4,
-        }
-    }
-
-    macro_attr! {
-        #[repr(C)]
-        #[derive(Copy, Clone, Debug, TryFrom!(i32))]
-        pub enum InterpolationMode {
-            NearestNeighbor = 0,
-            Linear          = 1,
-            Cubic           = 2,
-        }
-    }
-
-    macro_attr! {
-        #[repr(C)]
-        #[derive(Copy, Clone, Debug, TryFrom!(i64))]
-        pub enum WhiteBalanceMode {
-            Off        = 0,
-            Once       = 1,
-            Continuous = 2,
-        }
-    }
-}
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
@@ -480,31 +394,6 @@ impl Device {
                                                    &mut this.drv) }, this)
     }
 
-    getset!(get_color_proc,    set_color_proc,    HOBJ(0x5E0008), settings::ColorProc         as i32);
-    getset!(get_scale_enabled, set_scale_enabled, HOBJ(0x800001), b: bool => b as i32, i: i32 => i == 1);
-    getset!(get_scale_mode,    set_scale_mode,    HOBJ(0x800002), settings::InterpolationMode as i32);
-    getset!(get_scale_width,   set_scale_width,   HOBJ(0x800003), i32);
-    getset!(get_scale_height,  set_scale_height,  HOBJ(0x800004), i32);
-    getset!(get_width,         set_width,         HOBJ(0x840004), i64);
-    getset!(get_height,        set_height,        HOBJ(0x840005), i64);
-    getset!(get_offset_x,      set_offset_x,      HOBJ(0x840006), i64);
-    getset!(get_offset_y,      set_offset_y,      HOBJ(0x840007), i64);
-    getset!(get_cam_format,    set_cam_format,    HOBJ(0x840008), settings::CameraPixelFormat as i64);
-    getset!(get_dest_format,   set_dest_format,   HOBJ(0x800000), settings::DestPixelFormat   as i32);
-    getset!(get_bin_x,         set_bin_x,         HOBJ(0x84000A), i64);
-    getset!(get_bin_y,         set_bin_y,         HOBJ(0x84000B), i64);
-    getset!(get_decimate_x,    set_decimate_x,    HOBJ(0x84000C), i64);
-    getset!(get_decimate_y,    set_decimate_y,    HOBJ(0x84000D), i64);
-    getset!(get_reverse_x,     set_reverse_x,     HOBJ(0x84000E), b: bool => b as i32, i: i32 => i == 1);
-    getset!(get_reverse_y,     set_reverse_y,     HOBJ(0x84000F), b: bool => b as i32, i: i32 => i == 1);
-    getset!(get_acq_fr_enable, set_acq_fr_enable, HOBJ(0x850017), b: bool => b as i64, i: i64 => i == 1);
-    getset!(get_acq_fr,        set_acq_fr,        HOBJ(0x850018), f64);
-    getset!(get_exposure_time, set_exposure_time, HOBJ(0x850005), f64);
-    getset!(get_auto_exposure, set_auto_exposure, HOBJ(0x850006), b: bool => b as i64, i: i64 => i == 1);
-    getset!(get_auto_gain,     set_auto_gain,     HOBJ(0x870003), b: bool => b as i64, i: i64 => i == 1);
-    getset!(get_white_balance, set_white_balance, HOBJ(0x870012), settings::WhiteBalanceMode as i64);
-    getset!(get_average_grey,  set_average_grey,  HOBJ(0x870006), i64);
-
     fn set_prop<T: ObjProp>(&self, prop: HOBJ, value: T, index: c_int) -> Result<(), TPROPHANDLING_ERROR> {
         prop_status2result!(unsafe { T::set(prop, value, index) })
     }
@@ -555,6 +444,157 @@ impl Device {
         try!(dmr_status2result!(unsafe { DMR_CloseDevice(self.drv,
                                                          self.dev) }));
         dmr_status2result!(unsafe { DMR_Close() })
+    }
+}
+
+pub mod settings {
+    use conv::TryFrom;
+    use super::{Device, TPROPHANDLING_ERROR, HOBJ};
+
+    macro_rules! settings {
+        ($(($name:ident: $typ:ty, $get:ident, $set:ident, $($rest:tt)*))*) => {
+            #[derive(Debug, Default, Serialize, Deserialize)]
+            pub struct Settings {
+                $(
+                    pub $name: Option<$typ>,
+                )*
+            }
+
+            impl Device {
+                $(
+                    getset!($get, $set, $($rest)*);
+                )*
+
+                pub fn set(&mut self, s: &Settings) -> Result<(), TPROPHANDLING_ERROR> {
+                    $(
+                        if let Some($name) = s.$name {
+                            self.$set($name)?;
+                        }
+                    )*
+                    Ok(())
+                }
+
+                pub fn get(&self) -> Settings {
+                    Settings {
+                        $(
+                            $name: self.$get().ok(),
+                        )*
+                    }
+                }
+            }
+        }
+    }
+
+    settings! {
+        (color_proc:    ColorProc,         get_color_proc,    set_color_proc,    HOBJ(0x5E0008), ColorProc         as i32             )
+        (scale_enabled: bool,              get_scale_enabled, set_scale_enabled, HOBJ(0x800001), b: bool => b as i32, i: i32 => i == 1)
+        (scale_mode:    InterpolationMode, get_scale_mode,    set_scale_mode,    HOBJ(0x800002), InterpolationMode as i32             )
+        (scale_width:   i32,               get_scale_width,   set_scale_width,   HOBJ(0x800003), i32                                  )
+        (scale_height:  i32,               get_scale_height,  set_scale_height,  HOBJ(0x800004), i32                                  )
+        (width:         i64,               get_width,         set_width,         HOBJ(0x840004), i64                                  )
+        (height:        i64,               get_height,        set_height,        HOBJ(0x840005), i64                                  )
+        (offset_x:      i64,               get_offset_x,      set_offset_x,      HOBJ(0x840006), i64                                  )
+        (offset_y:      i64,               get_offset_y,      set_offset_y,      HOBJ(0x840007), i64                                  )
+        (cam_format:    CameraPixelFormat, get_cam_format,    set_cam_format,    HOBJ(0x840008), CameraPixelFormat as i64             )
+        (dest_format:   DestPixelFormat,   get_dest_format,   set_dest_format,   HOBJ(0x800000), DestPixelFormat   as i32             )
+        (bin_x:         i64,               get_bin_x,         set_bin_x,         HOBJ(0x84000A), i64                                  )
+        (bin_y:         i64,               get_bin_y,         set_bin_y,         HOBJ(0x84000B), i64                                  )
+        (decimate_x:    i64,               get_decimate_x,    set_decimate_x,    HOBJ(0x84000C), i64                                  )
+        (decimate_y:    i64,               get_decimate_y,    set_decimate_y,    HOBJ(0x84000D), i64                                  )
+        (reverse_x:     bool,              get_reverse_x,     set_reverse_x,     HOBJ(0x84000E), b: bool => b as i32, i: i32 => i == 1)
+        (reverse_y:     bool,              get_reverse_y,     set_reverse_y,     HOBJ(0x84000F), b: bool => b as i32, i: i32 => i == 1)
+        (acq_fr_enable: bool,              get_acq_fr_enable, set_acq_fr_enable, HOBJ(0x850017), b: bool => b as i64, i: i64 => i == 1)
+        (acq_fr:        f64,               get_acq_fr,        set_acq_fr,        HOBJ(0x850018), f64                                  )
+        (exposure_time: f64,               get_exposure_time, set_exposure_time, HOBJ(0x850005), f64                                  )
+        (auto_exposure: bool,              get_auto_exposure, set_auto_exposure, HOBJ(0x850006), b: bool => b as i64, i: i64 => i == 1)
+        (auto_gain:     bool,              get_auto_gain,     set_auto_gain,     HOBJ(0x870003), b: bool => b as i64, i: i64 => i == 1)
+        (white_balance: WhiteBalanceMode,  get_white_balance, set_white_balance, HOBJ(0x870012), WhiteBalanceMode  as i64             )
+        (average_grey:  i64,               get_average_grey,  set_average_grey,  HOBJ(0x870006), i64                                  )
+    }
+
+    macro_attr! {
+        #[repr(C)]
+        #[derive(Copy, Clone, Debug, TryFrom!(i64), Serialize, Deserialize)]
+        pub enum CameraPixelFormat {
+            BayerGR8      = 0x1080008,
+            BayerGR10     = 0x110000C,
+            BayerGR12     = 0x1100010,
+            BayerGR16     = 0x110002E,
+            RGB8Packed    = 0x2180014,
+            BGR8Packed    = 0x2180015,
+            BGRA8Packed   = 0x2200017,
+            BGR10V2Packed = 0x220001D,
+            RGB8          = 0,
+            BGR8          = 1,
+            BGRa8         = 2,
+            RGB10p32      = 3,
+        }
+    }
+
+    macro_attr! {
+        #[repr(C)]
+        #[derive(Copy, Clone, Debug, TryFrom!(i32), Serialize, Deserialize)]
+        pub enum DestPixelFormat {
+            Auto                 = 0,
+            Raw                  = 1,
+            Mono8                = 2,
+            Mono10               = 6,
+            Mono12               = 7,
+            Mono12Packed_V1      = 28,
+            Mono12Packed_V2      = 19,
+            Mono14               = 8,
+            Mono16               = 9,
+            BGR888Packed         = 22,
+            BGR101010Packed_V2   = 23,
+            RGB888Packed         = 10,
+            RGB101010Packed      = 14,
+            RGB121212Packed      = 15,
+            RGB141414Packed      = 16,
+            RGB161616Packed      = 17,
+            RGBx888Packed        = 3,
+            RGBx888Planar        = 5,
+            YUV422Packed         = 4,
+            YUV422_UYVYPacked    = 18,
+            YUV422_10Packed      = 20,
+            YUV422_UYVY_10Packed = 21,
+            YUV444_UYVPacked     = 24,
+            YUV444_UYV_10Packed  = 25,
+            YUV444Packed         = 26,
+            YUV444_10Packed      = 27,
+            YUV422Planar         = 13,
+        }
+    }
+
+    macro_attr! {
+        #[repr(C)]
+        #[derive(Copy, Clone, Debug, TryFrom!(i32), Serialize, Deserialize)]
+        pub enum ColorProc {
+            Auto             = 0,
+            Raw              = 1,
+            ColorBayer       = 2,
+            ColorBayerToMono = 3,
+            RawToPlanes      = 4,
+        }
+    }
+
+    macro_attr! {
+        #[repr(C)]
+        #[derive(Copy, Clone, Debug, TryFrom!(i32), Serialize, Deserialize)]
+        pub enum InterpolationMode {
+            NearestNeighbor = 0,
+            Linear          = 1,
+            Cubic           = 2,
+        }
+    }
+
+    macro_attr! {
+        #[repr(C)]
+        #[derive(Copy, Clone, Debug, TryFrom!(i64), Serialize, Deserialize)]
+        pub enum WhiteBalanceMode {
+            Off        = 0,
+            Once       = 1,
+            Continuous = 2,
+        }
     }
 }
 
