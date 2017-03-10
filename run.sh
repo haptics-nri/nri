@@ -5,8 +5,8 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:./crates/drivers/structure
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:./crates/drivers/biotac/src/wrapper
 export RUST_BACKTRACE=1
 
-if [ "$#" -eq 0 ]; then 
-    rlwrap cargo run --release
+if [ "$#" -eq 0 -o "$1" == "--" ]; then 
+    rlwrap cargo run --release --no-default-features
     #gdb target/release/nri
 elif [ "$1" == "all" ]; then
     DIR="$2"
@@ -35,7 +35,7 @@ elif [ "$1" == "all" ]; then
 else
     DEV=$1
     shift
-    rlwrap cargo run --release --example read$DEV -- "$@"
+    rlwrap cargo run --release --no-default-features --example read$DEV -- "$@"
     #target/release/examples/read$DEV "$@"
 fi
 

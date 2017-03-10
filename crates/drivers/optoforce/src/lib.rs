@@ -50,7 +50,7 @@
 #[macro_use] extern crate guilt_by_association;
 
 group_attr!{
-    #[cfg(target_os = "linux")]
+    #[cfg(feature = "hardware")]
 
     extern crate scribe;
 
@@ -205,5 +205,5 @@ group_attr!{
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(feature = "hardware"))]
 stub!(Optoforce);

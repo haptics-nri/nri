@@ -2,6 +2,7 @@ extern crate csv;
 extern crate lodepng;
 extern crate libc;
 extern crate hprof;
+extern crate num_cpus;
 
 use std::{env, fs, process, mem, ptr, thread};
 use std::io::{self, Read, Write};
@@ -192,7 +193,7 @@ pub fn do_camera<T: Copy, Data: Debug + Pixels<T>, F: for<'a> Fn(String, C, &'a 
     let mut csvwtr = csv::Writer::from_memory();
     attempt!(csvwtr.encode(("Frame number", "Filename", "Unix timestamp")));
 
-    const N_THREADS: usize = 4;
+    let N_THREADS = num_cpus::get();
     print!("Creating {} threads...", N_THREADS);
     let mut threads = vec![];
     for i in 0..N_THREADS {

@@ -10,6 +10,15 @@ exclude = ["src/web/templates/*", "src/web/bootstrap/*", "src/web/flows/*", "dat
 lto = true
 
 [features]
+default = ["hardware"]
+hardware = [
+    "biotac/hardware",
+    "bluefox/hardware",
+    "optoforce/hardware",
+    "structure/hardware",
+    "teensy/hardware",
+    "vicon/hardware",
+    ]
 nightly = [
     "cli/nightly",
     "web/nightly",
@@ -54,6 +63,7 @@ time        = "0.1"
 libc        = "0.2"
 csv         = "0.15"
 lodepng     = "0.13" # TODO migrate to image
+num_cpus    = "1.3.0"
 
 [build-dependencies]
 foreman     = "0.2"

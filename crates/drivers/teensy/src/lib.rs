@@ -1,7 +1,7 @@
 //! Service to read data from the Teensy and attached sensors
 
 #[macro_use] extern crate utils;
-extern crate comms;
+#[macro_use] extern crate comms;
 
 #[macro_use] extern crate guilt_by_association;
 #[macro_use] extern crate macro_attr;
@@ -36,7 +36,7 @@ impl ParkState {
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(feature = "hardware"))]
 impl ParkState {
     pub fn metermaid() -> Option<ParkState> {
         Some(ParkState::Stick)
@@ -44,7 +44,7 @@ impl ParkState {
 }
 
 group_attr!{
-    #[cfg(target_os = "linux")]
+    #[cfg(feature = "hardware")]
 
     extern crate scribe;
 
@@ -568,5 +568,5 @@ group_attr!{
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(feature = "hardware"))]
 stub!(Teensy);

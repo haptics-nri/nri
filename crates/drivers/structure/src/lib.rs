@@ -1,14 +1,14 @@
 //! Service to capture frames from the Structure Sensor
 
 #[macro_use] extern crate utils;
-extern crate comms;
+#[macro_use] extern crate comms;
 
 #[macro_use] extern crate guilt_by_association;
 #[macro_use] extern crate macro_attr;
 #[macro_use] extern crate conv;
 
 group_attr!{
-    #[cfg(target_os = "linux")]
+    #[cfg(feature = "hardware")]
 
     extern crate scribe;
     extern crate time;
@@ -202,5 +202,5 @@ group_attr!{
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(feature = "hardware"))]
 stub!(Structure);
