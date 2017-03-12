@@ -123,11 +123,10 @@ pub enum Block {
 guilty!{
     /// A service that can be setup and torn down based on commands from a higher power.
     pub trait Controllable {
-        // FIXME no docs allowed yet on guilty consts
-        // Human-readable name of the service
-        const NAME: &'static str,
-        // Desired blocking mode (see documentation for the Block enum)
-        const BLOCK: Block,
+        /// Human-readable name of the service
+        const NAME: &'static str;
+        /// Desired blocking mode (see documentation for the Block enum)
+        const BLOCK: Block;
 
         /// Setup the service.
         ///
@@ -139,9 +138,7 @@ guilty!{
         ///
         /// In the case of a device driver, this corresponds to gathering one frame or sample of data.
         ///
-        /// Return true if we should wait for a command from the supervisor thread before calling
-        /// step() again. Return false to call step() again right away (unless there is a pending
-        /// command).
+        /// Blocking mode controls the delay between steps.
         fn step(&mut self, data: Option<String>);
 
         /// Tear down the service.
@@ -193,8 +190,8 @@ macro_rules! stub {
         use ::comms::{Controllable, Block, CmdFrom};
         guilty!{
             impl Controllable for $t {
-                const NAME: &'static str = stringify!($t),
-                const BLOCK: Block = Block::Infinite,
+                const NAME: &'static str = stringify!($t);
+                const BLOCK: Block = Block::Infinite;
 
                 fn setup(_: ::std::sync::mpsc::Sender<CmdFrom>, _: Option<String>) -> $t {
                     $t
@@ -282,6 +279,13 @@ fn handle<C: Controllable>(block: bool, c: &mut C, rx: &Receiver<CmdTo>, data: &
 /// Runs in a loop receiving commands from the supervisor thread. Manages a Controllable instance,
 /// calling its setup()/step()/teardown() methods as necessary.
 pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) -> Result<()> {
+    let mut block = guilty!(C::BLOCK);
+    let actual_period = match block {
+        Block::Immediate      => 0,
+        Block::Infinite       => -1,
+        Block::Period(period) => period,
+    };
+
     'alive: loop {
         let mut data;
 
@@ -301,13 +305,6 @@ pub fn go<C: Controllable>(rx: Receiver<CmdTo>, tx: Sender<CmdFrom>) -> Result<(
         tx.send(CmdFrom::Timein { thread: guilty!(C::NAME) }).chain_err(|| ErrorKind::MpscCmd(Some(guilty!(C::NAME))))?;
 
         tx.send(CmdFrom::Data(format!("to web start {}", guilty!(C::NAME)))).chain_err(|| ErrorKind::MpscCmd(Some(guilty!(C::NAME))))?;
-
-        let mut block = guilty!(C::BLOCK);
-        let actual_period = match block {
-            Block::Immediate      => 0,
-            Block::Infinite       => -1,
-            Block::Period(period) => period,
-        };
 
         utils::PROF.with(|wrapped_prof| {
             *wrapped_prof.borrow_mut() = Some(hprof::Profiler::new(guilty!(C::NAME)));

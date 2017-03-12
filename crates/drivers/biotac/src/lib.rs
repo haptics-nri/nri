@@ -5,7 +5,7 @@
 #[macro_use] extern crate comms;
 
 group_attr! {
-    #[cfg(target_os = "linux")]
+    #[cfg(feature = "hardware")]
 
     extern crate scribe;
 
@@ -43,8 +43,8 @@ group_attr! {
 
     guilty! {
         impl Controllable for Biotac {
-            const NAME: &'static str = "biotac",
-            const BLOCK: Block = Block::Period(10_000_000),
+            const NAME: &'static str = "biotac";
+            const BLOCK: Block = Block::Period(10_000_000);
 
             fn setup(_: Sender<CmdFrom>, _: Option<String>) -> Biotac {
                 // initialize Cheetah
@@ -61,7 +61,7 @@ group_attr! {
 
                 let cheetah = unsafe {
                     let mut cheetah: wrapper::biotac::Cheetah = mem::zeroed::<wrapper::biotac::Cheetah>();
-                    assert!(0 == wrapper::biotac::bt_cheetah_initialize(&info, &mut cheetah));
+                    assert!(0 == utils::in_original_dir(|| wrapper::biotac::bt_cheetah_initialize(&info, &mut cheetah)).unwrap());
                     cheetah
                 };
 
@@ -169,6 +169,6 @@ group_attr! {
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(feature = "hardware"))]
 stub!(Biotac);
 

@@ -50,7 +50,7 @@
 #[macro_use] extern crate guilt_by_association;
 
 group_attr!{
-    #[cfg(target_os = "linux")]
+    #[cfg(feature = "hardware")]
 
     extern crate scribe;
 
@@ -96,8 +96,8 @@ group_attr!{
 
     guilty!{
         impl Controllable for Optoforce {
-            const NAME: &'static str = "optoforce",
-            const BLOCK: Block = Block::Period(1_000_000),
+            const NAME: &'static str = "optoforce";
+            const BLOCK: Block = Block::Period(1_000_000);
 
             fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Optoforce {
                 let dev = wrapper::Device::new(Default::default());
@@ -205,5 +205,5 @@ group_attr!{
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(feature = "hardware"))]
 stub!(Optoforce);

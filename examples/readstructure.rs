@@ -26,6 +26,6 @@ impl common::Pixels<u16> for Row {
 }
 
 fn main() {
-    common::do_camera::<u16, Row, _, _>("structure", |_, _| {}, (), 640, 480, 1, ColorType::LCT_GREY, 16);
+    common::do_camera::<u16, Row, _, _>("structure", |_, _, _| {}, (), 640, 480, 1, ColorType::LCT_GREY, 16);
 }
 

@@ -17,6 +17,13 @@
                                 class="btn btn-success">Next</button>
                     </div>
                 {{/if}}
+                <div style="float: right; margin-top: -0.5em">
+                    <button formaction="/flow/{{shortname}}/abort"
+                            type="submit"
+                            id="abort"
+                            onclick="clear_timer()"
+                            class="btn btn-warning">Abort</button>
+                </div>
                 <b>{{name}}</b>
                 <ol>
                     {{#each states}}

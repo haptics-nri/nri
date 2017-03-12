@@ -20,7 +20,7 @@ comms                = { path = "../comms"             }
 teensy               = { path = "../../drivers/teensy" }
 lazy_static          = "0.2"
 chrono               = "0.3"
-uuid                 = "0.2"
+uuid                 = { version = "0.2", features = ["v4"] }
 rustc-serialize      = "0.3" # TODO migrate to serde
 error-chain          = "0.7"
 

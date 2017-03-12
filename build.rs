@@ -1,15 +1,14 @@
+extern crate foreman;
+use foreman::*;
+
 fn main() {
-    let project_dir = env!("CARGO_MANIFEST_DIR");
-    //let out_dir = env!("OUT_DIR");
+    let project_dir = manifest_dir().unwrap();
 
     //Command::new("make -C crates/drivers/structure").status().unwrap();
 
-    println!("cargo:rustc-link-search=native={}/crates/drivers/structure", project_dir);
-    println!("cargo:rustc-libdir={}/crates/drivers/structure", project_dir);
-    println!("cargo:rustc-link-search=native={}/crates/drivers/bluefox", project_dir);
-    println!("cargo:rustc-libdir={}/crates/drivers/bluefox", project_dir);
-    println!("cargo:rustc-link-search=native={}/crates/drivers/optoforce", project_dir);
-    println!("cargo:rustc-libdir={}/crates/drivers/optoforce", project_dir);
-    println!("cargo:rustc-link-search=native={}/crates/drivers/biotac/src/wrapper", project_dir);
-    println!("cargo:rustc-libdir={}/crates/drivers/biotac/src/wrapper", project_dir);
+    let driver_dir = project_dir.join("crates").join("drivers");
+    link_search(SearchKind::Native, &driver_dir.join("structure"));
+    link_search(SearchKind::Native, &driver_dir.join("bluefox"));
+    link_search(SearchKind::Native, &driver_dir.join("optoforce"));
+    link_search(SearchKind::Native, &driver_dir.join("biotac").join("src").join("wrapper"));
 }

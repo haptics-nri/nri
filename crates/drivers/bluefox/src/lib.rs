@@ -9,12 +9,14 @@
 #[macro_use] extern crate conv;
 
 group_attr!{
-    #[cfg(target_os = "linux")]
+    #[cfg(feature = "hardware")]
 
     extern crate libc;
     extern crate time;
     extern crate image;
     extern crate rustc_serialize as serialize;
+    #[macro_use] extern crate serde_derive;
+    extern crate serde_json;
 
     extern crate scribe;
 
@@ -22,8 +24,10 @@ group_attr!{
     use image::png::PNGEncoder;
     use serialize::base64;
     use serialize::base64::ToBase64;
+    use std::env;
+    use std::io::Write;
+    use std::process::{Command, Stdio};
     use std::sync::Mutex;
-    use std::sync::atomic::{AtomicBool, ATOMIC_BOOL_INIT, Ordering};
     use std::sync::mpsc::Sender;
     use comms::{Controllable, CmdFrom, Block, RestartableThread};
     use scribe::Writer;
@@ -32,8 +36,6 @@ group_attr!{
 
     mod wrapper;
     use self::wrapper::settings::*;
-
-    static SETTINGS_DONE: AtomicBool = ATOMIC_BOOL_INIT;
 
     /// Controllable struct for the camera
     pub struct Bluefox {
@@ -56,16 +58,31 @@ group_attr!{
         writer: Writer<[u8]>
     }
 
+    fn set_settings(settings: Settings) {
+        let mut exe = env::current_exe().unwrap();
+        exe.set_file_name("");
+        exe.push("examples");
+        exe.push("bluefox_settings");
+
+        let settings_str = serde_json::to_string(&settings).unwrap();
+        println!("{:?} '{}'", exe, settings_str);
+
+        let mut child = Command::new(&exe)
+                                .stdin(Stdio::piped())
+                                .spawn().unwrap();
+
+        writeln!(child.stdin.as_mut().unwrap(), "{}", settings_str).unwrap();
+        
+        assert!(child.wait().unwrap().success());
+    }
+
     guilty!{
         impl Controllable for Bluefox {
-            const NAME: &'static str = "bluefox",
-            const BLOCK: Block = Block::Immediate,
+            const NAME: &'static str = "bluefox";
+            const BLOCK: Block = Block::Immediate;
 
             fn setup(tx: Sender<CmdFrom>, data: Option<String>) -> Bluefox {
-                let device = wrapper::Device::new().unwrap();
-                device.request_reset().unwrap();
-
-                let mut fps = 7.5;
+                let mut fps = 15.0;
                 let mut format = (CameraPixelFormat::RGB8, DestPixelFormat::Auto);
                 if let Some(ref data) = data {
                     let mut parts = data.split(",");
@@ -87,37 +104,16 @@ group_attr!{
                     }
                 }
 
-                if SETTINGS_DONE.load(Ordering::SeqCst) {
-                    // HACK: driver always returns error if we try to modify settings again
-                    println!("settings already set, not modifying");
-                    if data.is_some() {
-                        println!("WARNING: ignoring passed-in settings");
-                    }
-                } else {
-                    println!("BEFORE:\noffset = ({}, {})\nheight = {}\nwidth = {}\npixel format = {:?} -> {:?}\nframe rate = ({}, {})",
-                             device.get_offset_x().unwrap(),
-                             device.get_offset_y().unwrap(),
-                             device.get_height().unwrap(),
-                             device.get_width().unwrap(),
-                             device.get_cam_format().unwrap(), device.get_dest_format().unwrap(),
-                             device.get_acq_fr_enable().unwrap(), device.get_acq_fr().unwrap());
-                    device.set_offset_x(0).unwrap();
-                    device.set_offset_y(0).unwrap();
-                    device.set_height(1200).unwrap();
-                    device.set_width(1600).unwrap();
-                    device.set_acq_fr_enable(true).unwrap();
-                    device.set_acq_fr(fps).unwrap();
-                    device.set_cam_format(format.0).unwrap();
-                    device.set_dest_format(format.1).unwrap();
-                    println!("AFTER:\noffset = ({}, {})\nheight = {}\nwidth = {}\npixel format = {:?} -> {:?}\nframe rate = ({}, {})",
-                             device.get_offset_x().unwrap(),
-                             device.get_offset_y().unwrap(),
-                             device.get_height().unwrap(),
-                             device.get_width().unwrap(),
-                             device.get_cam_format().unwrap(), device.get_dest_format().unwrap(),
-                             device.get_acq_fr_enable().unwrap(), device.get_acq_fr().unwrap());
-                    SETTINGS_DONE.store(true, Ordering::SeqCst);
-                }
+                set_settings(some!(Settings {
+                    offset_x: 0, offset_y: 0,
+                    height: 1200, width: 1600,
+                    acq_fr_enable: true, acq_fr: fps,
+                    auto_exposure: true, auto_gain: true, average_grey: 90,
+                    cam_format: format.0, dest_format: format.1,
+                }));
+
+                let device = wrapper::Device::new().unwrap();
+                device.request_reset().unwrap();
 
                 let mtx = Mutex::new(tx);
                 Bluefox {
@@ -166,6 +162,7 @@ group_attr!{
                 match data.as_ref().map(|s| s as &str) {
                     Some("disk start") => {
                         println!("Started Bluefox recording.");
+                        self.stampfile = Writer::with_file("bluefox_times.csv");
                         self.writing = true;
                         self.writer.set_index(self.i);
                     },
@@ -227,5 +224,5 @@ group_attr!{
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(feature = "hardware"))]
 stub!(Bluefox);

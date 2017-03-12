@@ -8,7 +8,7 @@
 #[macro_use] extern crate conv;
 
 group_attr!{
-    #[cfg(target_os = "linux")]
+    #[cfg(feature = "hardware")]
 
     extern crate scribe;
     extern crate time;
@@ -58,11 +58,11 @@ group_attr!{
 
     guilty!{
         impl Controllable for Structure {
-            const NAME: &'static str = "structure",
-            const BLOCK: Block = Block::Immediate,
+            const NAME: &'static str = "structure";
+            const BLOCK: Block = Block::Immediate;
 
             fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Structure {
-                wrapper::initialize().unwrap();
+                utils::in_original_dir(|| wrapper::initialize().unwrap());
                 let device = wrapper::Device::new(None).unwrap();
 
                 let depth = wrapper::VideoStream::new(&device, wrapper::OniSensorType::Depth).unwrap();
@@ -126,6 +126,7 @@ group_attr!{
                 match cmd.as_ref().map(|s| s as &str) {
                     Some("disk start") => {
                         println!("Started Structure recording.");
+                        self.stampfile = Writer::with_file("structure_times.csv");
                         self.writing = true;
                         self.writer.set_index(self.i);
                     },
@@ -201,5 +202,5 @@ group_attr!{
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(feature = "hardware"))]
 stub!(Structure);

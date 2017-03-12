@@ -1,21 +1,23 @@
-Stick-and-Camera Episode
+BioTac-and-Camera Episode
 
 - Begin
+    stop
     "Starting new episode!"
 
 - Capture
+    start vicon
     start teensy
-    : teensy ref int
+    start bluefox structure
+    start biotac
     : bluefox disk start
     : structure disk start
     "Now recording!"
 - Finish
-    : structure disk stop
     : bluefox disk stop
+    : structure disk stop
     "Writing to disk, please wait..."
-    stop teensy
+    stop bluefox structure biotac teensy vicon
     "Done!"
 - Wrap up
     > "surface name"
-    > "slippery/sticky" (1..5)
 

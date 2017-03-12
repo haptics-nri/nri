@@ -299,6 +299,7 @@ fn try_main() -> Result<()> {
     prof!("main", {
 
         env_logger::init().chain_err(|| "failed to set up logger")?;
+        utils::in_original_dir(|| {}).chain_err(|| "failed to change directory")?;
 
         info!("Hello, world!");
 

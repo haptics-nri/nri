@@ -1,23 +1,24 @@
 BioTac-and-Camera Episode
 
 - Begin
-    stop
     "Starting new episode!"
 
 - Capture
-    start vicon
-    start teensy
-    start bluefox structure
-    start biotac
+    start teensy biotac
+    : teensy ref int
     : bluefox disk start
     : structure disk start
     "Now recording!"
 - Finish
-    : bluefox disk stop
     : structure disk stop
+    : bluefox disk stop
     "Writing to disk, please wait..."
-    stop bluefox structure biotac teensy vicon
+    stop biotac teensy
     "Done!"
 - Wrap up
     > "surface name"
+    > "cool/warm" (1..5)
+    > "soft/hard" (1..5)
+    > "smooth/rough" (1..5)
+    > "slippery/sticky" (1..5)
 

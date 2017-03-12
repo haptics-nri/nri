@@ -21,13 +21,14 @@ extern crate hyper;
 extern crate rustc_serialize as serialize;
 extern crate websocket;
 
-use std::ops::Deref;
 use std::path::Path;
 use std::sync::{Mutex, RwLock, mpsc};
 use std::thread::JoinHandle;
 use std::collections::BTreeMap;
+use std::{env, str};
 use std::io::Read;
 use std::fs::File;
+use std::process::Command;
 use comms::{Controllable, CmdFrom, Power, Block};
 use teensy::ParkState;
 use iron::prelude::*;
@@ -96,7 +97,7 @@ lazy_static! {
                                                             |hbs, path| {
         let mut source = String::from("");
         File::open(&path).unwrap().read_to_string(&mut source).unwrap();
-        hbs.register_template_string(path.file_stem().unwrap().to_str().unwrap(), source.into()).ok().unwrap();
+        hbs.register_template_string(path.file_stem().unwrap().to_str().unwrap(), source).ok().unwrap();
     });
 }
 
@@ -118,7 +119,7 @@ fn index() -> Box<Handler> {
                                   Service::new("Vicon"           , "vicon"     , "<img class=\"frame vicon latest\" /><div class=\"vicon framenum\"></div>"),
                       ].to_json());
                       data.insert("flows".to_owned(), FLOWS.read().unwrap().to_json());
-                      data.insert("server".to_owned(), format!("{}:{}", req.url.host, config::WS_PORT).to_json());
+                      data.insert("server".to_owned(), format!("{}:{}", req.url.host(), config::WS_PORT).to_json());
 
                       let mut resp = Response::new();
                       resp.set_mut(render("index", data)).set_mut(Header(ContentType(Mime(TopLevel::Text, SubLevel::Html, vec![])))).set_mut(status::Ok);
@@ -148,7 +149,7 @@ macro_rules! bind {
 
 macro_rules! params {
     ($req:expr => [URL $($url:ident),*] [GET $($get:ident),*] [POST $($post:ident),*]) => {
-        bind!($req, Some = extensions.get::<Router>   ($($url),*)  |p, v| String::from_utf8(percent_decode(p.find(v).unwrap().as_bytes())).unwrap());
+        bind!($req, Some = extensions.get::<Router>   ($($url),*)  |p, v| percent_decode(p.find(v).unwrap().as_bytes()).decode_utf8_lossy().to_string());
         bind!($req, Ok   = get_ref::<UrlEncodedQuery> ($($get),*)  |p, v| p[v][0].clone());
         bind!($req, Ok   = get_ref::<UrlEncodedBody>  ($($post),*) |p, v| p[v][0].clone());
     }
@@ -185,12 +186,12 @@ fn control(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
                               [POST]);
 
                       Ok(match &*action {
-                              "start" => if rpc!(mtx.lock().unwrap(), CmdFrom::Start, service.clone(), None).unwrap() {
+                              "start" => if rpc!(mtx.lock().unwrap(), CmdFrom::Start, service.to_owned(), None).unwrap() {
                                   Response::with((status::Ok, format!("Started {}", service)))
                               } else {
                                   Response::with((status::InternalServerError, format!("Failed to start {}", service)))
                               },
-                              "stop" => if rpc!(mtx.lock().unwrap(), CmdFrom::Stop, service.clone()).unwrap() {
+                              "stop" => if rpc!(mtx.lock().unwrap(), CmdFrom::Stop, service.to_owned()).unwrap() {
                                   Response::with((status::Ok, format!("Stopped {}", service)))
                               } else {
                                   Response::with((status::InternalServerError, format!("Failed to stop {}", service)))
@@ -215,11 +216,16 @@ fn flow(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
                       let comms = ws::Comms::new(wsid);
 
                       let resp = Ok(match &*action {
-                              "start" | "continue" => {
+                              a @ "start" | a @ "continue" | a @ "abort" => {
                                   let mut locked_flows = FLOWS.write().unwrap();
-                                  if let Some(found) = locked_flows.get_mut(&flow) {
-                                      let contour = found.run(ParkState::metermaid().unwrap(), mtx.lock().unwrap().deref(), comms.clone());
-                                      Response::with((status::Ok, format!("{:?} \"{}\" flow", contour, flow)))
+                                  if let Some(found) = locked_flows.get_mut(&*flow) {
+                                      if a == "abort" {
+                                          found.abort(&*mtx.lock().unwrap(), comms.clone()).unwrap();
+                                          Response::with((status::Ok, format!("Aborting \"{}\" flow", flow)))
+                                      } else {
+                                          let contour = found.run(ParkState::metermaid().unwrap(), &*mtx.lock().unwrap(), comms.clone()).unwrap();
+                                          Response::with((status::Ok, format!("{:?} \"{}\" flow", contour, flow)))
+                                      }
                                   } else {
                                       Response::with((status::BadRequest, format!("Could not find \"{}\" flow", flow)))
                                   }
@@ -230,9 +236,25 @@ fn flow(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
                       let mut data = BTreeMap::<String, Json>::new();
                       data.insert("flows".to_owned(), FLOWS.read().unwrap().to_json());
                       comms.send(format!("flow {}", render("flows", data)));
+                      comms.send(format!("diskfree {}", disk_free()));
 
                       resp
                   })
+}
+
+/// Measure free disk space in gigabytes
+fn disk_free() -> String {
+    str::from_utf8(
+        &Command::new("df") // measure disk free space
+            .arg("-h")     // human-readable units
+            .arg("--output=avail") // only print free space
+            .arg(env::current_dir().unwrap().to_str().unwrap()) // device corresponding to $PWD
+            .output().unwrap().stdout).unwrap() // read all output
+        .split("\n") // split lines
+        .skip(1) // skip first line
+        .next().unwrap() // use second line
+        .trim() // trim whitespace
+        .to_owned()
 }
 
 /// Controllable struct for the web server
@@ -249,8 +271,8 @@ pub struct Web {
 
 guilty!{
     impl Controllable for Web {
-        const NAME: &'static str = "web",
-        const BLOCK: Block = Block::Infinite,
+        const NAME: &'static str = "web";
+        const BLOCK: Block = Block::Infinite;
 
         fn setup(tx: mpsc::Sender<CmdFrom>, _: Option<String>) -> Web {
             let (wstx, wsrx) = mpsc::channel();
@@ -258,10 +280,10 @@ guilty!{
             let thread = ws::spawn(ctx, wsrx);
 
             let mut router = Router::new();
-            router.get("/", index());
-            router.post("/nuc/:action", nuc(tx.clone()));
-            router.post("/control/:service/:action", control(tx.clone()));
-            router.post("/flow/:flow/:action", flow(tx.clone()));
+            router.get("/", index(), "index");
+            router.post("/nuc/:action", nuc(tx.clone()), "nuc_action");
+            router.post("/control/:service/:action", control(tx.clone()), "service_action");
+            router.post("/flow/:flow/:action", flow(tx.clone()), "flow_action");
 
             let mut mount = Mount::new();
             for p in &["css", "fonts", "js"] {

@@ -1,0 +1,58 @@
+Episode
+
+- Begin
+    stop
+    "Starting new Episode!"
+
+- Camera aiming
+    stop
+    start bluefox
+    "Use the Refresh button to get the cameras aimed well"
+- Camera capture
+    : bluefox disk start
+    "Now recording! Pan the rig around to get images from various angles"
+- Camera finish
+    : bluefox disk stop
+    "Writing to disk, please wait..."
+    "Done!"
+
+- BioTac => BioTac capture
+    start biotac teensy
+    : bluefox disk start
+    "Recording from BioTac!"
+- BioTac finish
+    "Writing to disk, please wait..."
+    : bluefox disk stop
+    stop biotac
+    "Done!"
+
+- OptoForce => OptoForce capture
+    start optoforce
+    : bluefox disk start
+    "Recording from OptoForce!"
+- OptoForce finish
+    "Writing to disk, please wait..."
+    : bluefox disk stop
+    stop optoforce
+    "Done!"
+
+- Stick => Rigid stick capture
+    : bluefox disk start
+    "Recording from rigid stick!"
+- Rigid stick finish
+    "Writing to disk, please wait..."
+    : bluefox disk stop
+    stop bluefox teensy
+    "Done!"
+
+- Wrap up Q1
+    > "episode name"
+- Wrap up Q2
+    > "hardness"     (1..5)
+- Wrap up Q3
+    > "roughness"    (1..5)
+- Wrap up Q4
+    > "slipperiness" (1..5)
+- Wrap up Q5
+    > "warmness"     (1..5)
+

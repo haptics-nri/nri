@@ -62,6 +62,7 @@ fn april(fname: String, prof: &Profiler) -> (u32, String, String, String, String
         let mut p2s: Vec<(f64, f64)> = vec![];
         let mut p3s: Vec<(f64, f64)> = vec![];
         let mut p4s: Vec<(f64, f64)> = vec![];
+        println!("{}", output);
         for line in output.lines().skip(1) {
             let mut sections = line.split(';');
 

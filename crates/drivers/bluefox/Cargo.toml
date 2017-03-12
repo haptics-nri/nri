@@ -7,6 +7,7 @@ authors = ["Alex Burka <aburka@seas.upenn.edu>"]
 debug = true
 
 [features]
+hardware = []
 nightly = [
     "comms/nightly",
     "scribe/nightly",
@@ -17,12 +18,15 @@ nightly = [
 comms                = { path = "../../back/comms"        }
 scribe               = { path = "../../back/scribe"       }
 utils                = { path = "../../utils"             }
-guilt-by-association = "0.2"
+guilt-by-association = "0.4"
 macro-attr           = "0.2"
 conv                 = "0.3"
 time                 = "0.1"
 libc                 = "0.2"
 image                = "0.12"
 rustc-serialize      = "0.3" # TODO migrate to serde
+serde                = "0.9"
+serde_json           = "0.9"
+serde_derive         = "0.9"
 error-chain          = "0.7"
 

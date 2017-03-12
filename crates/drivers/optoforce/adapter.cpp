@@ -10,7 +10,7 @@ lofa_version lofa_get_version(void)
 LOFA_SENSOR_HANDLE lofa_create_sensor(int buffer, float factor)
 {
     if (buffer == -1) buffer = DEFAULT_BUFFER;
-    if (isnan(factor)) factor = DEFAULT_FACTOR;
+    if (std::isnan(factor)) factor = DEFAULT_FACTOR;
 
     return new Sensor(buffer, factor);
 }

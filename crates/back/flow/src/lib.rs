@@ -40,6 +40,8 @@ error_chain! {
             description("RPC error")
             display("RPC error while trying to {}", action)
         }
+
+        FlowCanceled {}
     }
 }
 
@@ -50,7 +52,7 @@ trait OptionExt<T> {
 impl<T> OptionExt<T> for Option<T> {
     fn put(&mut self, it: T) -> &mut T {
         *self = Some(it);
-        self.as_mut().unwrap()
+        self.as_mut().unwrap() // ok since the value is put in on the line above
     }
 }
 
@@ -87,7 +89,7 @@ lazy_static! {
 pub trait Comms: Clone {
     fn print(&self, msg: String);
     fn send(&self, msg: String);
-    fn rpc<T, F: Fn(String) -> StdResult<T, String>>(&self, prompt: String, validator: F) -> T;
+    fn rpc<T, F: Fn(String) -> StdResult<T, String>>(&self, prompt: String, validator: F) -> Option<T>;
 }
 
 #[derive(Debug, PartialEq)]
@@ -158,6 +160,34 @@ impl Flow {
     pub fn new(name: String, shortname: String, states: Vec<FlowState>) -> Flow {
         Flow { name: name, shortname: shortname, active: false, almostdone: false, states: states, stamp: None, dir: None, id: None }
     }
+    
+    pub fn abort<C: Comms>(&mut self, tx: &mpsc::Sender<CmdFrom>, comms: C) -> Result<()> {
+        use self::ErrorKind::*;
+        // flow canceled! clear everything!
+
+        comms.print("Aborting flow.".into());
+
+        self.active = false;
+        self.almostdone = false;
+        let cap = Vec::with_capacity(self.states.len());
+        let states = mem::replace(&mut self.states, cap);
+        for mut state in states.into_iter().rev() {
+            if state.done {
+                comms.print(format!("\tCleaning up state \"{}\"", state.name));
+                state.cleanup(tx, comms.clone())?;
+            }
+            let FlowState { name, park, script, .. } = state;
+            self.states.push(FlowState::new(name, park, script));
+        }
+        self.states.reverse();
+        if let Some(dir) = self.dir.take() {
+            let epdir = env::current_dir().chain_err(|| Io("get current directory".into()))?;
+            env::set_current_dir(&dir).chain_err(|| Io(format!("set current directory to {:?}", dir)))?;
+            fs::remove_dir_all(&epdir).chain_err(|| Io(format!("delete directory {:?}", epdir)))?;
+        }
+
+        Ok(())
+    }
 
     pub fn run<C: Comms>(&mut self, park: ParkState, tx: &mpsc::Sender<CmdFrom>, comms: C) -> Result<EventContour> {
         // TODO refactor this confusing function
@@ -198,11 +228,16 @@ impl Flow {
         }
 
         // find the next eligible state (if there is one)
+        let mut abort = false;
         if let Some(state) = self.states.iter_mut().skip_while(|s| s.done).next() {
             if state.park.map_or(true, |p| p == park) {
                 ret = EventContour::Continuing;
                 comms.print(format!("Executing state {}", state.name));
-                state.run(tx, comms.clone())?;
+                match state.run(tx, comms.clone()) {
+                    Ok(()) => (),
+                    Err(Error(ErrorKind::FlowCanceled, ..)) => abort = true,
+                    Err(e) => return Err(e)
+                }
                 comms.print(format!("Finished executing state {}", state.name));
             } else if let Some(goal) = state.park {
                 comms.print(format!("Waiting for parking lot state to be {:?} (currently {:?})", goal, park));
@@ -210,6 +245,11 @@ impl Flow {
             }
         } else {
             comms.print(format!("No applicable states."));
+        }
+
+        if abort {
+            self.abort(tx, comms)?;
+            return Ok(EventContour::Finishing);
         }
 
         let almostdone = match self.states.last() {
@@ -262,7 +302,7 @@ impl Flow {
         let mut i = 0;
         while lines.peek().is_some() {
             i += 1;
-            let header = lines.next().unwrap();
+            let header = lines.next().unwrap(); // ok because of the peek in the loop condition
             
             if header.is_empty() { continue; }
             let header = header.split("=>").collect::<Vec<_>>();
@@ -291,9 +331,10 @@ impl Flow {
             
             let mut script = vec![];
             
-            while lines.peek().is_some() && lines.peek().unwrap().starts_with(' ') {
+            while lines.peek().is_some()
+                  && lines.peek().unwrap().starts_with(' ') { // ok because of the peek
                 i += 1;
-                let line = lines.next().unwrap();
+                let line = lines.next().unwrap(); // ok because of the peek in the loop condition
                 let line = line.trim();
                 
                 if        line.starts_with(':') {
@@ -335,7 +376,9 @@ impl Flow {
                         Some("start") => {
                             for word in words {
                                 let mut split = word.splitn(2, '/');
-                                script.push((FlowCmd::Start(split.next().unwrap().to_owned(), split.next().map(|s| s.to_owned())), None));
+                                script.push((FlowCmd::Start(split.next().unwrap().to_owned(),
+                                                // ok because splitn always returns at least one
+                                             split.next().map(|s| s.to_owned())), None));
                             }
                         },
                         Some(_) => Err(ParseFlow(i, "invalid command"))?,
@@ -367,14 +410,23 @@ impl FlowState {
         Ok(())
     }
 
+    pub fn cleanup<C: Comms>(&mut self, tx: &mpsc::Sender<CmdFrom>, comms: C) -> Result<()> {
+        for &mut (ref mut c, _) in self.script.iter_mut().rev() {
+            comms.print(format!("\t\tUndoing {:?}", c));
+            c.cleanup(tx)?;
+        }
+
+        Ok(())
+    }
+
     pub fn finalize(&mut self, file: &mut File) -> Result<()> {
         use self::ErrorKind::*;
 
-        writeln!(file, "- {} [{}]", self.name, StampPrinter(self.stamp.unwrap())).unwrap();
+        writeln!(file, "- {} [{}]", self.name, StampPrinter(self.stamp.ok_or("FlowState::finalize called before FlowState::run")?)).chain_err(|| Io("write to flow file".into()))?;
         for &mut (ref mut c, ref mut stamp) in &mut self.script {
             write!(file, "    ").chain_err(|| Io("write to flow file".into()))?;
             c.finalize(file)?;
-            writeln!(file, " [{}]", StampPrinter(stamp.unwrap())).chain_err(|| Io("write to flow file".into()))?;
+            writeln!(file, " [{}]", StampPrinter(stamp.ok_or("FlowState::finalize called before FlowState::run")?)).chain_err(|| Io("write to flow file".into()))?;
             *stamp = None;
         }
         self.done = false;
@@ -400,35 +452,35 @@ impl FlowCmd {
             FlowCmd::Message(ref msg) => comms.send(format!("msg {}", msg)),
             FlowCmd::Str { ref prompt, ref mut data } => {
                 assert!(data.is_none());
-                *data = Some(comms.rpc(
-                                    format!("prompt Please enter {}",
-                                            prompt),
-                                    |x| {
-                                        if x.is_empty() {
-                                            Err("prompt That's an empty string!".to_owned())
-                                        } else {
-                                            Ok(x)
-                                        }
-                                    }));
+                *data = Some(comms.rpc(format!("prompt Please enter {}",
+                                               prompt),
+                                       |x| {
+                                           if x.is_empty() {
+                                               Err("prompt That's an empty string!".to_owned())
+                                           } else {
+                                               Ok(x)
+                                           }
+                                       })
+                                       .ok_or(ErrorKind::FlowCanceled)?);
             }
             FlowCmd::Int { ref prompt, limits: (low, high), ref mut data } => {
                 assert!(data.is_none());
-                *data = Some(comms.rpc(
-                                    format!("prompt Please select {} ({}-{} scale)",
-                                            prompt, low, high),
-                                    |x| {
-                                        match x.trim().parse() {
-                                            Ok(i) if i >= low && i <= high => {
-                                                Ok(i)
-                                            }
-                                            Ok(_) => {
-                                                Err("prompt Out of range!".to_owned())
-                                            }
-                                            Err(_) => {
-                                                Err("prompt Not an integer!".to_owned())
-                                            }
-                                        }
-                                    }));
+                *data = Some(comms.rpc(format!("prompt Please select {} ({}-{} scale)",
+                                               prompt, low, high),
+                                       |x| {
+                                           match x.trim().parse() {
+                                               Ok(i) if i >= low && i <= high => {
+                                                   Ok(i)
+                                               }
+                                               Ok(_) => {
+                                                   Err("prompt Out of range!".to_owned())
+                                               }
+                                               Err(_) => {
+                                                   Err("prompt Not an integer!".to_owned())
+                                               }
+                                           }
+                                       })
+                                       .ok_or(ErrorKind::FlowCanceled)?);
             }
             FlowCmd::Start(ref service, ref data) => {
                 comms.print(format!("Flow starting service {}", service));
@@ -441,13 +493,34 @@ impl FlowCmd {
                 rpc!(tx, CmdFrom::Stop, service.clone()).chain_err(|| Rpc(format!("stop {}", service)))?;
             }
             FlowCmd::Send(ref string) => {
-                tx.send(CmdFrom::Data(String::from("to ") + string)).unwrap();
+                tx.send(CmdFrom::Data(String::from("to ") + string)).chain_err(|| Rpc(format!("send to {}", string)))?;
             }
             FlowCmd::StopSensors => {
                 for &svc in &["bluefox", "structure", "biotac", "optoforce", "teensy"] {
                     rpc!(tx, CmdFrom::Stop, svc.to_owned()).chain_err(|| Rpc(format!("stop {}", svc)))?;
                 }
             }
+        }
+
+        Ok(())
+    }
+
+    pub fn cleanup(&mut self, tx: &mpsc::Sender<CmdFrom>) -> Result<()> {
+        use self::ErrorKind::*;
+
+        match *self {
+            FlowCmd::Start(ref service, _) => {
+                // if a service was started, stop it
+                rpc!(tx, CmdFrom::Stop, service.clone()).chain_err(|| Rpc(format!("[cleanup] stop {}", service)))?;
+            }
+            FlowCmd::Send(ref string) => {
+                // if a "disk start" message was sent, send a "disk stop"
+                if string.contains("disk start") {
+                    let string = &string.replace("disk start", "disk stop");
+                    tx.send(CmdFrom::Data(String::from("to ") + string)).chain_err(|| Rpc(format!("[cleanup] send to {}", string)))?;
+                }
+            }
+            _ => { /* nothing to do */ }
         }
 
         Ok(())
@@ -459,11 +532,11 @@ impl FlowCmd {
         match *self {
             FlowCmd::Message(ref msg) => write!(file, "{:?}", msg).chain_err(|| Io("write to flow file".into()))?,
             FlowCmd::Str { ref prompt, ref mut data } => {
-                write!(file, "> {:?} [{:?}]", prompt, data.as_ref().unwrap()).chain_err(|| Io("write to flow file".into()))?;
+                write!(file, "> {:?} [{:?}]", prompt, data.as_ref().ok_or("FlowCmd::finalize called before FlowCmd::run")?).chain_err(|| Io("write to flow file".into()))?;
                 *data = None;
             },
             FlowCmd::Int { ref prompt, limits: (low, high), ref mut data } => {
-                write!(file, "> {:?} ({}..{}) [{:?}]", prompt, low, high, data.unwrap()).chain_err(|| Io("write to flow file".into()))?;
+                write!(file, "> {:?} ({}..{}) [{:?}]", prompt, low, high, data.ok_or("FlowCmd::finalize called before FlowCmd::run")?).chain_err(|| Io("write to flow file".into()))?;
                 *data = None;
             },
             FlowCmd::Start(ref service, ref data) => {

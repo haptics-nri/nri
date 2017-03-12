@@ -5,7 +5,7 @@
 #[macro_use] extern crate guilt_by_association;
 
 group_attr!{
-    #[cfg(target_os = "linux")]
+    #[cfg(feature = "hardware")]
 
     extern crate scribe;
     extern crate time;
@@ -53,8 +53,8 @@ group_attr!{
 
     guilty! {
         impl Controllable for Vicon {
-            const NAME: &'static str = "vicon",
-            const BLOCK: Block = Block::Infinite,
+            const NAME: &'static str = "vicon";
+            const BLOCK: Block = Block::Infinite;
 
             fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Vicon {
                 let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
@@ -93,5 +93,5 @@ group_attr!{
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(feature = "hardware"))]
 stub!(Vicon);

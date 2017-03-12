@@ -1,0 +1,14 @@
+Sphere Calibration
+
+- Begin
+    stop
+    "Starting new episode!"
+
+- Capture
+    start vicon
+    "Now recording!"
+- Finish
+    "Writing to disk, please wait..."
+    stop vicon
+    "Done!"
+

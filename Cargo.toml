@@ -10,6 +10,15 @@ exclude = ["src/web/templates/*", "src/web/bootstrap/*", "src/web/flows/*", "dat
 lto = true
 
 [features]
+default = ["hardware"]
+hardware = [
+    "biotac/hardware",
+    "bluefox/hardware",
+    "optoforce/hardware",
+    "structure/hardware",
+    "teensy/hardware",
+    "vicon/hardware",
+    ]
 nightly = [
     "cli/nightly",
     "web/nightly",
@@ -40,7 +49,7 @@ vicon       = { path = "crates/drivers/vicon"     }
 utils       = { path = "crates/utils"             }
 
 # external deps
-guilt-by-association = "0.2"
+guilt-by-association = "0.4"
 log         = "0.3"
 env_logger  = "0.4"
 hprof       = "0.1"
@@ -49,11 +58,20 @@ error-chain = "0.7" # skip v0.8 because of the Sync bound
 
 [dev-dependencies]
 # needed for examples (TODO remove)
-lazy_static = "0.2"
-time        = "0.1"
-libc        = "0.2"
-csv         = "0.15"
-lodepng     = "0.13" # TODO migrate to image
+lazy_static  = "0.2"
+time         = "0.1"
+libc         = "0.2"
+csv          = "0.15"
+lodepng      = "0.13" # TODO migrate to image
+num_cpus    = "1.3.0"
+serde        = "0.9"
+serde_json   = "0.9"
+serde_derive = "0.9"
+macro-attr   = "0.2"
+conv         = "0.3"
+
+[build-dependencies]
+foreman     = "0.2"
 
 [replace]
 "hprof:0.1.3" = { path = "overrides/hprof" }

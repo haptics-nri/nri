@@ -36,7 +36,7 @@ impl ParkState {
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(feature = "hardware"))]
 impl ParkState {
     pub fn metermaid() -> Option<ParkState> {
         Some(ParkState::Stick)
@@ -44,7 +44,7 @@ impl ParkState {
 }
 
 group_attr!{
-    #[cfg(target_os = "linux")]
+    #[cfg(feature = "hardware")]
 
     extern crate scribe;
 
@@ -325,8 +325,8 @@ group_attr!{
 
     guilty! {
         impl Controllable for Teensy {
-            const NAME: &'static str = "teensy",
-            const BLOCK: Block = Block::Immediate,
+            const NAME: &'static str = "teensy";
+            const BLOCK: Block = Block::Immediate;
 
             fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Teensy {
                 let mut port = serialport();
@@ -568,5 +568,5 @@ group_attr!{
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(feature = "hardware"))]
 stub!(Teensy);

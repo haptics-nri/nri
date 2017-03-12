@@ -36,29 +36,43 @@
                     words = data.split(' ');
                     switch (words[0]) {
                         case "msg":
-                            alert(data.slice(data.indexOf(" ")));
+                            alert(data.slice(data.indexOf(" ")),
+                                    null,
+                                    function () {
+                                        $("#abort").click();
+                                    });
                             break;
                         case "prompt":
-                            prompt(data.slice(data.indexOf(" ")), function (s) { send("RPC" + window.wsid + " " + s); });
+                            prompt(data.slice(data.indexOf(" ")),
+                                    function (s) {
+                                        send("RPC" + window.wsid + " " + s);
+                                    },
+                                    function () {
+                                        send("RPC" + window.wsid + " ABORT");
+                                    });
                             break;
                     }
                 }
             }
 
-            function alert(text, then) {
-                then = then || function () { console.log("alert modal dismissed by clicking OK"); };
+            function alert(text, thenok, thencancel) {
+                thenok = thenok || function () { console.log("alert modal dismissed by clicking OK"); };
+                thencancel = thencancel || function () { console.log("alert modal cancelled"); };
 
                 $("#alert .modal-body").html(text);
-                $("#alert #ok").unbind('click.alert').bind('click.alert', then);
+                $("#alert #ok").unbind('click.alert').bind('click.alert', thenok);
+                $("#alert #cancel").unbind('click.alert').bind('click.alert', thencancel);
                 $("#alert").modal("show");
             }
-            function confirm(text, thenyes, thenno) {
+            function confirm(text, thenyes, thenno, thencancel) {
                 thenyes = thenyes || function () { console.log("confirm modal dismissed by clicking Yes"); };
                 thenno = thenno || function () { console.log("confirm modal dismissed by clicking No"); };
+                thencancel = thencancel || function () { console.log("confirm modal cancelled"); };
 
                 $("#confirm .modal-body").html(text);
                 $("#confirm #yes").unbind('click.confirm').bind('click.confirm', thenyes);
                 $("#confirm #no").unbind('click.confirm').bind('click.confirm', thenno);
+                $("#confirm #cancel").unbind('click.confirm').bind('click.confirm', thencancel);
                 $("#confirm").modal("show");
             }
             function prompt(text, thenok, thencancel) {
@@ -67,9 +81,14 @@
 
                 $("#prompt #text").html(text);
                 $("#prompt #input").val("");
+                if (text.endsWith("scale)")) {
+                    $("#prompt #input").attr("type", "number");
+                } else {
+                    $("#prompt #input").attr("type", "text");
+                }
                 $("#prompt #ok").unbind('click.prompt').bind('click.prompt', function () { thenok($("#prompt #input").val()); });
                 $("#prompt #cancel").unbind('click.prompt').bind('click.prompt', thencancel);
-                $("#prompt").modal("show");
+                $("#prompt").modal({ show: true, backdrop: "static" });
             }
 
             function send(s) {
@@ -109,6 +128,12 @@
                 $("#alert").on("hidden.bs.modal", next);
                 $("#confirm").on("hidden.bs.modal", next);
                 $("#prompt").on("hidden.bs.modal", next);
+                $("#prompt").on("keypress", function (e) {
+                    if (e.which == 13) {
+                        $("#prompt #ok").click();
+                        e.preventDefault();
+                    }
+                });
             };
 
             window.socket = new WebSocket("ws://{{server}}", "rust-websocket");
@@ -143,6 +168,9 @@
                     case "stop":
                         serv = words[1];
                         $("#light-" + serv).css("background-color", "red");
+                        break;
+                    case "diskfree":
+                        $("#diskfree").html(words[1]);
                         break;
                 }
             };
@@ -260,6 +288,7 @@
                 <table style="border-spacing: 0.5em;
                               table-layout: fixed">
                     <tr>
+                        <td id="diskfree" style="padding-right: 0.5em"></span>
                         <td id="timer" style="padding-right: 0.5em" onclick="start_timer()"></td>
                         {{#each services}}
                             <td id="light-{{shortname}}" style="font-family: monospace;
@@ -292,6 +321,7 @@
                     </div>
                     <div class="modal-footer">
                         <a href="#" class="btn btn-primary" data-dismiss="modal" id="ok">OK</a>
+                        <a href="#" class="btn btn-primary" data-dismiss="modal" id="cancel">Cancel</a>
                     </div>
                 </div>
             </div>
@@ -309,6 +339,7 @@
                     <div class="modal-footer">
                         <a href="#" class="btn btn-primary" data-dismiss="modal" id="yes">Yes</a>
                         <a href="#" class="btn btn-primary" data-dismiss="modal" id="no">No</a>
+                        <a href="#" class="btn btn-primary" data-dismiss="modal" id="cancel">Cancel</a>
                     </div>
                 </div>
             </div>
@@ -324,7 +355,7 @@
                     <div class="modal-body">
                         <div id="text"></div>
                         <form>
-                            <input type="text" id="input"/>
+                            <input type="text" id="input" autofocus />
                         </form>
                     </div>
                     <div class="modal-footer">

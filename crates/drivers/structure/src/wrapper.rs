@@ -84,7 +84,7 @@ pub mod prop {
 
     guilty! {
         pub trait Stream {
-            const ID: i32,
+            const ID: i32;
 
             type Data;
             type CData;
@@ -144,7 +144,7 @@ pub mod prop {
             pub struct $name;
             guilty! {
                 impl Stream for $name {
-                    const ID: i32 = $id,
+                    const ID: i32 = $id;
 
                     type Data = $data;
                     type CData = $cdata;

@@ -8,6 +8,7 @@ authors = ["Alex Burka <aburka@seas.upenn.edu>"]
 debug = true
 
 [features]
+hardware = []
 nightly = [
     "comms/nightly",
     "scribe/nightly",
@@ -18,7 +19,7 @@ nightly = [
 comms                = { path = "../../back/comms"        }
 scribe               = { path = "../../back/scribe"       }
 utils                = { path = "../../utils"             }
-guilt-by-association = "0.2"
+guilt-by-association = "0.4"
 macro-attr           = "0.2"
 conv                 = "0.3"
 time                 = "0.1"
