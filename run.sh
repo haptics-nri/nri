@@ -12,7 +12,7 @@ else
 fi
 
 if [ "$#" -eq 0 -o "$1" == "--" ]; then 
-    cargo test --no-run --release
+    cargo build --release $FEAT --example bluefox_settings && \
     rlwrap cargo run --release $FEAT
     #gdb target/release/nri
 elif [ "$1" == "all" ]; then
