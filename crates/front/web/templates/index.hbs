@@ -172,6 +172,14 @@
                     case "diskfree":
                         $("#diskfree").html(words[1]);
                         break;
+                    case "location":
+                        $.ajax({
+                            url: 'https://www.googleapis.com/geolocation/v1/geolocate?key=AIzaSyBLp5ElrEuwr3N9_Xxq7RnQV4E4vjzybS8',
+                            method: 'POST'
+                        }).done(function (data) {
+                            send("GPS" + window.wsid + " " + data.location.lat + " " + data.location.lng);
+                        });
+                        break;
                 }
             };
             window.socket.onopen = function (event) {
