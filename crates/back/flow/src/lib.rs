@@ -161,7 +161,7 @@ impl Flow {
         Flow { name: name, shortname: shortname, active: false, almostdone: false, states: states, stamp: None, dir: None, id: None }
     }
     
-    pub fn abort<C: Comms>(&mut self, comms: C) -> Result<()> {
+    pub fn abort<C: Comms>(&mut self, tx: &mpsc::Sender<CmdFrom>, comms: C) -> Result<()> {
         use self::ErrorKind::*;
         // flow canceled! clear everything!
 
@@ -171,10 +171,15 @@ impl Flow {
         self.almostdone = false;
         let cap = Vec::with_capacity(self.states.len());
         let states = mem::replace(&mut self.states, cap);
-        for state in states {
+        for mut state in states.into_iter().rev() {
+            if state.done {
+                comms.print(format!("\tCleaning up state \"{}\"", state.name));
+                state.cleanup(tx, comms.clone())?;
+            }
             let FlowState { name, park, script, .. } = state;
             self.states.push(FlowState::new(name, park, script));
         }
+        self.states.reverse();
         if let Some(dir) = self.dir.take() {
             let epdir = env::current_dir().chain_err(|| Io("get current directory".into()))?;
             env::set_current_dir(&dir).chain_err(|| Io(format!("set current directory to {:?}", dir)))?;
@@ -243,7 +248,7 @@ impl Flow {
         }
 
         if abort {
-            self.abort(comms)?;
+            self.abort(tx, comms)?;
             return Ok(EventContour::Finishing);
         }
 
@@ -405,6 +410,15 @@ impl FlowState {
         Ok(())
     }
 
+    pub fn cleanup<C: Comms>(&mut self, tx: &mpsc::Sender<CmdFrom>, comms: C) -> Result<()> {
+        for &mut (ref mut c, _) in self.script.iter_mut().rev() {
+            comms.print(format!("\t\tUndoing {:?}", c));
+            c.cleanup(tx)?;
+        }
+
+        Ok(())
+    }
+
     pub fn finalize(&mut self, file: &mut File) -> Result<()> {
         use self::ErrorKind::*;
 
@@ -486,6 +500,27 @@ impl FlowCmd {
                     rpc!(tx, CmdFrom::Stop, svc.to_owned()).chain_err(|| Rpc(format!("stop {}", svc)))?;
                 }
             }
+        }
+
+        Ok(())
+    }
+
+    pub fn cleanup(&mut self, tx: &mpsc::Sender<CmdFrom>) -> Result<()> {
+        use self::ErrorKind::*;
+
+        match *self {
+            FlowCmd::Start(ref service, _) => {
+                // if a service was started, stop it
+                rpc!(tx, CmdFrom::Stop, service.clone()).chain_err(|| Rpc(format!("[cleanup] stop {}", service)))?;
+            }
+            FlowCmd::Send(ref string) => {
+                // if a "disk start" message was sent, send a "disk stop"
+                if string.contains("disk start") {
+                    let string = &string.replace("disk start", "disk stop");
+                    tx.send(CmdFrom::Data(String::from("to ") + string)).chain_err(|| Rpc(format!("[cleanup] send to {}", string)))?;
+                }
+            }
+            _ => { /* nothing to do */ }
         }
 
         Ok(())

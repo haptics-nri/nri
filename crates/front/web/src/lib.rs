@@ -21,7 +21,6 @@ extern crate hyper;
 extern crate rustc_serialize as serialize;
 extern crate websocket;
 
-use std::ops::Deref;
 use std::path::Path;
 use std::sync::{Mutex, RwLock, mpsc};
 use std::thread::JoinHandle;
@@ -221,10 +220,10 @@ fn flow(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
                                   let mut locked_flows = FLOWS.write().unwrap();
                                   if let Some(found) = locked_flows.get_mut(&*flow) {
                                       if a == "abort" {
-                                          found.abort(comms.clone()).unwrap();
+                                          found.abort(&*mtx.lock().unwrap(), comms.clone()).unwrap();
                                           Response::with((status::Ok, format!("Aborting \"{}\" flow", flow)))
                                       } else {
-                                          let contour = found.run(ParkState::metermaid().unwrap(), mtx.lock().unwrap().deref(), comms.clone()).unwrap();
+                                          let contour = found.run(ParkState::metermaid().unwrap(), &*mtx.lock().unwrap(), comms.clone()).unwrap();
                                           Response::with((status::Ok, format!("{:?} \"{}\" flow", contour, flow)))
                                       }
                                   } else {
