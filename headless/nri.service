@@ -5,7 +5,9 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/home/nri/software/nri/supervisor.sh
+ExecStart=/bin/bash -l -c /home/nri/software/nri/supervisor.sh
+User=nri
+Group=nri
 
 [Install]
 WantedBy=multi-user.target
