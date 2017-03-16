@@ -3,6 +3,7 @@
 extern crate lodepng;
 
 use std::fmt;
+use std::sync::atomic::Ordering;
 use lodepng::ColorType;
 
 struct Row {
@@ -26,6 +27,7 @@ impl common::Pixels<u16> for Row {
 }
 
 fn main() {
+    common::VERBOSITY.store(0, Ordering::SeqCst);
     common::do_camera::<u16, Row, _, _>("structure", |_, _, _| {}, (), 640, 480, 1, ColorType::LCT_GREY, 16);
 }
 

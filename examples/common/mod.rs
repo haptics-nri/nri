@@ -11,8 +11,14 @@ use std::fmt::Debug;
 use std::sync::{mpsc, Arc};
 use std::path::{Path, PathBuf};
 use std::str;
+use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT, Ordering};
 use self::lodepng::{encode_file, ColorType};
 use self::hprof::Profiler;
+
+/// Verbosity
+///
+/// Messages indented more levels than this will be suppressed
+pub static VERBOSITY: AtomicUsize = ATOMIC_USIZE_INIT;
 
 /// Semiautomatically-indenting `println!` replacement
 ///
@@ -54,14 +60,19 @@ use self::hprof::Profiler;
     ///     2. like (1), but with '>' prepended: prints the stuff, then increases the indentation
     ///        level. The indentation will revert at the end of the scope.
     #[macro_export] macro_rules! indentln {
+        () => {};
         (> $($arg:expr),*) => {
             indentln!($($arg),*);
             let _indent_guard = $crate::common::indent::IndentGuard::new();
             $crate::common::indent::_INDENT.fetch_add(1, ::std::sync::atomic::Ordering::SeqCst);
         };
-        ($($arg:expr),*)   => {
-            println!("{s: <#w$}{a}", s = "", w = 4 * $crate::common::indent::_INDENT.load(::std::sync::atomic::Ordering::SeqCst), a = format!($($arg),*));
-        }
+        ($($arg:expr),*)   => {{
+            let indent = $crate::common::indent::_INDENT.load(::std::sync::atomic::Ordering::SeqCst);
+            let verbosity = $crate::common::VERBOSITY.load(::std::sync::atomic::Ordering::SeqCst);
+            if indent < verbosity {
+                println!("{s: <#w$}{a}", s = "", w = 4 * indent, a = format!($($arg),*));
+            }
+        }}
     }
 }
 
@@ -234,7 +245,7 @@ pub fn do_camera<T: Copy, Data: Debug + Pixels<T>, F: for<'a> Fn(String, C, &'a 
                 {
                     let s = io::stdout();
                     let _g = s.lock();
-                    prof.print_timing();
+                    //prof.print_timing();
                 }
             }),
             tx
@@ -245,7 +256,6 @@ pub fn do_camera<T: Copy, Data: Debug + Pixels<T>, F: for<'a> Fn(String, C, &'a 
     let mut i = 0;
     let mut t = 0;
     for row in csvrdr.decode() {
-        println!("reading frame {}...", i);
         let (num, fname, stamp): (usize, String, f64) = row.expect(&format!("failed to parse row {} of {}", i, inname));
         attempt!(csvwtr.encode((num, Path::new(&fname).with_extension("png").to_str().unwrap().to_string(), stamp)));
         i += 1;

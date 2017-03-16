@@ -9,6 +9,7 @@ use std::fs::File;
 use std::path::Path;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::Ordering;
 use std::process::Command;
 use lodepng::ColorType;
 use hprof::Profiler;
@@ -62,7 +63,6 @@ fn april(fname: String, prof: &Profiler) -> (u32, String, String, String, String
         let mut p2s: Vec<(f64, f64)> = vec![];
         let mut p3s: Vec<(f64, f64)> = vec![];
         let mut p4s: Vec<(f64, f64)> = vec![];
-        println!("{}", output);
         for line in output.lines().skip(1) {
             let mut sections = line.split(';');
 
@@ -97,6 +97,8 @@ fn april(fname: String, prof: &Profiler) -> (u32, String, String, String, String
 }
 
 fn main() {
+    common::VERBOSITY.store(0, Ordering::SeqCst);
+
     let mut csvwtr = csv::Writer::from_memory();
     attempt!(csvwtr.encode(("Frame number", "Tag IDs", "Tag Centers", "Tag P1s", "Tag P2s", "Tag P3s", "Tag P4s")));
     let csvwtr = Arc::new(Mutex::new(csvwtr));
