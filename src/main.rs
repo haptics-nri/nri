@@ -341,20 +341,14 @@ fn try_main() -> Result<()> {
                         // step 2. stop all services
                         stop_all(services.drain(1..));
 
-                        // step 3. reboot system through DBUS
-                        process::Command::new("dbus-send")
-                            .arg("--system")
-                            .arg("--print-reply")
-                            .arg("--dest=org.freedesktop.login1")
-                            .arg("/org/freedesktop/login1")
-                            .arg(
-                                match power {
-                                    Power::PowerOff => "org.freedesktop.login1.Manager.PowerOff",
-                                    Power::Reboot   => "org.freedesktop.login1.Manager.Reboot",
-                                })
-                            .arg("boolean:true")
-                            .spawn().chain_err(|| "could not start dbus-send process")?
-                            .wait().chain_err(|| "dbus-send process did not complete successfully")?;
+                        // step 3. run shutdown/reboot command
+                        let mut cmd = process::Command::new("sudo");
+                        match power {
+                            Power::PowerOff => { cmd.args(&["/sbin/shutdown", "-hP", "now"]); }
+                            Power::Reboot   => { cmd.args(&["/sbin/reboot"]); }
+                        }
+                        cmd.spawn().chain_err(|| "could not start process")?
+                           .wait().chain_err(|| "process did not complete successfully")?;
                     },
                     CmdFrom::Timeout { thread: who, .. }  => {
                         // TODO actually time the service and do something if it times out
