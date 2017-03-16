@@ -1,7 +1,7 @@
 //! Service to capture frames from the Structure Sensor
 
 #[macro_use] extern crate utils;
-#[macro_use] extern crate comms;
+#[cfg_attr(not(feature="hardware"), macro_use)] extern crate comms;
 
 #[macro_use] extern crate guilt_by_association;
 #[macro_use] extern crate macro_attr;
@@ -62,7 +62,7 @@ group_attr!{
             const BLOCK: Block = Block::Immediate;
 
             fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Structure {
-                utils::in_original_dir(|| wrapper::initialize().unwrap());
+                utils::in_original_dir(|| wrapper::initialize().unwrap()).unwrap();
                 let device = wrapper::Device::new(None).unwrap();
 
                 let depth = wrapper::VideoStream::new(&device, wrapper::OniSensorType::Depth).unwrap();

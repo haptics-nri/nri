@@ -1,7 +1,7 @@
 //! Service to remote-control the Vicon ROS node
 
 #[macro_use] extern crate utils;
-#[macro_use] extern crate comms;
+#[cfg_attr(not(feature="hardware"), macro_use)] extern crate comms;
 #[macro_use] extern crate guilt_by_association;
 
 group_attr!{

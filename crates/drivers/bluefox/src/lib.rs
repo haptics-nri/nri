@@ -4,7 +4,7 @@
 
 #[macro_use] extern crate guilt_by_association;
 #[macro_use] extern crate utils;
-#[macro_use] extern crate comms;
+#[cfg_attr(not(feature="hardware"), macro_use)] extern crate comms;
 #[macro_use] extern crate macro_attr;
 #[macro_use] extern crate conv;
 
