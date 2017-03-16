@@ -26,16 +26,6 @@ pub fn in_original_dir<F: FnOnce() -> R, R>(f: F) -> io::Result<R> {
     Ok(ret)
 }
 
-#[macro_export]
-macro_rules! some {
-    ($strukt:ident { $($field:ident: $value:expr),* $(,)* }) => {
-        $strukt {
-            $($field: Some($value),)*
-            .. $strukt::default()
-        }
-    }
-}
-
 /// Just like println!, but prints to stderr
 #[macro_export]
 macro_rules! errorln {

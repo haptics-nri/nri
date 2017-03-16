@@ -24,8 +24,8 @@ group_attr!{
     use image::png::PNGEncoder;
     use serialize::base64;
     use serialize::base64::ToBase64;
-    use std::env;
-    use std::io::Write;
+    use std::{env, fs};
+    use std::io::{Read, Write};
     use std::process::{Command, Stdio};
     use std::sync::Mutex;
     use std::sync::mpsc::Sender;
@@ -104,13 +104,15 @@ group_attr!{
                     }
                 }
 
-                set_settings(some!(Settings {
-                    offset_x: 0, offset_y: 0,
-                    height: 1200, width: 1600,
-                    acq_fr_enable: true, acq_fr: fps,
-                    auto_exposure: true, auto_gain: true, average_grey: 90,
-                    cam_format: format.0, dest_format: format.1,
-                }));
+                let mut settings_file = utils::in_original_dir(|| fs::File::open("crates/drivers/bluefox/camera_settings.json").unwrap()).unwrap();
+                let mut settings_data = String::new();
+                settings_file.read_to_string(&mut settings_data).unwrap();
+                let settings = serde_json::from_str(&settings_data).unwrap();
+                set_settings(Settings {
+                    acq_fr: Some(fps),
+                    cam_format: Some(format.0),
+                    dest_format: Some(format.1),
+                    ..settings });
 
                 let device = wrapper::Device::new().unwrap();
                 device.request_reset().unwrap();
