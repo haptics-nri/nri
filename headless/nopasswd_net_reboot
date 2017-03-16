@@ -1,0 +1,10 @@
+# Allow nri user to manage the network systemd services and reboot the machine
+%nri ALL=NOPASSWD: /bin/systemctl enable create_ap
+%nri ALL=NOPASSWD: /bin/systemctl disable create_ap
+%nri ALL=NOPASSWD: /bin/systemctl enable network-manager
+%nri ALL=NOPASSWD: /bin/systemctl disable network-manager
+%nri ALL=NOPASSWD: /bin/systemctl is-enabled -q create_ap
+%nri ALL=NOPASSWD: /bin/systemctl is-enabled -q network-manager
+%nri ALL=NOPASSWD: /sbin/shutdown -hP now
+%nri ALL=NOPASSWD: /sbin/reboot
+

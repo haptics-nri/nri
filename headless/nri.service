@@ -1,1 +1,12 @@
-/etc/systemd/system/nri.service
+[Unit]
+Description=NRI supervisor
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/home/nri/software/nri/supervisor.sh
+
+[Install]
+WantedBy=multi-user.target
+
