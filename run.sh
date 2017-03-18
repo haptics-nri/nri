@@ -1,8 +1,8 @@
 #!/bin/bash
 
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:./crates/drivers/optoforce
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:./crates/drivers/structure
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:./crates/drivers/biotac/src/wrapper
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/crates/drivers/optoforce
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/crates/drivers/structure
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/crates/drivers/biotac/src/wrapper
 export RUST_BACKTRACE=1
 
 if [ $(hostname) == "nri-desktop" ]; then
@@ -12,7 +12,7 @@ else
 fi
 
 if [ "$#" -eq 0 -o "$1" == "--" ]; then 
-    cargo build --release $FEAT --example bluefox_settings && \
+    (cd tools/bluefox-settings && cargo build --release) && \
     rlwrap cargo run --release $FEAT
     #gdb target/release/nri
 elif [ "$1" == "all" ]; then

@@ -3,24 +3,15 @@ name    = "bluefox"
 version = "0.1.0"
 authors = ["Alex Burka <aburka@seas.upenn.edu>"]
 
-[profile.release]
-debug = true
-
 [features]
 hardware = []
-nightly = [
-    "comms/nightly",
-    "scribe/nightly",
-    "utils/nightly",
-    ]
 
 [dependencies]
-comms                = { path = "../../back/comms"        }
-scribe               = { path = "../../back/scribe"       }
-utils                = { path = "../../utils"             }
+comms                = { path = "../../back/comms"         }
+scribe               = { path = "../../back/scribe"        }
+utils                = { path = "../../utils"              }
+bluefox-sys          = { path = "../../../sys/bluefox-sys" }
 guilt-by-association = "0.4"
-macro-attr           = "0.2"
-conv                 = "0.3"
 time                 = "0.1"
 libc                 = "0.2"
 image                = "0.12"

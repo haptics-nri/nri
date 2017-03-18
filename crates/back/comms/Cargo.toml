@@ -3,12 +3,8 @@ name    = "comms"
 version = "0.1.0"
 authors = ["Alex Burka <aburka@seas.upenn.edu>"]
 
-[profile.release]
-debug = true
-
 [features]
 hardware = []
-nightly = ["utils/nightly"]
 
 [dependencies]
 utils                = { path = "../../utils"  }

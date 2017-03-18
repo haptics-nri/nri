@@ -1,0 +1,13 @@
+[package]
+name = "bluefox-sys"
+version = "0.1.0"
+authors = ["Haptics NUC <hapticsnuc@alexburka.com>"]
+
+[dependencies]
+libc         = "0.2"
+macro-attr   = "0.2"
+conv         = "0.3"
+serde        = "0.9"
+serde_json   = "0.9"
+serde_derive = "0.9"
+

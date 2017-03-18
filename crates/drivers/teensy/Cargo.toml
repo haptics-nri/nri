@@ -3,16 +3,8 @@ name    = "teensy"
 version = "0.1.0"
 authors = ["Alex Burka <aburka@seas.upenn.edu>"]
 
-[profile.release]
-debug = true
-
 [features]
 hardware = []
-nightly = [
-    "comms/nightly",
-    "scribe/nightly",
-    "utils/nightly",
-    ]
 
 [dependencies]
 comms                = { path = "../../back/comms"  }

@@ -3,15 +3,6 @@ name    = "scribe"
 version = "0.1.0"
 authors = ["Alex Burka <aburka@seas.upenn.edu>"]
 
-[profile.release]
-debug = true
-
-[features]
-nightly = [
-    "utils/nightly",
-    "lazy_static/nightly",
-    ]
-
 [dependencies]
 utils          = { path = "../../utils" }
 libc           = "0.2"

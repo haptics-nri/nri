@@ -2,18 +2,9 @@
 name    = "structure"
 version = "0.1.0"
 authors = ["Alex Burka <aburka@seas.upenn.edu>"]
-# TODO build script
-
-[profile.release]
-debug = true
 
 [features]
 hardware = []
-nightly = [
-    "comms/nightly",
-    "scribe/nightly",
-    "utils/nightly",
-    ]
 
 [dependencies]
 comms                = { path = "../../back/comms"        }

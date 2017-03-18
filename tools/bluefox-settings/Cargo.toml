@@ -1,0 +1,14 @@
+[package]
+name = "bluefox-settings"
+version = "0.1.0"
+authors = ["Haptics NUC <hapticsnuc@alexburka.com>"]
+build = "build.rs"
+
+[dependencies]
+libc         = "0.2"
+serde_json   = "0.9"
+bluefox-sys  = { path = "../../sys/bluefox-sys" }
+
+[build-dependencies]
+foreman      = "0.2"
+

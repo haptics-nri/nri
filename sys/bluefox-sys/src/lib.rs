@@ -1,5 +1,10 @@
 #![allow(dead_code, non_camel_case_types)]
 
+extern crate libc;
+#[macro_use] extern crate serde_derive;
+#[macro_use] extern crate macro_attr;
+#[macro_use] extern crate conv;
+
 use libc::{c_void, c_int, c_uint, c_char, c_double};
 use conv::TryFrom;
 use std::slice;

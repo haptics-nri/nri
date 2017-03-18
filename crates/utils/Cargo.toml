@@ -3,12 +3,6 @@ name    = "utils"
 version = "0.1.0"
 authors = ["Alex Burka <aburka@seas.upenn.edu>"]
 
-[profile.release]
-debug = true
-
-[features]
-nightly = ["lazy_static/nightly"]
-
 [dependencies]
 lazy_static = "0.2"
 hprof  = "0.1"

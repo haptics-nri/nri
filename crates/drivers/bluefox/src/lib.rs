@@ -5,42 +5,39 @@
 #[macro_use] extern crate guilt_by_association;
 #[macro_use] extern crate utils;
 #[cfg_attr(not(feature="hardware"), macro_use)] extern crate comms;
-#[macro_use] extern crate macro_attr;
-#[macro_use] extern crate conv;
 
 group_attr!{
     #[cfg(feature = "hardware")]
 
-    extern crate libc;
     extern crate time;
     extern crate image;
     extern crate rustc_serialize as serialize;
-    #[macro_use] extern crate serde_derive;
     extern crate serde_json;
 
     extern crate scribe;
+    extern crate bluefox_sys as ll;
 
     use image::{imageops, ImageBuffer, ColorType, FilterType};
     use image::png::PNGEncoder;
     use serialize::base64;
     use serialize::base64::ToBase64;
-    use std::{env, fs};
+    use std::fs::File;
     use std::io::{Read, Write};
+    use std::path::PathBuf;
     use std::process::{Command, Stdio};
     use std::sync::Mutex;
     use std::sync::mpsc::Sender;
     use comms::{Controllable, CmdFrom, Block, RestartableThread};
     use scribe::Writer;
+    use ll::Device;
+    use ll::settings::*;
 
     type PngStuff = (usize, Vec<u8>, (usize, usize), ColorType);
-
-    mod wrapper;
-    use self::wrapper::settings::*;
 
     /// Controllable struct for the camera
     pub struct Bluefox {
         /// Private device handle
-        device: wrapper::Device,
+        device: Device,
 
         /// Time that setup() was last called (used for calculating frame rates)
         start: time::Tm,
@@ -59,10 +56,15 @@ group_attr!{
     }
 
     fn set_settings(settings: Settings) {
-        let mut exe = env::current_exe().unwrap();
-        exe.set_file_name("");
-        exe.push("examples");
-        exe.push("bluefox_settings");
+        let mut exe = PathBuf::from(env!("CARGO_MANIFEST_DIR"));;
+        exe.push("..");
+        exe.push("..");
+        exe.push("..");
+        exe.push("tools");
+        exe.push("bluefox-settings");
+        exe.push("target");
+        exe.push("release");
+        exe.push("bluefox-settings");
 
         let settings_str = serde_json::to_string(&settings).unwrap();
         println!("{:?} '{}'", exe, settings_str);
@@ -104,7 +106,7 @@ group_attr!{
                     }
                 }
 
-                let mut settings_file = utils::in_original_dir(|| fs::File::open("crates/drivers/bluefox/camera_settings.json").unwrap()).unwrap();
+                let mut settings_file = utils::in_original_dir(|| File::open("crates/drivers/bluefox/camera_settings.json").unwrap()).unwrap();
                 let mut settings_data = String::new();
                 settings_file.read_to_string(&mut settings_data).unwrap();
                 let settings = serde_json::from_str(&settings_data).unwrap();
@@ -114,7 +116,7 @@ group_attr!{
                     dest_format: Some(format.1),
                     ..settings });
 
-                let device = wrapper::Device::new().unwrap();
+                let device = Device::new().unwrap();
                 device.request_reset().unwrap();
 
                 let mtx = Mutex::new(tx);

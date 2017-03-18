@@ -20,17 +20,6 @@ hardware = [
     "vicon/hardware",
     ]
 nightly = [
-    "cli/nightly",
-    "web/nightly",
-    "comms/nightly",
-    "scribe/nightly",
-    "biotac/nightly",
-    "bluefox/nightly",
-    "optoforce/nightly",
-    "structure/nightly",
-    "teensy/nightly",
-    "vicon/nightly",
-    "utils/nightly",
     "lazy_static/nightly",
     ]
 

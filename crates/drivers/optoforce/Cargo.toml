@@ -3,17 +3,8 @@ name    = "optoforce"
 version = "0.1.0"
 authors = ["Alex Burka <aburka@seas.upenn.edu>"]
 
-[profile.release]
-debug = true
-# TODO build script
-
 [features]
 hardware = []
-nightly = [
-    "comms/nightly",
-    "scribe/nightly",
-    "utils/nightly",
-    ]
 
 [dependencies]
 comms                = { path = "../../back/comms"        }
