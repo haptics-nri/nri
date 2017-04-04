@@ -7,4 +7,5 @@
 %nri ALL=NOPASSWD: /bin/systemctl is-enabled -q network-manager
 %nri ALL=NOPASSWD: /sbin/shutdown -hP now
 %nri ALL=NOPASSWD: /sbin/reboot
+%nri ALL=NOPASSWD: /home/nri/software/uhubctl/uhubctl [a-zA-Z0-9-]*
 

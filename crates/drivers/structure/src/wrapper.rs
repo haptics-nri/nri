@@ -257,16 +257,6 @@ macro_rules! status2result {
 }
 
 pub fn initialize() -> Result<(), OniError> {
-    /* TODO it'd be real nice if we could reset it without unplugging it
-    match ioctl::usbdevfs_reset("/dev/bus/usb/002/002") {
-        Ok(_) => println!("Device reset succeeded"),
-        Err(rc) => {
-            println!("Device reset failed: {}", rc);
-            return Err(OniError::Error);
-        },
-    }
-    thread::sleep(Duration::from_millis(5000));
-    */
     status2result!(unsafe { oniInitialize(2) })
 }
 

@@ -15,13 +15,14 @@ group_attr!{
     extern crate libc;
     extern crate image;
     extern crate rustc_serialize as serialize;
-    use std::{mem, slice};
+    use std::{mem, slice, thread};
+    use std::process::Command;
     use std::sync::Mutex;
+    use std::sync::mpsc::Sender;
     use image::{imageops, ImageBuffer, ColorType, FilterType};
     use image::png::PNGEncoder;
     use serialize::base64;
     use serialize::base64::ToBase64;
-    use std::sync::mpsc::Sender;
     use comms::{Controllable, CmdFrom, Block, RestartableThread};
     use scribe::Writer;
 
@@ -62,6 +63,19 @@ group_attr!{
             const BLOCK: Block = Block::Immediate;
 
             fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Structure {
+                // The Structure Sensor behaves badly if a program terminates without calling the shutdown
+                // function. Software reset (via ioctl) does not help -- the only way is to cycle power by
+                // unplugging the device. We take advantage of the fact that it is plugged in through a USB
+                // hub, and use uhubctl (https://github.com/mvp/uhubctl) to turn it off and on again.
+                assert!(Command::new("sudo")
+                                .args(&["/home/nri/software/uhubctl/uhubctl",
+                                        "-a", "cycle", // cycle power
+                                        "-d", "0.5", // keep power off for 0.5 sec
+                                        "-l", "2-3", "-p 3"]) // USB hub at address 2-3, port 3
+                                .status().unwrap()
+                                .success());
+                thread::sleep_ms(1000);
+
                 utils::in_original_dir(|| wrapper::initialize().unwrap()).unwrap();
                 let device = wrapper::Device::new(None).unwrap();
 
