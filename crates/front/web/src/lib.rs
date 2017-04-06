@@ -237,7 +237,7 @@ fn flow(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
 
                       let mut data = BTreeMap::<String, Json>::new();
                       data.insert("flows".to_owned(), FLOWS.read().unwrap().to_json());
-                      comms.send(format!("flow {}", render("flows", data)));
+                      comms.send(format!("flow {}", render("flows", data))); // FIXME if this fails, abort the flow!!! (network error)
                       comms.send(format!("diskfree {}", disk_free()));
 
                       resp

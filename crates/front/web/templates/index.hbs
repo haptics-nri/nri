@@ -97,14 +97,30 @@
             }
 
             var timer = null;
+            var dead_man_timer = null;
+
+            function dead_man_switch() {
+                clearTimeout(dead_man_timer);
+                dead_man_timer = setTimeout(dead_man_alarm, 500);
+            }
+
+            function dead_man_alarm() {
+                if (document.response.document.body.innerText =="") {
+                    alert("Server not responding!");
+                }
+            }
 
             function start_timer() {
+                dead_man_switch();
+
                 $("#timer").html("0m0s");
                 clearInterval(timer);
                 timer = setInterval(update_timer, 1000);
             }
 
             function clear_timer() {
+                dead_man_switch();
+
                 clearInterval(timer);
                 $("#timer").html("");
             }
