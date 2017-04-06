@@ -11,6 +11,7 @@ teensy               = { path = "../../drivers/teensy" }
 guilt-by-association = "0.4"
 lazy_static          = "0.2"
 log                  = "0.3"
+regex                = "0.2"
 
 # iron deps
 iron                 = "0.5"

@@ -9,6 +9,7 @@ extern crate teensy;
 #[macro_use] extern crate log;
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate guilt_by_association;
+extern crate regex;
 
 extern crate iron;
 extern crate handlebars as hbs;
@@ -31,6 +32,7 @@ use std::fs::File;
 use std::process::Command;
 use comms::{Controllable, CmdFrom, Power, Block};
 use teensy::ParkState;
+use regex::Regex;
 use iron::prelude::*;
 use iron::status;
 use iron::middleware::Handler;
@@ -242,18 +244,30 @@ fn flow(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
                   })
 }
 
+trait RegexSplit {
+    fn split_re<'r, 't>(&'t self, re: &'r Regex) -> regex::Split<'r, 't>;
+}
+
+impl RegexSplit for str {
+    fn split_re<'r, 't>(&'t self, re: &'r Regex) -> regex::Split<'r, 't> {
+        re.split(self)
+    }
+}
+
 /// Measure free disk space in gigabytes
 fn disk_free() -> String {
+    let re = Regex::new(r" +").unwrap();
+
     str::from_utf8(
         &Command::new("df") // measure disk free space
             .arg("-h")     // human-readable units
-            .arg("--output=avail") // only print free space
             .arg(env::current_dir().unwrap().to_str().unwrap()) // device corresponding to $PWD
             .output().unwrap().stdout).unwrap() // read all output
         .split("\n") // split lines
         .skip(1) // skip first line
         .next().unwrap() // use second line
-        .trim() // trim whitespace
+        .split_re(&re) // split on whitespace
+        .nth(3).unwrap() // fourth column is available space
         .to_owned()
 }
 
