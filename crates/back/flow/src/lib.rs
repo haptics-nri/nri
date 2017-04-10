@@ -124,6 +124,7 @@ impl fmt::Display for StampPrinter {
 }
 
 /// Descriptor of a data collection flow
+#[derive(Default)]
 pub struct Flow {
     /// Name of the flow
     pub name: String, pub shortname: String,
@@ -135,7 +136,8 @@ pub struct Flow {
     almostdone: bool,
 
     stamp: Option<DateTime<Local>>,
-    dir: Option<PathBuf>,
+    original_dir: Option<PathBuf>,
+    episode_dir: Option<PathBuf>,
     id: Option<Uuid>,
 }
 
@@ -173,7 +175,12 @@ pub enum FlowCmd {
 
 impl Flow {
     pub fn new(name: String, shortname: String, states: Vec<FlowState>) -> Flow {
-        Flow { name: name, shortname: shortname, active: false, almostdone: false, states: states, stamp: None, dir: None, id: None }
+        Flow {
+            name: name,
+            shortname: shortname,
+            states: states,
+            .. Flow::default()
+        }
     }
     
     pub fn abort<C: Comms>(&mut self, tx: &mpsc::Sender<CmdFrom>, comms: C) -> Result<()> {
@@ -195,10 +202,9 @@ impl Flow {
             self.states.push(FlowState::new(name, park, script));
         }
         self.states.reverse();
-        if let Some(dir) = self.dir.take() {
-            let epdir = env::current_dir().chain_err(|| Io("get current directory".into()))?;
-            env::set_current_dir(&dir).chain_err(|| Io(format!("set current directory to {:?}", dir)))?;
-            fs::remove_dir_all(&epdir).chain_err(|| Io(format!("delete directory {:?}", epdir)))?;
+        if let (Some(original_dir), Some(episode_dir)) = (self.original_dir.take(), self.episode_dir.take()) {
+            env::set_current_dir(&original_dir).chain_err(|| Io(format!("set current directory to {:?}", original_dir)))?;
+            fs::remove_dir_all(&episode_dir).chain_err(|| Io(format!("delete directory {:?}", episode_dir)))?;
         }
 
         Ok(())
@@ -223,7 +229,7 @@ impl Flow {
             let datedir = stamp.format("%Y%m%d").to_string();
             let fldir = format!("data/{}/{}", datedir, self.shortname); // TODO use PathBuf::push
             fs::create_dir_all(&fldir).chain_err(|| Io(format!("create episode directory {:?}", fldir)))?;
-            self.dir = Some(env::current_dir().chain_err(|| Io("get current directory".into()))?);
+            self.original_dir = Some(env::current_dir().chain_err(|| Io("get current directory".into()))?);
             env::set_current_dir(&fldir).chain_err(|| Io(format!("set current directory to {:?}", fldir)))?;
             let mut epnum = 1;
             for entry in fs::read_dir(".").chain_err(|| Io("list current directory".into()))? {
@@ -238,6 +244,7 @@ impl Flow {
             }
             fs::create_dir(epnum.to_string()).chain_err(|| Io(format!("create directory \"{}\"", epnum)))?;
             env::set_current_dir(epnum.to_string()).chain_err(|| Io(format!("set current directory to \"{}\"", epnum)))?;
+            self.episode_dir = Some(env::current_dir().chain_err(|| Io("get current directory".into()))?);
 
             ret = EventContour::Starting;
         }
@@ -288,8 +295,8 @@ impl Flow {
                 }
                 self.states = states;
 
-                if let Some(dir) = self.dir.take() {
-                    env::set_current_dir(&dir).chain_err(|| Io(format!("set current directory to {:?}", dir)))?;
+                if let Some(original_dir) = self.original_dir.take() {
+                    env::set_current_dir(&original_dir).chain_err(|| Io(format!("set current directory to {:?}", original_dir)))?;
                 }
 
                 ret = EventContour::Finishing;
