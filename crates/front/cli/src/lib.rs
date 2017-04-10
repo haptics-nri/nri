@@ -217,22 +217,26 @@ impl CLI {
     fn flow(&self, name: Option<&str>) {
         #[derive(Clone)] struct CLIComms;
         impl Comms for CLIComms {
-            fn print(&self, _: String) {
+            type Error = io::Error;
+
+            fn print(&self, _: String) -> Result<(), Self::Error> {
                 /* quiet */
+                Ok(())
             }
 
-            fn send(&self, msg: String) {
+            fn send(&self, msg: String) -> Result<(), Self::Error> {
                 println!("\t{} ", &msg[4..]);
+                Ok(())
             }
 
-            fn rpc<T, F: Fn(String) -> Result<T, String>>(&self, prompt: String, validator: F) -> Option<T> {
+            fn rpc<T, F: Fn(String) -> Result<T, String>>(&self, prompt: String, validator: F) -> Result<Option<T>, Self::Error> {
                 loop {
                     print!("\t{}: ", &prompt[7..]);
-                    io::stdout().flush().unwrap();
+                    io::stdout().flush()?;
                     let mut input = String::new();
-                    io::stdin().read_line(&mut input).unwrap();
+                    io::stdin().read_line(&mut input)?;
                     match validator(input.clone()) {
-                        Ok(ret) => return Some(ret),
+                        Ok(ret) => return Ok(Some(ret)),
                         Err(msg) => println!("\t{}", &msg[7..])
                     }
                 }

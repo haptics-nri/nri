@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::{mpsc, Mutex};
+use std::result::Result as StdResult;
 use std::{thread, str};
 use comms::CmdFrom;
 use super::{config, flow};
@@ -7,6 +8,8 @@ pub use websocket::{Sender, Receiver, Message};
 use websocket::message::Type as MsgType;
 use websocket::{sender, header, stream, Server, Client};
 use url::Host;
+
+use super::{Result, Error, ResultExt};
 
 lazy_static! {
     pub static ref RPC_SENDERS: Mutex<HashMap<usize, mpsc::Sender<Option<String>>>> = Mutex::new(HashMap::new());
@@ -27,40 +30,46 @@ impl Comms {
 }
 
 impl flow::Comms for Comms {
-    fn print(&self, msg: String) {
+    type Error = Error;
+
+    fn print(&self, msg: String) -> Result<()> {
         println!("{}", msg);
+        Ok(())
     }
 
-    fn send(&self, msg: String) {
-        let mut locked_senders = WS_SENDERS.lock().unwrap();
-
-        locked_senders[self.wsid].send_message(&Message::text(msg)).unwrap();
+    fn send(&self, msg: String) -> Result<()> {
+        let mut locked_senders = WS_SENDERS.lock()?;
+        if ::std::env::var("NRI_WS_FAIL").ok().map_or(false, |s| s == "1") {
+            Err("NoDataAvailable".into())
+        } else {
+            Ok(locked_senders[self.wsid].send_message(&Message::text(msg))?)
+        }
     }
 
-    fn rpc<T, F: Fn(String) -> Result<T, String>>(&self, prompt: String, validator: F) -> Option<T> {
-        let go = |prompt: &str| -> Option<String> {
+    fn rpc<T, F: Fn(String) -> StdResult<T, String>>(&self, prompt: String, validator: F) -> Result<Option<T>> {
+        let go = |prompt: &str| -> Result<Option<String>> {
             let (tx, rx) = mpsc::channel();
             println!("Waiting on RPC from WSID {}", self.wsid);
             {
-                let mut locked_senders = WS_SENDERS.lock().unwrap();
-                let mut locked_rpcs = RPC_SENDERS.lock().unwrap();
+                let mut locked_senders = WS_SENDERS.lock()?;
+                let mut locked_rpcs = RPC_SENDERS.lock()?;
                 locked_rpcs.insert(self.wsid, tx);
-                locked_senders[self.wsid].send_message(&Message::text(prompt.to_owned())).unwrap();
+                locked_senders[self.wsid].send_message(&Message::text(prompt.to_owned()))?;
             }
-            rx.recv().unwrap()
+            Ok(rx.recv()?)
         };
 
-        let mut maybe_answer = go(&prompt);
+        let mut maybe_answer = go(&prompt)?;
         loop {
             if let Some(answer) = maybe_answer {
                 match validator(answer) {
-                    Ok(ret) => return Some(ret),
+                    Ok(ret) => return Ok(Some(ret)),
                     Err(admonish) => {
-                        maybe_answer = go(&format!("{} {}", admonish, prompt));
+                        maybe_answer = go(&format!("{} {}", admonish, prompt))?;
                     }
                 }
             } else {
-                return None;
+                return Ok(None);
             }
         }
     }

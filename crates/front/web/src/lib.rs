@@ -9,6 +9,7 @@ extern crate teensy;
 #[macro_use] extern crate log;
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate guilt_by_association;
+#[macro_use] extern crate error_chain;
 extern crate regex;
 
 extern crate iron;
@@ -30,6 +31,8 @@ use std::{env, str};
 use std::io::Read;
 use std::fs::File;
 use std::process::Command;
+use std::sync::PoisonError;
+use std::sync::mpsc::RecvError;
 use comms::{Controllable, CmdFrom, Power, Block};
 use teensy::ParkState;
 use regex::Regex;
@@ -47,6 +50,7 @@ use hyper::server::Listening;
 use hyper::header::ContentType;
 use hyper::mime::{Mime, TopLevel, SubLevel};
 use serialize::json::{ToJson, Json};
+use websocket::result::WebSocketError;
 
 /// parsing and running flows
 extern crate flow;
@@ -58,6 +62,23 @@ mod middleware;
 mod ws;
 
 use self::flow::{FLOWS, Comms};
+
+error_chain! {
+    errors {
+        Poison {}
+    }
+
+    foreign_links {
+        WebSocket(WebSocketError);
+        MPSCRecv(RecvError);
+    }
+}
+
+impl<T> From<PoisonError<T>> for Error {
+    fn from(x: PoisonError<T>) -> Self {
+        Self::from_kind(ErrorKind::Poison)
+    }
+}
 
 /// Service descriptor
 ///
@@ -225,8 +246,10 @@ fn flow(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
                                           found.abort(&*mtx.lock().unwrap(), comms.clone()).unwrap();
                                           Response::with((status::Ok, format!("Aborting \"{}\" flow", flow)))
                                       } else {
-                                          let contour = found.run(ParkState::metermaid().unwrap(), &*mtx.lock().unwrap(), comms.clone()).unwrap();
-                                          Response::with((status::Ok, format!("{:?} \"{}\" flow", contour, flow)))
+                                          match found.run(ParkState::metermaid().unwrap(), &*mtx.lock().unwrap(), comms.clone()) {
+                                              Ok(contour) => Response::with((status::Ok, format!("{:?} \"{}\" flow", contour, flow))),
+                                              Err(e) => { println!("{:?}", e); Response::with((status::InternalServerError, "bad")) }
+                                          }
                                       }
                                   } else {
                                       Response::with((status::BadRequest, format!("Could not find \"{}\" flow", flow)))

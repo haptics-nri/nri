@@ -15,6 +15,7 @@ use std::ffi::OsString;
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::result::Result as StdResult;
+use std::error::Error as StdError;
 use std::sync::RwLock;
 use std::time::Duration;
 use chrono::{DateTime, Local, Timelike};
@@ -42,6 +43,8 @@ error_chain! {
         }
 
         FlowCanceled {}
+
+        Comms {}
     }
 }
 
@@ -56,10 +59,20 @@ impl<T> OptionExt<T> for Option<T> {
     }
 }
 
+trait ResultExt2<T, E: StdError + Send + 'static> {
+    fn comms_err(self) -> Result<T>;
+}
+
+impl<T, E: StdError + Send + 'static> ResultExt2<T, E> for StdResult<T, E> {
+    fn comms_err(self) -> Result<T> {
+        self.map_err(|err| Error::with_chain(err, ErrorKind::Comms))
+    }
+}
+
 #[derive(Debug)]
 struct OsStringError(OsString);
 
-impl ::std::error::Error for OsStringError {
+impl StdError for OsStringError {
     fn description(&self) -> &str {
         "invalid UTF-8"
     }
@@ -87,9 +100,11 @@ lazy_static! {
 }
 
 pub trait Comms: Clone {
-    fn print(&self, msg: String);
-    fn send(&self, msg: String);
-    fn rpc<T, F: Fn(String) -> StdResult<T, String>>(&self, prompt: String, validator: F) -> Option<T>;
+    type Error: StdError + Send + 'static;
+
+    fn print(&self, msg: String) -> StdResult<(), Self::Error>;
+    fn send(&self, msg: String) -> StdResult<(), Self::Error>;
+    fn rpc<T, F: Fn(String) -> StdResult<T, String>>(&self, prompt: String, validator: F) -> StdResult<Option<T>, Self::Error>;
 }
 
 #[derive(Debug, PartialEq)]
@@ -165,7 +180,7 @@ impl Flow {
         use self::ErrorKind::*;
         // flow canceled! clear everything!
 
-        comms.print("Aborting flow.".into());
+        comms.print("Aborting flow.".into()).comms_err()?;
 
         self.active = false;
         self.almostdone = false;
@@ -173,7 +188,7 @@ impl Flow {
         let states = mem::replace(&mut self.states, cap);
         for mut state in states.into_iter().rev() {
             if state.done {
-                comms.print(format!("\tCleaning up state \"{}\"", state.name));
+                comms.print(format!("\tCleaning up state \"{}\"", state.name)).comms_err()?;
                 state.cleanup(tx, comms.clone())?;
             }
             let FlowState { name, park, script, .. } = state;
@@ -198,7 +213,7 @@ impl Flow {
 
         // are we just starting the flow now?
         if !self.active {
-            comms.print(format!("Beginning flow {}!", self.name));
+            comms.print(format!("Beginning flow {}!", self.name)).comms_err()?;
 
             // need a timestamp and ID
             let stamp = self.stamp.put(Local::now());
@@ -232,19 +247,19 @@ impl Flow {
         if let Some(state) = self.states.iter_mut().skip_while(|s| s.done).next() {
             if state.park.map_or(true, |p| p == park) {
                 ret = EventContour::Continuing;
-                comms.print(format!("Executing state {}", state.name));
+                comms.print(format!("Executing state {}", state.name)).comms_err()?;
                 match state.run(tx, comms.clone()) {
                     Ok(()) => (),
                     Err(Error(ErrorKind::FlowCanceled, ..)) => abort = true,
                     Err(e) => return Err(e)
                 }
-                comms.print(format!("Finished executing state {}", state.name));
+                comms.print(format!("Finished executing state {}", state.name)).comms_err()?;
             } else if let Some(goal) = state.park {
-                comms.print(format!("Waiting for parking lot state to be {:?} (currently {:?})", goal, park));
-                comms.send(format!("msg Please insert {:?} end-effector", goal));
+                comms.print(format!("Waiting for parking lot state to be {:?} (currently {:?})", goal, park)).comms_err()?;
+                comms.send(format!("msg Please insert {:?} end-effector", goal)).comms_err()?;
             }
         } else {
-            comms.print(format!("No applicable states."));
+            comms.print(format!("No applicable states.")).comms_err()?;
         }
 
         if abort {
@@ -412,7 +427,7 @@ impl FlowState {
 
     pub fn cleanup<C: Comms>(&mut self, tx: &mpsc::Sender<CmdFrom>, comms: C) -> Result<()> {
         for &mut (ref mut c, _) in self.script.iter_mut().rev() {
-            comms.print(format!("\t\tUndoing {:?}", c));
+            comms.print(format!("\t\tUndoing {:?}", c)).comms_err()?;
             c.cleanup(tx)?;
         }
 
@@ -449,7 +464,7 @@ impl FlowCmd {
         use self::ErrorKind::*;
 
         match *self {
-            FlowCmd::Message(ref msg) => comms.send(format!("msg {}", msg)),
+            FlowCmd::Message(ref msg) => comms.send(format!("msg {}", msg)).comms_err()?,
             FlowCmd::Str { ref prompt, ref mut data } => {
                 assert!(data.is_none());
                 *data = Some(comms.rpc(format!("prompt Please enter {}",
@@ -460,7 +475,7 @@ impl FlowCmd {
                                            } else {
                                                Ok(x)
                                            }
-                                       })
+                                       }).comms_err()?
                                        .ok_or(ErrorKind::FlowCanceled)?);
             }
             FlowCmd::Int { ref prompt, limits: (low, high), ref mut data } => {
@@ -479,15 +494,15 @@ impl FlowCmd {
                                                    Err("prompt Not an integer!".to_owned())
                                                }
                                            }
-                                       })
+                                       }).comms_err()?
                                        .ok_or(ErrorKind::FlowCanceled)?);
             }
             FlowCmd::Start(ref service, ref data) => {
-                comms.print(format!("Flow starting service {}", service));
+                comms.print(format!("Flow starting service {}", service)).comms_err()?;
                 rpc!(tx, CmdFrom::Start, service.clone(), data.clone()).chain_err(|| Rpc(format!("start {}", service)))?;
-                comms.print(format!("Flow waiting for service {} to start", service));
+                comms.print(format!("Flow waiting for service {} to start", service)).comms_err()?;
                 thread::sleep(Duration::from_millis(2000));
-                comms.print(format!("Flow done waiting for service {}", service));
+                comms.print(format!("Flow done waiting for service {}", service)).comms_err()?;
             }
             FlowCmd::Stop(ref service) => {
                 rpc!(tx, CmdFrom::Stop, service.clone()).chain_err(|| Rpc(format!("stop {}", service)))?;
