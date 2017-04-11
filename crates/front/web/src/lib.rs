@@ -27,7 +27,7 @@ use std::path::Path;
 use std::sync::{Mutex, RwLock, mpsc};
 use std::thread::JoinHandle;
 use std::collections::BTreeMap;
-use std::{env, str};
+use std::{env, str, thread};
 use std::io::Read;
 use std::fs::File;
 use std::process::Command;
@@ -260,8 +260,15 @@ fn flow(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
 
                       let mut data = BTreeMap::<String, Json>::new();
                       data.insert("flows".to_owned(), FLOWS.read().unwrap().to_json());
-                      comms.send(format!("flow {}", render("flows", data))); // FIXME if this fails, abort the flow!!! (network error)
-                      comms.send(format!("diskfree {}", disk_free()));
+                      retry(3, 500,
+                            || {
+                                comms.send(format!("flow {}", render("flows", data.clone())))
+                                    .ok().and_then(|_| comms.send(format!("diskfree {}", disk_free())).ok())
+                            },
+                            || {
+                                println!("ERROR: Sending flow info to client failed 3 times :(");
+                                ()
+                            });
 
                       resp
                   })
@@ -274,6 +281,20 @@ trait RegexSplit {
 impl RegexSplit for str {
     fn split_re<'r, 't>(&'t self, re: &'r Regex) -> regex::Split<'r, 't> {
         re.split(self)
+    }
+}
+
+/// Retry some action on failure
+fn retry<R, F: FnMut() -> Option<R>, G: FnOnce() -> R>(times: usize, delay_ms: u32, mut action: F, fallback: G) -> R {
+    for _ in 0..times-1 {
+        if let Some(ret) = action() {
+            return ret;
+        }
+        thread::sleep_ms(delay_ms);
+    }
+    match action() {
+        Some(ret) => return ret,
+        None => return fallback()
     }
 }
 
