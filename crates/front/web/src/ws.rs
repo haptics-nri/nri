@@ -9,7 +9,7 @@ use websocket::message::Type as MsgType;
 use websocket::{sender, header, stream, Server, Client};
 use url::Host;
 
-use super::{Result, Error, ResultExt};
+use super::{Result, Error};
 
 lazy_static! {
     pub static ref RPC_SENDERS: Mutex<HashMap<usize, mpsc::Sender<Option<String>>>> = Mutex::new(HashMap::new());

@@ -33,6 +33,7 @@ use std::fs::File;
 use std::process::Command;
 use std::sync::PoisonError;
 use std::sync::mpsc::RecvError;
+use std::time::Duration;
 use comms::{Controllable, CmdFrom, Power, Block};
 use teensy::ParkState;
 use regex::Regex;
@@ -75,7 +76,7 @@ error_chain! {
 }
 
 impl<T> From<PoisonError<T>> for Error {
-    fn from(x: PoisonError<T>) -> Self {
+    fn from(_: PoisonError<T>) -> Self {
         Self::from_kind(ErrorKind::Poison)
     }
 }
@@ -260,7 +261,7 @@ fn flow(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
 
                       let mut data = BTreeMap::<String, Json>::new();
                       data.insert("flows".to_owned(), FLOWS.read().unwrap().to_json());
-                      retry(3, 500,
+                      retry(3, Duration::from_millis(500),
                             || {
                                 comms.send(format!("flow {}", render("flows", data.clone())))
                                     .ok().and_then(|_| comms.send(format!("diskfree {}", disk_free())).ok())
@@ -285,17 +286,14 @@ impl RegexSplit for str {
 }
 
 /// Retry some action on failure
-fn retry<R, F: FnMut() -> Option<R>, G: FnOnce() -> R>(times: usize, delay_ms: u32, mut action: F, fallback: G) -> R {
-    for _ in 0..times-1 {
-        if let Some(ret) = action() {
-            return ret;
+fn retry<R, F: FnMut() -> Option<R>, G: FnOnce() -> R>(times: usize, delay: Duration, mut action: F, fallback: G) -> R {
+    for i in 0..times {
+        match action() {
+            Some(ret) => return ret,
+            None => if i == times-1 { return fallback() } else { thread::sleep(delay) }
         }
-        thread::sleep_ms(delay_ms);
     }
-    match action() {
-        Some(ret) => return ret,
-        None => return fallback()
-    }
+    unreachable!()
 }
 
 /// Measure free disk space in gigabytes
