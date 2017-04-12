@@ -239,39 +239,50 @@ fn flow(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
                       let wsid = wsid.parse().unwrap();
                       let comms = ws::Comms::new(wsid);
 
-                      let resp = Ok(match &*action {
-                              a @ "start" | a @ "continue" | a @ "abort" => {
-                                  let mut locked_flows = FLOWS.write().unwrap();
-                                  if let Some(found) = locked_flows.get_mut(&*flow) {
-                                      if a == "abort" {
-                                          found.abort(&*mtx.lock().unwrap(), comms.clone()).unwrap();
-                                          Response::with((status::Ok, format!("Aborting \"{}\" flow", flow)))
-                                      } else {
-                                          match found.run(ParkState::metermaid().unwrap(), &*mtx.lock().unwrap(), comms.clone()) {
-                                              Ok(contour) => Response::with((status::Ok, format!("{:?} \"{}\" flow", contour, flow))),
-                                              Err(e) => { println!("{:?}", e); Response::with((status::InternalServerError, "bad")) }
-                                          }
-                                      }
+                      // step 1: figure out what to do, do it, and pre-construct the HTTP response
+                      let mut resp = match &*action {
+                          a @ "start" | a @ "continue" | a @ "abort" => {
+                              let mut locked_flows = FLOWS.write().unwrap();
+                              if let Some(found) = locked_flows.get_mut(&*flow) {
+                                  if a == "abort" {
+                                      found.abort(&*mtx.lock().unwrap(), comms.clone()).unwrap();
+                                      Response::with((status::Ok, format!("Aborting \"{}\" flow", flow)))
                                   } else {
-                                      Response::with((status::BadRequest, format!("Could not find \"{}\" flow", flow)))
+                                      match found.run(ParkState::metermaid().unwrap(), &*mtx.lock().unwrap(), comms.clone()) {
+                                          Ok(contour) => Response::with((status::Ok, format!("{:?} \"{}\" flow", contour, flow))),
+                                          Err(e) => { println!("{:?}", e); Response::with((status::InternalServerError, "bad")) }
+                                      }
                                   }
+                              } else {
+                                  Response::with((status::BadRequest, format!("Could not find \"{}\" flow", flow)))
                               }
-                              _ => Response::with((status::BadRequest, format!("What does {} mean?", action))),
-                          });
+                          }
+                          _ => Response::with((status::BadRequest, format!("What does {} mean?", action))),
+                      };
 
+                      // next send some WebSocket updates (retry logic to increase reliability)
                       let mut data = BTreeMap::<String, Json>::new();
                       data.insert("flows".to_owned(), FLOWS.read().unwrap().to_json());
-                      retry(3, Duration::from_millis(500),
-                            || {
-                                comms.send(format!("flow {}", render("flows", data.clone())))
-                                    .ok().and_then(|_| comms.send(format!("diskfree {}", disk_free())).ok())
-                            },
-                            || {
-                                println!("ERROR: Sending flow info to client failed 3 times :(");
-                                ()
-                            });
+                      retry(10, Duration::from_millis(500),
+                          || {
+                                 Ok(())
+                                     .and_then(|_| comms.send(format!("flow {}", render("flows", data.clone()))))
+                                     .and_then(|_| comms.send(format!("diskfree {}", disk_free())))
+                                     .ok()
+                          },
+                          || {
+                                 // if the WebSocket communications fail, back out and abort the flow
+                                 
+                                 println!("ERROR: Sending flow info to client failed 10 times :(");
 
-                      resp
+                                 let mut locked_flows = FLOWS.write().unwrap();
+                                 if let Some(found) = locked_flows.get_mut(&*flow) {
+                                     found.abort(&*mtx.lock().unwrap(), comms.clone()).unwrap();
+                                     resp = Response::with((status::Ok, format!("Aborting \"{}\" flow", flow)));
+                                 }
+                          });
+
+                      Ok(resp)
                   })
 }
 
@@ -290,7 +301,13 @@ fn retry<R, F: FnMut() -> Option<R>, G: FnOnce() -> R>(times: usize, delay: Dura
     for i in 0..times {
         match action() {
             Some(ret) => return ret,
-            None => if i == times-1 { return fallback() } else { thread::sleep(delay) }
+            None =>
+                if i == times-1 {
+                    return fallback()
+                } else {
+                    println!("\tretry {}", i);
+                    thread::sleep(delay)
+                }
         }
     }
     unreachable!()
