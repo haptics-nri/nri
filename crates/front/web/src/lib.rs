@@ -22,6 +22,7 @@ extern crate url;
 extern crate hyper;
 extern crate rustc_serialize as serialize;
 extern crate websocket;
+extern crate uuid;
 
 use std::path::Path;
 use std::sync::{Mutex, RwLock, mpsc};
@@ -52,6 +53,7 @@ use hyper::header::ContentType;
 use hyper::mime::{Mime, TopLevel, SubLevel};
 use serialize::json::{ToJson, Json};
 use websocket::result::WebSocketError;
+use uuid::Uuid;
 
 /// parsing and running flows
 extern crate flow;
@@ -236,8 +238,14 @@ fn flow(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
                       params!(req => [URL flow, action]
                        [GET]
                        [POST wsid]);
-                      let wsid = wsid.parse().unwrap();
+                      let mut id_parts = wsid.split('_');
+                      let srvid: Uuid = id_parts.next().unwrap().parse().unwrap();
+                      let wsid = id_parts.next().unwrap().parse().unwrap();
                       let comms = ws::Comms::new(wsid);
+
+                      if srvid != *ws::SERVER_ID {
+                          return Ok(Response::with((status::ImATeapot, "Reload first!".to_string())));
+                      }
 
                       // step 1: figure out what to do, do it, and pre-construct the HTTP response
                       let mut resp = match &*action {

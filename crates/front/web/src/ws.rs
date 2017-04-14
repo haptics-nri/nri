@@ -8,10 +8,12 @@ pub use websocket::{Sender, Receiver, Message};
 use websocket::message::Type as MsgType;
 use websocket::{sender, header, stream, Server, Client};
 use url::Host;
+use uuid::Uuid;
 
 use super::{Result, Error};
 
 lazy_static! {
+    pub static ref SERVER_ID: Uuid = Uuid::new_v4();
     pub static ref RPC_SENDERS: Mutex<HashMap<usize, mpsc::Sender<Option<String>>>> = Mutex::new(HashMap::new());
     pub static ref WS_SENDERS:  Mutex<Vec<sender::Sender<stream::WebSocketStream>>> = Mutex::new(Vec::new());
 }
@@ -39,7 +41,7 @@ impl flow::Comms for Comms {
 
     fn send(&self, msg: String) -> Result<()> {
         let mut locked_senders = WS_SENDERS.lock()?;
-        if ::std::env::var("NRI_WS_FAIL").ok().map_or(false, |s| s == "1") {
+        if ::std::env::var("NRI_WS_FAIL").ok().map_or(false, |s| s == "1") { // FIXME remove this debugging gizmo
             Err("NoDataAvailable".into())
         } else {
             Ok(locked_senders[self.wsid].send_message(&Message::text(msg))?)
@@ -126,7 +128,7 @@ pub fn spawn(ctx: mpsc::Sender<CmdFrom>, wsrx: mpsc::Receiver<Message<'static>>)
                     let mut locked_senders = WS_SENDERS.lock().unwrap();
                     let wsid = locked_senders.len();
 
-                    client.send_message(&Message::text(format!("hello {}", wsid))).unwrap();
+                    client.send_message(&Message::text(format!("hello {}_{}", *SERVER_ID, wsid))).unwrap();
 
                     let (sender, mut receiver) = client.split();
                     locked_senders.push(sender);
@@ -145,20 +147,24 @@ pub fn spawn(ctx: mpsc::Sender<CmdFrom>, wsrx: mpsc::Receiver<Message<'static>>)
                                     if text.starts_with(b"RPC") {
                                         let text = str::from_utf8(&text).unwrap();
                                         let space = text.find(' ').unwrap();
-                                        let id = text[3..space].parse::<usize>().unwrap();
+                                        let mut id_parts = text[3..space].split('_');
+                                        let srvid = id_parts.next().unwrap().parse::<Uuid>().unwrap();
+                                        let wsid = id_parts.next().unwrap().parse::<usize>().unwrap();
                                         let msg = text[space+1..].to_owned();
 
-                                        let mut locked_senders = WS_SENDERS.lock().unwrap();
-                                        let locked_rpcs = RPC_SENDERS.lock().unwrap();
-                                        println!("Received RPC for WSID {}: {}", wsid, msg);
-                                        if let Some(rpc) = locked_rpcs.get(&id) {
-                                            if msg == "ABORT" {
-                                                rpc.send(None).unwrap();
+                                        if srvid == *SERVER_ID {
+                                            let mut locked_senders = WS_SENDERS.lock().unwrap();
+                                            let locked_rpcs = RPC_SENDERS.lock().unwrap();
+                                            println!("Received RPC for WSID {}_{}: {}", srvid, wsid, msg);
+                                            if let Some(rpc) = locked_rpcs.get(&wsid) {
+                                                if msg == "ABORT" {
+                                                    rpc.send(None).unwrap();
+                                                } else {
+                                                    rpc.send(Some(msg)).unwrap();
+                                                }
                                             } else {
-                                                rpc.send(Some(msg)).unwrap();
+                                                locked_senders[wsid].send_message(&Message::text("RPC ERROR: nobody listening".to_owned())).unwrap();
                                             }
-                                        } else {
-                                            locked_senders[id].send_message(&Message::text("RPC ERROR: nobody listening".to_owned())).unwrap();
                                         }
                                     } else {
                                         cctx.send(CmdFrom::Data(str::from_utf8(&text).unwrap().to_owned())).unwrap();
