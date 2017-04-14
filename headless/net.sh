@@ -11,6 +11,13 @@ case "$arg" in
         sudo /bin/systemctl disable create_ap
         sudo /bin/systemctl enable network-manager
         ;;
+    "" )
+        if sudo /bin/systemctl is-enabled -q create_ap; then
+            "$0" wifi
+        else
+            "$0" hotspot
+        fi
+        ;;
     * )
         echo "ERROR: unrecognized network type"
         exit 1

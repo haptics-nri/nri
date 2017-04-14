@@ -125,7 +125,8 @@ extern crate bluefox;
 extern crate biotac;
 extern crate vicon;
 
-use std::{fs, panic, process, thread};
+use std::{fs, panic, thread};
+use std::process::{self, Command};
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{channel, Sender};
 use std::collections::HashMap;
@@ -342,10 +343,11 @@ fn try_main() -> Result<()> {
                         stop_all(services.drain(1..));
 
                         // step 3. run shutdown/reboot command
-                        let mut cmd = process::Command::new("sudo");
+                        let mut cmd;
                         match power {
-                            Power::PowerOff => { cmd.args(&["/sbin/shutdown", "-hP", "now"]); }
-                            Power::Reboot   => { cmd.args(&["/sbin/reboot"]); }
+                            Power::PowerOff   => { cmd = Command::new("sudo"); cmd.args(&["/sbin/shutdown", "-hP", "now"]); }
+                            Power::Reboot     => { cmd = Command::new("sudo"); cmd.arg("/sbin/reboot"); }
+                            Power::RebootWifi => { cmd = Command::new("/home/nri/software/nri/net.sh"); }
                         }
                         cmd.spawn().chain_err(|| "could not start process")?
                            .wait().chain_err(|| "process did not complete successfully")?;

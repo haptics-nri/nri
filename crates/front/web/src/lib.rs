@@ -198,6 +198,10 @@ fn nuc(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
                                   mtx.lock().unwrap().send(CmdFrom::Power(Power::Reboot)).unwrap();
                                   Response::with((status::Ok, "Rebooting..."))
                               }
+                              "wifi" => {
+                                  mtx.lock().unwrap().send(CmdFrom::Power(Power::RebootWifi)).unwrap();
+                                  Response::with((status::Ok, "Rebooting..."))
+                              }
                               _ => Response::with((status::BadRequest, format!("What does {} mean?", action))),
                           })
                   })
