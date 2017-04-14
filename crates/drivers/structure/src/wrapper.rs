@@ -301,7 +301,7 @@ impl Device {
         status2result!(unsafe { oniDeviceOpen(c_uri, &mut dev.pdev) }, dev)
     }
 
-    pub fn close(&mut self) {
+    pub fn close(&self) {
         unsafe {
             oniDeviceClose(self.pdev);
         } // TODO this returns an error which I am ignoring

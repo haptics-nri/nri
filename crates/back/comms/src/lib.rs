@@ -98,6 +98,7 @@ pub enum CmdFrom {
 pub enum Power {
     PowerOff,
     Reboot,
+    RebootWifi
 }
 
 /// Desired blocking mode for a service

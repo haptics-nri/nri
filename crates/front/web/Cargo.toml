@@ -13,6 +13,7 @@ lazy_static          = "0.2"
 log                  = "0.3"
 regex                = "0.2"
 error-chain          = "0.10"
+uuid                 = { version = "0.2", features = ["v4"] }
 
 # iron deps
 iron                 = "0.5"

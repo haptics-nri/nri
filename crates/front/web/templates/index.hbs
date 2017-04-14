@@ -255,6 +255,27 @@
                         </button>
 
                     </form>
+
+                    <form id="wifi"
+                          action="/nuc/wifi"
+                          method="POST"
+                          target="response"
+                          style="display: inline">
+
+                        <input type="hidden"
+                               name="wsid"
+                               class="wsid"
+                               value="-1"/>
+                        <button onclick="confirm('NUC will reboot!',
+                                                 function () {
+                                                    $('#wifi').submit();
+                                                 });
+                                                 return false"
+                                class="btn btn-danger">
+                            Switch wifi
+                        </button>
+
+                    </form>
                 </div>
             </div>
 
