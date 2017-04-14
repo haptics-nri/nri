@@ -17,8 +17,9 @@ group_attr!{
     extern crate rustc_serialize as serialize;
     use std::{mem, slice, thread};
     use std::process::Command;
-    use std::sync::Mutex;
+    use std::sync::{Arc, Mutex, Condvar};
     use std::sync::mpsc::Sender;
+    use std::time::Duration;
     use image::{imageops, ImageBuffer, ColorType, FilterType};
     use image::png::PNGEncoder;
     use serialize::base64;
@@ -26,7 +27,8 @@ group_attr!{
     use comms::{Controllable, CmdFrom, Block, RestartableThread};
     use scribe::Writer;
 
-    type PngStuff = (usize, Vec<u8>, bool, (i32, i32), ColorType);
+    type PngData = (usize, Vec<u8>, bool, (i32, i32), ColorType);
+    type WatchdogData = (Arc<(Mutex<bool>, Condvar)>, String, Duration);
 
     mod wrapper;
 
@@ -49,12 +51,30 @@ group_attr!{
         writing: bool,
 
         /// PNG writer/sender
-        png: RestartableThread<PngStuff>,
+        png: RestartableThread<PngData>,
+
+        /// Watchdog thread to raise the alarm when the sensor hangs
+        watchdog: RestartableThread<WatchdogData>,
 
         /// Timestamp file handle
         stampfile: Writer<[u8]>,
 
         writer: Writer<[u8]>
+    }
+
+    impl Structure {
+        fn timeout<R, F: FnOnce() -> R>(&self, dur: Duration, gerund: String, action: F) -> R {
+            let pair = Arc::new((Mutex::new(false), Condvar::new()));
+            let &(ref lock, ref cvar) = &*pair;
+            self.watchdog.send((pair.clone(), gerund, dur)).unwrap();
+
+            let ret = action();
+
+            *lock.lock().unwrap() = true;
+            cvar.notify_one();
+
+            ret
+        }
     }
 
     guilty!{
@@ -67,14 +87,17 @@ group_attr!{
                 // function. Software reset (via ioctl) does not help -- the only way is to cycle power by
                 // unplugging the device. We take advantage of the fact that it is plugged in through a USB
                 // hub, and use uhubctl (https://github.com/mvp/uhubctl) to turn it off and on again.
+                /*
                 assert!(Command::new("sudo")
                                 .args(&["/home/nri/software/uhubctl/uhubctl",
                                         "-a", "cycle", // cycle power
-                                        "-d", "0.5", // keep power off for 0.5 sec
-                                        "-l", "2-3", "-p 3"]) // USB hub at address 2-3, port 3
+                                        "-r", "10", // try 10 times to turn off power
+                                        "-d", "1", // keep power off for 1 sec
+                                        "-l", "2-3", "-p", "3"]) // USB hub at address 2-3, port 3
                                 .status().unwrap()
                                 .success());
-                thread::sleep_ms(1000);
+                thread::sleep(Duration::from_millis(1000));
+                */
 
                 utils::in_original_dir(|| wrapper::initialize().unwrap()).unwrap();
                 let device = wrapper::Device::new(None).unwrap();
@@ -129,6 +152,16 @@ group_attr!{
                         prof!("send", mtx.lock().unwrap().send(CmdFrom::Data(format!("send kick structure {} data:image/png;base64,{}", i, encoded.to_base64(base64::STANDARD)))).unwrap());
                     }),
 
+                    watchdog: RestartableThread::new("Structure watchdog thread", |(pair, gerund, timeout): (Arc<(Mutex<bool>, Condvar)>, _, _)| {
+                        let &(ref lock, ref cvar) = &*pair;
+                        let guard = lock.lock().unwrap();
+                        if !*guard {
+                            if cvar.wait_timeout(guard, timeout).unwrap().1.timed_out() {
+                                println!("ERROR!!! Structure Sensor timed out while {}", gerund);
+                            }
+                        }
+                    }),
+
                     stampfile: Writer::with_file("structure_times.csv"),
                     writer: Writer::with_files("structure{}.dat"),
                 }
@@ -153,7 +186,7 @@ group_attr!{
 
                 if self.depth.is_running() {
                     prof!("depth", {
-                        let frame = prof!("readFrame", self.depth.read_frame().unwrap());
+                        let frame = prof!("readFrame", self.timeout(Duration::from_millis(100), "getting depth frame".into(), || self.depth.read_frame().unwrap()));
                         let narrow_data: &[u8] = prof!(frame.data());
                         let data: Vec<u8> = prof!("endianness", {
                             unsafe { // flip bytes
@@ -183,7 +216,7 @@ group_attr!{
 
                 if self.ir.is_running() {
                     prof!("ir", {
-                        let frame = prof!("readFrame", self.ir.read_frame().unwrap());
+                        let frame = prof!("readFrame", self.timeout(Duration::from_millis(100), "getting IR frame".into(), || self.ir.read_frame().unwrap()));
                         let data: &[u8] = prof!(frame.data());
 
                         if self.writing {
@@ -203,12 +236,12 @@ group_attr!{
 
             fn teardown(&mut self) {
                 let end = time::now();
-                if self.ir.is_running() { self.ir.stop(); }
-                self.ir.destroy();
-                if self.depth.is_running() { self.depth.stop(); }
-                self.depth.destroy();
-                self.device.close();
-                wrapper::shutdown();
+                if self.ir.is_running() { self.timeout(Duration::from_secs(2), "stopping IR".into(), || self.ir.stop()); }
+                self.timeout(Duration::from_secs(1), "destroying IR".into(), || self.ir.destroy());
+                if self.depth.is_running() { self.timeout(Duration::from_secs(2), "stopping depth".into(), || self.depth.stop()); }
+                self.timeout(Duration::from_secs(2), "destroying depth".into(), || self.depth.destroy());
+                self.timeout(Duration::from_secs(2), "closing device".into(), || self.device.close());
+                self.timeout(Duration::from_secs(2), "shutting down".into(), || wrapper::shutdown());
                 let millis = (end - self.start).num_milliseconds() as f64;
                 println!("{} structure frames grabbed in {} s ({} FPS)!", self.i, millis/1000.0, 1000.0*(self.i as f64)/millis);
             }
