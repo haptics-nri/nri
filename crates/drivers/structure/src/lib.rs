@@ -12,7 +12,6 @@ group_attr!{
 
     extern crate scribe;
     extern crate time;
-    extern crate chrono;
     extern crate libc;
     extern crate image;
     extern crate rustc_serialize as serialize;
@@ -20,7 +19,7 @@ group_attr!{
     use std::process::Command;
     use std::sync::{Arc, Mutex, Condvar};
     use std::sync::mpsc::Sender;
-    use chrono::Duration;
+    use time::Duration;
     use image::{imageops, ImageBuffer, ColorType, FilterType};
     use image::png::PNGEncoder;
     use serialize::base64;

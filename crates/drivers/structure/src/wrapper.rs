@@ -8,7 +8,7 @@ use std::ffi::{CString, CStr};
 use std::cell::Cell;
 use std::ops::Deref;
 use std::slice;
-use chrono::Duration;
+use time::Duration;
 
 macro_attr! {
     #[repr(C)]

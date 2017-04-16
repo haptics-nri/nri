@@ -1064,7 +1064,6 @@ dependencies = [
 name = "structure"
 version = "0.1.0"
 dependencies = [
- "chrono 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "comms 0.1.0",
  "conv 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "guilt-by-association 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
