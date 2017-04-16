@@ -8,17 +8,7 @@ use std::ffi::{CString, CStr};
 use std::cell::Cell;
 use std::ops::Deref;
 use std::slice;
-use std::time::Duration;
-
-trait DurationExt {
-    fn as_millis(&self) -> u64;
-}
-
-impl DurationExt for Duration {
-    fn as_millis(&self) -> u64 {
-        self.as_secs() * 1000 + (self.subsec_nanos() / 1_000_000) as u64
-    }
-}
+use chrono::Duration;
 
 macro_attr! {
     #[repr(C)]
@@ -341,7 +331,7 @@ impl VideoStream {
 
     pub fn read_frame(&self, timeout: Duration) -> Result<Frame, OniError> {
         let mut ready = 0;
-        try!(status2result!(unsafe { oniWaitForAnyStream(&self.pvs, 1, &mut ready, timeout.as_millis() as c_int) }));
+        try!(status2result!(unsafe { oniWaitForAnyStream(&self.pvs, 1, &mut ready, timeout.num_milliseconds() as c_int) }));
         assert_eq!(ready, 0);
 
         let mut pframe = ptr::null_mut();

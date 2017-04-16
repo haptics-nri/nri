@@ -1,6 +1,8 @@
 #[macro_use] extern crate lazy_static;
+extern crate chrono;
 extern crate notify;
 
+use chrono::Duration;
 use notify::{Watcher, RecommendedWatcher};
 use std::{env, fs, io};
 use std::path::{Path, PathBuf};
@@ -225,4 +227,14 @@ pub mod prof {
 }
 
 pub use prof::PROF;
+
+pub trait DurationExt {
+    fn sleep(&self);
+}
+
+impl DurationExt for Duration {
+    fn sleep(&self) {
+        thread::sleep(self.to_std().unwrap());
+    }
+}
 

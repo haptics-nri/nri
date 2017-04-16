@@ -7,4 +7,5 @@ authors = ["Alex Burka <aburka@seas.upenn.edu>"]
 lazy_static = "0.2"
 hprof  = "0.1"
 notify = "2.5"
+chrono = "0.3"
 
