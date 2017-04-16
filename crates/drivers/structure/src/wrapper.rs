@@ -8,7 +8,17 @@ use std::ffi::{CString, CStr};
 use std::cell::Cell;
 use std::ops::Deref;
 use std::slice;
-//use std::time::Duration;
+use std::time::Duration;
+
+trait DurationExt {
+    fn as_millis(&self) -> u64;
+}
+
+impl DurationExt for Duration {
+    fn as_millis(&self) -> u64 {
+        self.as_secs() * 1000 + (self.subsec_nanos() / 1_000_000) as u64
+    }
+}
 
 macro_attr! {
     #[repr(C)]
@@ -224,24 +234,29 @@ impl OniSensorInfo {
     }
 }
 
+type OniDeviceHandle = *mut c_void;
+type OniStreamHandle = *mut c_void;
+
 #[link(name = "OpenNI2")]
 extern "C" {
     fn oniInitialize(apiVersion: i32) -> OniStatus;
     fn oniShutdown();
     fn oniGetExtendedError() -> *const c_char;
 
-    fn oniDeviceOpen(uri: *const c_char, device: *mut *mut c_void) -> OniStatus;
-    fn oniDeviceClose(device: *mut c_void) -> OniStatus;
-    fn oniDeviceCreateStream(device: *mut c_void, sensorType: OniSensorType, pStream: *mut *mut c_void) -> OniStatus;
+    fn oniDeviceOpen(uri: *const c_char, device: *mut OniDeviceHandle) -> OniStatus;
+    fn oniDeviceClose(device: OniDeviceHandle) -> OniStatus;
+    fn oniDeviceCreateStream(device: OniDeviceHandle, sensorType: OniSensorType, pStream: *mut OniStreamHandle) -> OniStatus;
 
     // TODO typedefs for OniStreamHandle etc
     fn oniStreamStart(stream: *mut c_void) -> OniStatus;
     fn oniStreamReadFrame(stream: *mut c_void, pFrame: *mut *mut OniFrame) -> OniStatus;
-    fn oniStreamStop(stream: *mut c_void);
-    fn oniStreamDestroy(stream: *mut c_void);
-    fn oniStreamGetSensorInfo(stream: *mut c_void) -> *const OniSensorInfo;
-    fn oniStreamSetProperty(stream: *mut c_void, property_id: c_int, data: *const c_void, data_size: c_int) -> OniStatus;
-    fn oniStreamGetProperty(stream: *mut c_void, property_id: c_int, data: *mut c_void, data_size: *mut c_int) -> OniStatus;
+    fn oniStreamStop(stream: OniStreamHandle);
+    fn oniStreamDestroy(stream: OniStreamHandle);
+    fn oniStreamGetSensorInfo(stream: OniStreamHandle) -> *const OniSensorInfo;
+    fn oniStreamSetProperty(stream: OniStreamHandle, property_id: c_int, data: *const c_void, data_size: c_int) -> OniStatus;
+    fn oniStreamGetProperty(stream: OniStreamHandle, property_id: c_int, data: *mut c_void, data_size: *mut c_int) -> OniStatus;
+
+    fn oniWaitForAnyStream(pStreams: *const OniStreamHandle, numStreams: c_int, pStreamIndex: *mut c_int, timeout: c_int) -> OniStatus;
 
     fn oniFrameRelease(pFrame: *mut OniFrame);
 }
@@ -266,12 +281,12 @@ pub fn shutdown() {
 
 #[derive(Debug)]
 pub struct Device {
-    pdev: *mut c_void,
+    pdev: OniDeviceHandle,
 }
 
 #[derive(Debug)]
 pub struct VideoStream {
-    pvs: *mut c_void,
+    pvs: OniStreamHandle,
     running: Cell<bool>,
 }
 
@@ -285,17 +300,12 @@ pub struct SensorInfo {
     pinfo: *const OniSensorInfo,
 }
 
-macro_rules! c_str {
-    ($s:expr) => {
-        CString::new($s).unwrap().as_ptr()
-    }
-}
-
 impl Device {
     pub fn new(uri: Option<&str>) -> Result<Device, OniError> {
         let mut dev = Device { pdev: ptr::null_mut() };
+        let cstr;
         let c_uri = match uri {
-            Some(u) => c_str!(u),
+            Some(u) => { cstr = CString::new(u).unwrap(); cstr.as_ptr() },
             None    => ptr::null(),
         };
         status2result!(unsafe { oniDeviceOpen(c_uri, &mut dev.pdev) }, dev)
@@ -329,9 +339,14 @@ impl VideoStream {
         self.running.get()
     }
 
-    pub fn read_frame(&self) -> Result<Frame, OniError> {
-        let mut pframe: *mut OniFrame = ptr::null_mut();
+    pub fn read_frame(&self, timeout: Duration) -> Result<Frame, OniError> {
+        let mut ready = 0;
+        try!(status2result!(unsafe { oniWaitForAnyStream(&self.pvs, 1, &mut ready, timeout.as_millis() as c_int) }));
+        assert_eq!(ready, 0);
+
+        let mut pframe = ptr::null_mut();
         try!(status2result!(unsafe { oniStreamReadFrame(self.pvs, &mut pframe) }));
+
         Ok(Frame { pf: unsafe { ptr::read(&pframe) } })
     }
 

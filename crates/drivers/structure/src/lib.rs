@@ -186,7 +186,7 @@ group_attr!{
 
                 if self.depth.is_running() {
                     prof!("depth", {
-                        let frame = prof!("readFrame", self.timeout(Duration::from_millis(100), "getting depth frame".into(), || self.depth.read_frame().unwrap()));
+                        let frame = prof!("readFrame", self.timeout(Duration::from_millis(100), "getting depth frame".into(), || self.depth.read_frame(Duration::from_millis(100)).unwrap()));
                         let narrow_data: &[u8] = prof!(frame.data());
                         let data: Vec<u8> = prof!("endianness", {
                             unsafe { // flip bytes
@@ -216,7 +216,7 @@ group_attr!{
 
                 if self.ir.is_running() {
                     prof!("ir", {
-                        let frame = prof!("readFrame", self.timeout(Duration::from_millis(100), "getting IR frame".into(), || self.ir.read_frame().unwrap()));
+                        let frame = prof!("readFrame", self.timeout(Duration::from_millis(100), "getting IR frame".into(), || self.ir.read_frame(Duration::from_millis(100)).unwrap()));
                         let data: &[u8] = prof!(frame.data());
 
                         if self.writing {
