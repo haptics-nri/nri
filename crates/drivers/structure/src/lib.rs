@@ -82,22 +82,22 @@ group_attr!{
             const NAME: &'static str = "structure";
             const BLOCK: Block = Block::Immediate;
 
-            fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Structure {
-                // The Structure Sensor behaves badly if a program terminates without calling the shutdown
-                // function. Software reset (via ioctl) does not help -- the only way is to cycle power by
-                // unplugging the device. We take advantage of the fact that it is plugged in through a USB
-                // hub, and use uhubctl (https://github.com/mvp/uhubctl) to turn it off and on again.
-                /*
-                assert!(Command::new("sudo")
-                                .args(&["/home/nri/software/uhubctl/uhubctl",
-                                        "-a", "cycle", // cycle power
-                                        "-r", "10", // try 10 times to turn off power
-                                        "-d", "1", // keep power off for 1 sec
-                                        "-l", "2-3", "-p", "3"]) // USB hub at address 2-3, port 3
-                                .status().unwrap()
-                                .success());
-                thread::sleep(Duration::from_millis(1000));
-                */
+            fn setup(tx: Sender<CmdFrom>, data: Option<String>) -> Structure {
+                if data.map_or(false, |s| s == "power") {
+                    // The Structure Sensor behaves badly if a program terminates without calling the shutdown
+                    // function. Software reset (via ioctl) does not help -- the only way is to cycle power by
+                    // unplugging the device. We take advantage of the fact that it is plugged in through a USB
+                    // hub, and use uhubctl (https://github.com/mvp/uhubctl) to turn it off and on again.
+                    assert!(Command::new("sudo")
+                                    .args(&["/home/nri/software/uhubctl/uhubctl",
+                                            "-a", "cycle", // cycle power
+                                            "-r", "10", // try 10 times to turn off power
+                                            "-d", "1", // keep power off for 1 sec
+                                            "-l", "2-3", "-p", "3"]) // USB hub at address 2-3, port 3
+                                    .status().unwrap()
+                                    .success());
+                    thread::sleep(Duration::from_millis(1000));
+                }
 
                 utils::in_original_dir(|| wrapper::initialize().unwrap()).unwrap();
                 let device = wrapper::Device::new(None).unwrap();
