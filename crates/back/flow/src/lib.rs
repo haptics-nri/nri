@@ -97,6 +97,8 @@ lazy_static! {
                         .expect(&format!("unable to parse flow {:?}", path));
         flows.insert(flow.shortname.clone(), flow);
     });
+
+    pub static ref DATADIR: RwLock<String> = RwLock::new(utils::config::DATADIR.into());
 }
 
 pub trait Comms: Clone {
@@ -227,7 +229,7 @@ impl Flow {
             self.active = true;
 
             let datedir = stamp.format("%Y%m%d").to_string();
-            let fldir = format!("data/{}/{}", datedir, self.shortname); // TODO use PathBuf::push
+            let fldir = format!("{}/{}/{}", *DATADIR.read().unwrap(), datedir, self.shortname); // TODO use PathBuf::push
             fs::create_dir_all(&fldir).chain_err(|| Io(format!("create episode directory {:?}", fldir)))?;
             self.original_dir = Some(env::current_dir().chain_err(|| Io("get current directory".into()))?);
             env::set_current_dir(&fldir).chain_err(|| Io(format!("set current directory to {:?}", fldir)))?;

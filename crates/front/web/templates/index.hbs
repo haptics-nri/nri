@@ -140,6 +140,13 @@
                 $("#timer").html(min + "m" + sec + "s");
             }
 
+            function set_datadir() {
+                prompt("Set data directory",
+                        function (s) {
+                            send("DATA" + window.wsid + " set DATADIR " + escape(s));
+                        });
+            }
+
             window.onload = function() {
                 $("#alert").on("hidden.bs.modal", next);
                 $("#confirm").on("hidden.bs.modal", next);
@@ -186,7 +193,8 @@
                         $("#light-" + serv).css("background-color", "red");
                         break;
                     case "diskfree":
-                        $("#diskfree").html(words[1]);
+                        $("#datadir").html(words[1]);
+                        $("#diskfree").html(words[2]);
                         break;
                     case "location":
                         $.ajax({
@@ -333,7 +341,8 @@
                 <table style="border-spacing: 0.5em;
                               table-layout: fixed">
                     <tr>
-                        <td id="diskfree" style="padding-right: 0.5em"></span>
+                        <td id="datadir" style="font-size: x-small; padding-right: 0.5em" onclick="set_datadir()"></td>
+                        <td id="diskfree" style="padding-right: 0.5em"></td>
                         <td id="timer" style="padding-right: 0.5em" onclick="start_timer()"></td>
                         {{#each services}}
                             <td id="light-{{shortname}}" style="font-family: monospace;
@@ -351,7 +360,6 @@
                     </tr>
                 </table>
             </div>
-            <h4>Status</h4>
             <iframe name="response" style="width: 95%; height: 2.5em"></iframe>
         </div>
         <div class="modal fade" id="alert">

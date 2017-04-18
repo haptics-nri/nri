@@ -28,6 +28,7 @@ nightly = [
 cli         = { path = "crates/front/cli"         }
 web         = { path = "crates/front/web"         }
 comms       = { path = "crates/back/comms"        }
+flow        = { path = "crates/back/flow"         }
 scribe      = { path = "crates/back/scribe"       }
 biotac      = { path = "crates/drivers/biotac"    }
 bluefox     = { path = "crates/drivers/bluefox"   }

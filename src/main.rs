@@ -113,6 +113,7 @@
 
 #[macro_use] extern crate utils;
 extern crate comms;
+extern crate flow;
 #[macro_use] extern crate guilt_by_association;
 #[macro_use] extern crate error_chain;
 extern crate scribe;
@@ -373,6 +374,15 @@ fn try_main() -> Result<()> {
                             "send" => { send_to(&services, "web".to_owned(), CmdTo::Data(d[5..].to_owned()))?; },
                             "kick" => { send_to(&services, words.next().unwrap_or("").to_owned(), CmdTo::Data("kick".to_owned()))?; },
                             "to"   => { send_to(&services, words.next().unwrap_or("").to_owned(), CmdTo::Data(words.collect::<Vec<_>>().join(" ")))?; },
+                            "set"  => match (words.next(), words.next()) {
+                                (Some("DATADIR"), Some(dir)) => {
+                                    println!("Setting DATADIR = {:?}", dir);
+                                    *flow::DATADIR.write().unwrap() = dir.into();
+                                },
+                                (Some(d), None)              => { errorln!("No value provided to set variable {}", d); },
+                                (Some(d), _)                 => { errorln!("Unknown variable {}", d); },
+                                (None, _)                    => { errorln!("No variable name"); }
+                            },
                             _      => { errorln!("Strange message {} received from a service", d); }
                         }
                     },
