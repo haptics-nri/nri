@@ -41,8 +41,14 @@ pub struct OniError {
     extended: String
 }
 
+impl OniError {
+    pub fn code(&self) -> OniErrorCode {
+        self.code
+    }
+}
+
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum OniErrorCode {
     Error          = 1,
     NotImplemented = 2,
@@ -282,7 +288,7 @@ pub struct VideoStream {
 
 #[derive(Debug)]
 pub struct Frame {
-    pf: *mut OniFrame,
+    pframe: *mut OniFrame,
 }
 
 #[derive(Debug)]
@@ -337,7 +343,7 @@ impl VideoStream {
         let mut pframe = ptr::null_mut();
         try!(status2result!(unsafe { oniStreamReadFrame(self.pvs, &mut pframe) }));
 
-        Ok(Frame { pf: unsafe { ptr::read(&pframe) } })
+        Ok(Frame { pframe: pframe })
     }
 
     pub fn info(&self) -> Result<SensorInfo, OniError> {
@@ -345,7 +351,7 @@ impl VideoStream {
         if pinfo.is_null() {
             Err(OniStatus::Error.into_err())
         } else {
-            Ok(SensorInfo { pinfo: unsafe { ptr::read(&pinfo) } })
+            Ok(SensorInfo { pinfo: pinfo })
         }
     }
 
@@ -378,13 +384,13 @@ impl Deref for Frame {
     type Target = OniFrame;
 
     fn deref(&self) -> &OniFrame {
-        unsafe { &*self.pf }
+        unsafe { &*self.pframe }
     }
 }
 
 impl Drop for Frame {
     fn drop(&mut self) {
-        unsafe { oniFrameRelease(self.pf) }
+        unsafe { oniFrameRelease(self.pframe) }
     }
 }
 
