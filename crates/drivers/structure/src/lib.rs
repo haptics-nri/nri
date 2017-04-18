@@ -49,6 +49,8 @@ group_attr!{
 
         /// Number of frames captured since setup() was last called (used for calculating frame rates)
         i: usize,
+
+        /// Whether we are currently recording frames to images
         writing: bool,
 
         /// PNG writer/sender
@@ -60,7 +62,11 @@ group_attr!{
         /// Timestamp file handle
         stampfile: Writer<[u8]>,
 
-        writer: Writer<[u8]>
+        /// PNG writer handle
+        writer: Writer<[u8]>,
+
+        /// Sender to communicate with core
+        tx: Sender<CmdFrom>,
     }
 
     impl Structure {
@@ -128,7 +134,8 @@ group_attr!{
                 depth.start().unwrap();
                 //ir.start().unwrap();
 
-                let mtx = Mutex::new(tx);
+                let png_tx = tx.clone();
+                let wd_tx = tx.clone();
                 Structure {
                     device: device,
                     depth: depth,
@@ -136,6 +143,7 @@ group_attr!{
                     start: time::now(),
                     i: 0,
                     writing: false,
+                    tx: tx,
 
                     png: RestartableThread::new("Structure PNG thread", move |(i, unencoded, do_resize, (h, w), bd): PngData| {
                         let mut encoded = Vec::with_capacity((w*h) as usize);
@@ -150,15 +158,16 @@ group_attr!{
                             prof!("encode", PNGEncoder::new(&mut encoded).encode(&unencoded as &[u8], ww, hh, bd).unwrap());
                         }
 
-                        prof!("send", mtx.lock().unwrap().send(CmdFrom::Data(format!("send kick structure {} data:image/png;base64,{}", i, encoded.to_base64(base64::STANDARD)))).unwrap());
+                        prof!("send", png_tx.send(CmdFrom::Data(format!("send kick structure {} data:image/png;base64,{}", i, encoded.to_base64(base64::STANDARD)))).unwrap());
                     }),
 
-                    watchdog: RestartableThread::new("Structure watchdog thread", |(pair, gerund, timeout): WatchdogData| {
+                    watchdog: RestartableThread::new("Structure watchdog thread", move |(pair, gerund, timeout): WatchdogData| {
                         let &(ref lock, ref cvar) = &*pair;
                         let guard = lock.lock().unwrap();
                         if !*guard {
                             if cvar.wait_timeout(guard, timeout.to_std().unwrap()).unwrap().1.timed_out() {
                                 println!("ERROR!!! Structure Sensor timed out while {}", gerund);
+                                wd_tx.send(CmdFrom::Data("send msg Structure Sensor froze!".into())).unwrap();
                             }
                         }
                     }),
@@ -187,7 +196,15 @@ group_attr!{
 
                 if self.depth.is_running() {
                     prof!("depth", {
-                        let frame = prof!("readFrame", self.timeout(Duration::milliseconds(100), "getting depth frame".into(), || self.depth.read_frame(Duration::milliseconds(100)).unwrap()));
+                        let frame = match prof!("readFrame", self.timeout(Duration::milliseconds(100), "getting depth frame".into(), || self.depth.read_frame(Duration::milliseconds(100)))) {
+                            Ok(frame) => frame,
+                            Err(ref e) if e.code() == wrapper::OniErrorCode::TimeOut => {
+                                self.tx.send(CmdFrom::Data("send msg Structure Sensor froze and will be stopped!".into())).unwrap();
+                                self.timeout(Duration::seconds(2), "stopping depth".into(), || self.depth.stop());
+                                return;
+                            },
+                            e => e.unwrap()
+                        };
                         let narrow_data: &[u8] = prof!(frame.data());
                         let data: Vec<u8> = prof!("endianness", {
                             unsafe { // flip bytes
