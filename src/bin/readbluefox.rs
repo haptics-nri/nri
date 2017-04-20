@@ -1,8 +1,8 @@
-#[macro_use] extern crate lazy_static;
-#[macro_use] mod common;
 extern crate lodepng;
 extern crate csv;
 extern crate hprof;
+
+#[macro_use] extern crate nri;
 
 use std::{env, fmt};
 use std::fs::File;
@@ -24,7 +24,7 @@ impl fmt::Debug for Row {
     }
 }
 
-impl common::Pixels<[u8; 3]> for Row {
+impl nri::Pixels<[u8; 3]> for Row {
     fn pixel(&self, i: usize) -> [u8; 3] {
         self.pixels[i]
     }
@@ -97,13 +97,13 @@ fn april(fname: String, prof: &Profiler) -> (u32, String, String, String, String
 }
 
 fn main() {
-    common::VERBOSITY.store(0, Ordering::SeqCst);
+    nri::VERBOSITY.store(0, Ordering::SeqCst);
 
     let mut csvwtr = csv::Writer::from_memory();
     attempt!(csvwtr.encode(("Frame number", "Tag IDs", "Tag Centers", "Tag P1s", "Tag P2s", "Tag P3s", "Tag P4s")));
     let csvwtr = Arc::new(Mutex::new(csvwtr));
 
-    let inname = common::do_camera::<[u8; 3], Row, _, _>("bluefox",
+    let inname = nri::do_camera::<[u8; 3], Row, _, _>("bluefox",
                                                          |png, csvwtr, prof| {
                                                              let _g = prof.enter("april");
                                                              csvwtr.lock().unwrap().encode(april(png, prof)).unwrap()

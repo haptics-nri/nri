@@ -23,7 +23,6 @@ group_attr!{
     use serialize::base64::ToBase64;
     use std::fs::File;
     use std::io::{Read, Write};
-    use std::path::PathBuf;
     use std::process::{Command, Stdio};
     use std::sync::Mutex;
     use std::sync::mpsc::Sender;
@@ -56,23 +55,15 @@ group_attr!{
     }
 
     fn set_settings(settings: Settings) {
-        let mut exe = PathBuf::from(env!("CARGO_MANIFEST_DIR"));;
-        exe.push("..");
-        exe.push("..");
-        exe.push("..");
-        exe.push("tools");
-        exe.push("bluefox-settings");
-        exe.push("target");
-        exe.push("release");
-        exe.push("bluefox-settings");
-
-        let settings_str = serde_json::to_string(&settings).unwrap();
-        println!("{:?} '{}'", exe, settings_str);
-
-        let mut child = Command::new(&exe)
+        let mut child = Command::new("cargo")
+                                .args(&["run",
+                                        if cfg!(debug_assertions) { "--debug" } else { "--release" },
+                                        "--bin",
+                                        "bluefox-settings"])
                                 .stdin(Stdio::piped())
                                 .spawn().unwrap();
 
+        let settings_str = serde_json::to_string(&settings).unwrap();
         writeln!(child.stdin.as_mut().unwrap(), "{}", settings_str).unwrap();
         
         assert!(child.wait().unwrap().success());

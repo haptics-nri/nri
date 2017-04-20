@@ -11,7 +11,7 @@ use std::fmt::Debug;
 use std::sync::{mpsc, Arc};
 use std::path::{Path, PathBuf};
 use std::str;
-use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT, Ordering};
+use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT};
 use self::lodepng::{encode_file, ColorType};
 use self::hprof::Profiler;
 
@@ -59,16 +59,17 @@ pub static VERBOSITY: AtomicUsize = ATOMIC_USIZE_INIT;
     ///     1. exactly the same as println!: prepends the current indentation and prints the stuff
     ///     2. like (1), but with '>' prepended: prints the stuff, then increases the indentation
     ///        level. The indentation will revert at the end of the scope.
-    #[macro_export] macro_rules! indentln {
+    #[macro_export]
+    macro_rules! indentln {
         () => {};
         (> $($arg:expr),*) => {
             indentln!($($arg),*);
-            let _indent_guard = $crate::common::indent::IndentGuard::new();
-            $crate::common::indent::_INDENT.fetch_add(1, ::std::sync::atomic::Ordering::SeqCst);
+            let _indent_guard = $crate::indent::IndentGuard::new();
+            $crate::indent::_INDENT.fetch_add(1, ::std::sync::atomic::Ordering::SeqCst);
         };
         ($($arg:expr),*)   => {{
-            let indent = $crate::common::indent::_INDENT.load(::std::sync::atomic::Ordering::SeqCst);
-            let verbosity = $crate::common::VERBOSITY.load(::std::sync::atomic::Ordering::SeqCst);
+            let indent = $crate::indent::_INDENT.load(::std::sync::atomic::Ordering::SeqCst);
+            let verbosity = $crate::VERBOSITY.load(::std::sync::atomic::Ordering::SeqCst);
             if indent < verbosity {
                 println!("{s: <#w$}{a}", s = "", w = 4 * indent, a = format!($($arg),*));
             }
@@ -77,6 +78,7 @@ pub static VERBOSITY: AtomicUsize = ATOMIC_USIZE_INIT;
 }
 
 /// Just like println!, but prints to stderr
+#[macro_export]
 macro_rules! errorln {
     ($($arg:tt)*) => {{
         use std::io::Write;
@@ -88,6 +90,7 @@ macro_rules! errorln {
 }
 
 /// Just like try!, but kills the process on Err
+#[macro_export]
 macro_rules! attempt {
     ($e:expr) => {
         /*match $e {
@@ -204,10 +207,10 @@ pub fn do_camera<T: Copy, Data: Debug + Pixels<T>, F: for<'a> Fn(String, C, &'a 
     let mut csvwtr = csv::Writer::from_memory();
     attempt!(csvwtr.encode(("Frame number", "Filename", "Unix timestamp")));
 
-    let N_THREADS = num_cpus::get();
-    print!("Creating {} threads...", N_THREADS);
+    let num_threads = num_cpus::get();
+    print!("Creating {} threads...", num_threads);
     let mut threads = vec![];
-    for i in 0..N_THREADS {
+    for i in 0..num_threads {
         print!("{}...", i);
         let (tx, rx) = mpsc::channel::<PathBuf>();
         let name = String::from(name);

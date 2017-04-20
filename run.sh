@@ -14,7 +14,7 @@ fi
 export RUST_BACKTRACE=1
 
 if [ "$#" -eq 0 -o "$1" == "--" ]; then 
-    rlwrap cargo run --release $FEAT
+    cargo build --release $FEAT --bin bluefox-settings && rlwrap cargo run --release $FEAT --bin nri
     #gdb target/release/nri
 elif [ "$1" == "all" ]; then
     DIR="$2"

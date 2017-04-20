@@ -20,9 +20,7 @@ group_attr!{
         let settings: Settings = serde_json::from_str(&buffer).unwrap();
 
         let mut dev = Device::new().unwrap();
-        println!("BEFORE:\n{:#?}\n", dev.get());
         dev.set(&settings).unwrap();
-        println!("AFTER:\n{:#?}", dev.get());
     }
 }
 

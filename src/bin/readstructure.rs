@@ -1,6 +1,6 @@
-#[macro_use] extern crate lazy_static;
-#[macro_use] mod common;
 extern crate lodepng;
+
+extern crate nri;
 
 use std::fmt;
 use std::sync::atomic::Ordering;
@@ -20,14 +20,14 @@ impl fmt::Debug for Row {
     }
 }
 
-impl common::Pixels<u16> for Row {
+impl nri::Pixels<u16> for Row {
     fn pixel(&self, i: usize) -> u16 {
         self.pixels[i]
     }
 }
 
 fn main() {
-    common::VERBOSITY.store(0, Ordering::SeqCst);
-    common::do_camera::<u16, Row, _, _>("structure", |_, _, _| {}, (), 640, 480, 1, ColorType::LCT_GREY, 16);
+    nri::VERBOSITY.store(0, Ordering::SeqCst);
+    nri::do_camera::<u16, Row, _, _>("structure", |_, _, _| {}, (), 640, 480, 1, ColorType::LCT_GREY, 16);
 }
 

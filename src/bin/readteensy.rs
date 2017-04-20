@@ -1,7 +1,7 @@
 #[macro_use] extern crate lazy_static;
 extern crate time;
 
-#[macro_use] mod common;
+extern crate nri;
 
 use std::sync::RwLock;
 use std::{fmt, env};
@@ -93,24 +93,24 @@ impl fmt::Debug for Packet {
 }
 
 fn main() {
-    let inname = common::parse_in_arg(&mut env::args().skip(1));
+    let inname = nri::parse_in_arg(&mut env::args().skip(1));
 
     *OUTPUT_MODE.write().unwrap() = FT;
     let mut header = String::from("Timestamp, Teensy dt, Packet number");
     for i in 0..30 {
         header.push_str(&format!(", FT{}", i));
     }
-    common::do_binary::<Packet>(&header,
+    nri::do_binary::<Packet>(&header,
                                 (inname.clone(), Some(Path::new(&inname).with_extension("ft.csv").to_str().unwrap().to_string())));
 
     *OUTPUT_MODE.write().unwrap() = ACC;
-    common::do_binary::<Packet>("Timestamp, FIFO position, Acc X, Acc Y, Acc Z",
+    nri::do_binary::<Packet>("Timestamp, FIFO position, Acc X, Acc Y, Acc Z",
                                 (inname.clone(), Some(Path::new(&inname).with_extension("acc.csv").to_str().unwrap().to_string())));
     *OUTPUT_MODE.write().unwrap() = GYRO;
-    common::do_binary::<Packet>("Timestamp, FIFO position, Gyro X, Gyro Y, Gyro Z",
+    nri::do_binary::<Packet>("Timestamp, FIFO position, Gyro X, Gyro Y, Gyro Z",
                                 (inname.clone(), Some(Path::new(&inname).with_extension("gyro.csv").to_str().unwrap().to_string())));
     *OUTPUT_MODE.write().unwrap() = MAG;
-    common::do_binary::<Packet>("Timestamp, Mag X, Mag Y, Mag Z",
+    nri::do_binary::<Packet>("Timestamp, Mag X, Mag Y, Mag Z",
                                 (inname.clone(), Some(Path::new(&inname).with_extension("mag.csv").to_str().unwrap().to_string())));
 }
 

@@ -1,7 +1,6 @@
-#[macro_use] extern crate lazy_static;
 extern crate time;
 
-#[macro_use] mod common;
+extern crate nri;
 
 use std::fmt;
 use std::iter::once;
@@ -50,6 +49,6 @@ fn main() {
         .chain((0..19).map(|i| format!("Electrode #{}", i)))
         .collect::<Vec<String>>()
         .join(", ");
-    common::read_binary::<Packet>(&s);
+    nri::read_binary::<Packet>(&s);
 }
 

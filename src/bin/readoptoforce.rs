@@ -1,7 +1,6 @@
-#[macro_use] extern crate lazy_static;
 extern crate time;
 
-#[macro_use] mod common;
+extern crate nri;
 
 use std::fmt;
 
@@ -20,6 +19,6 @@ impl fmt::Debug for Data {
 }
 
 fn main() {
-    common::read_binary::<Data>("Timestamp, X, Y, Z");
+    nri::read_binary::<Data>("Timestamp, X, Y, Z");
 }
 

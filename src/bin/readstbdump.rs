@@ -1,7 +1,6 @@
-#[macro_use] extern crate lazy_static;
 extern crate time;
 
-#[macro_use] mod common;
+#[macro_use] extern crate nri;
 
 use std::{env, mem, ptr, slice};
 use std::io::{self, Read};
@@ -150,7 +149,7 @@ fn go<R: io::Read, W: io::Write>(mut reader: R, mut writer: W) -> Result<(),io::
 }
 
 fn main() {
-    let (inname, outname) = common::parse_inout_args(&mut env::args());
+    let (inname, outname) = nri::parse_inout_args(&mut env::args());
     println!("{:?}", go(File::open(&inname).unwrap(), File::create(&outname).unwrap()));
 }
 
