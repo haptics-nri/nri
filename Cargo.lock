@@ -4,6 +4,7 @@ version = "0.1.0"
 dependencies = [
  "biotac 0.1.0",
  "bluefox 0.1.0",
+ "bluefox-sys 0.1.0",
  "chrono 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "cli 0.1.0",
  "comms 0.1.0",

@@ -14,9 +14,6 @@ fi
 export RUST_BACKTRACE=1
 
 if [ "$#" -eq 0 -o "$1" == "--" ]; then 
-    if [ $LINUX -eq 1 ]; then
-        (cd tools/bluefox-settings && cargo build --release) || exit 1
-    fi
     rlwrap cargo run --release $FEAT
     #gdb target/release/nri
 elif [ "$1" == "all" ]; then
@@ -46,7 +43,6 @@ elif [ "$1" == "all" ]; then
 else
     DEV=$1
     shift
-    rlwrap cargo run --release $FEAT --example read$DEV -- "$@"
-    #target/release/examples/read$DEV "$@"
+    rlwrap cargo run --release $FEAT --bin read$DEV -- "$@"
 fi
 

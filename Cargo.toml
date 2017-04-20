@@ -37,6 +37,9 @@ teensy      = { path = "crates/drivers/teensy"    }
 vicon       = { path = "crates/drivers/vicon"     }
 utils       = { path = "crates/utils"             }
 
+# native
+bluefox-sys = { path = "sys/bluefox-sys" }
+
 # external deps
 guilt-by-association = "0.4"
 log         = "0.3"
@@ -45,8 +48,7 @@ hprof       = "0.1"
 chrono      = "0.3"
 error-chain = "0.10"
 
-[dev-dependencies]
-# needed for examples (TODO remove)
+# needed for bins
 lazy_static  = "0.2"
 time         = "0.1"
 libc         = "0.2"
