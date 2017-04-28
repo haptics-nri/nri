@@ -307,7 +307,7 @@ fn try_main() -> Result<()> {
 
         let (reply_tx, reply_rx) = channel();
 
-        let mut services = rxspawn!(reply_tx; CLI, Web, Teensy, Optoforce, Structure, Bluefox, Optoforce, Biotac, Vicon);
+        let mut services = rxspawn!(reply_tx; CLI, Web, Teensy, Optoforce, Structure, Bluefox, Optoforce, Biotac);
         let mut timers = HashMap::new();
 
         thread::sleep(Duration::from_millis(500)); // wait for threads to start
