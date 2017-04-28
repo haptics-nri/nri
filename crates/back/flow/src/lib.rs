@@ -117,9 +117,9 @@ pub enum EventContour {
     In,
 }
 
-struct StampPrinter(DateTime<Local>);
+struct StampPrinter<'a>(&'a DateTime<Local>);
 
-impl fmt::Display for StampPrinter {
+impl<'a> fmt::Display for StampPrinter<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:.9}", self.0.timestamp() as f64 + self.0.nanosecond() as f64 / 1_000_000_000f64)
     }
@@ -141,6 +141,7 @@ pub struct Flow {
     original_dir: Option<PathBuf>,
     episode_dir: Option<PathBuf>,
     id: Option<Uuid>,
+    file: Option<File>,
 }
 
 /// One state in a data collection flow
@@ -191,6 +192,7 @@ impl Flow {
 
         comms.print("Aborting flow.".into()).comms_err()?;
 
+        // reset state
         self.active = false;
         self.almostdone = false;
         let cap = Vec::with_capacity(self.states.len());
@@ -204,6 +206,9 @@ impl Flow {
             self.states.push(FlowState::new(name, park, script));
         }
         self.states.reverse();
+
+        // delete the files
+        drop(self.file.take());
         if let (Some(original_dir), Some(episode_dir)) = (self.original_dir.take(), self.episode_dir.take()) {
             env::set_current_dir(&original_dir).chain_err(|| Io(format!("set current directory to {:?}", original_dir)))?;
             fs::remove_dir_all(&episode_dir).chain_err(|| Io(format!("delete directory {:?}", episode_dir)))?;
@@ -248,6 +253,12 @@ impl Flow {
             env::set_current_dir(epnum.to_string()).chain_err(|| Io(format!("set current directory to \"{}\"", epnum)))?;
             self.episode_dir = Some(env::current_dir().chain_err(|| Io("get current directory".into()))?);
 
+            // start off the flow file
+            let shortname = &self.shortname;
+            let file = self.file.put(File::create(format!("{}.flow", shortname)).chain_err(|| Io(format!("create flow file \"{}.flow\"", shortname)))?);
+            writeln!(file, "{} [{}]", self.name, StampPrinter(stamp)).chain_err(|| Io(format!("write to flow file \"{}.flow\"", shortname)))?;
+            writeln!(file, "").chain_err(|| Io(format!("write to flow file \"{}.flow\"", shortname)))?;
+
             ret = EventContour::Starting;
         }
 
@@ -257,11 +268,14 @@ impl Flow {
             if state.park.map_or(true, |p| p == park) {
                 ret = EventContour::Continuing;
                 comms.print(format!("Executing state {}", state.name)).comms_err()?;
-                match state.run(tx, comms.clone()) {
+                let file = self.file.as_mut().expect("flow file missing");
+                let shortname = &self.shortname;
+                match state.run(tx, file, comms.clone()) {
                     Ok(()) => (),
                     Err(Error(ErrorKind::FlowCanceled, ..)) => abort = true,
                     Err(e) => return Err(e)
                 }
+                writeln!(file, "").chain_err(|| Io(format!("write to flow file \"{}.flow\"", shortname)))?;
                 comms.print(format!("Finished executing state {}", state.name)).comms_err()?;
             } else if let Some(goal) = state.park {
                 comms.print(format!("Waiting for parking lot state to be {:?} (currently {:?})", goal, park)).comms_err()?;
@@ -284,16 +298,11 @@ impl Flow {
             if self.almostdone {
                 // the flow is over! clear everything!
 
-                let mut file = File::create(format!("{}.flow", self.shortname)).chain_err(|| Io(format!("create flow file \"{}.flow\"", self.shortname)))?;
-                writeln!(file, "{} [{}]", self.name, StampPrinter(self.stamp.expect("timestamp missing"))).chain_err(|| Io(format!("write to flow file \"{}.flow\"", self.shortname)))?;
-                writeln!(file, "").chain_err(|| Io(format!("write to flow file \"{}.flow\"", self.shortname)))?;
-
                 self.active = false;
                 self.almostdone = false;
                 let mut states = mem::replace(&mut self.states, vec![]);
                 for state in &mut states {
-                    state.finalize(&mut file)?;
-                    writeln!(file, "").chain_err(|| Io(format!("write to flow file \"{}.flow\"", self.shortname)))?;
+                    state.finalize()?;
                 }
                 self.states = states;
 
@@ -423,11 +432,16 @@ impl FlowState {
         FlowState { name: name, park: park, script: script, stamp: None, done: false }
     }
 
-    pub fn run<C: Comms>(&mut self, tx: &mpsc::Sender<CmdFrom>, comms: C) -> Result<()> {
-        self.stamp = Some(Local::now());
+    pub fn run<C: Comms>(&mut self, tx: &mpsc::Sender<CmdFrom>, file: &mut File, comms: C) -> Result<()> {
+        use self::ErrorKind::*;
+
+        let stamp = self.stamp.put(Local::now());
+        writeln!(file, "- {} [{}]", self.name, StampPrinter(stamp)).chain_err(|| Io("write to flow file".into()))?;
         for &mut (ref mut c, ref mut stamp) in &mut self.script {
             *stamp = Some(Local::now());
-            c.run(tx, comms.clone())?;
+            write!(file, "    ").chain_err(|| Io("write to flow file".into()))?;
+            c.run(tx, file, comms.clone())?;
+            writeln!(file, " [{}]", StampPrinter(stamp.as_ref().expect("missing timestamp"))).chain_err(|| Io("write to flow file".into()))?;
         }
         self.done = true;
         
@@ -443,14 +457,9 @@ impl FlowState {
         Ok(())
     }
 
-    pub fn finalize(&mut self, file: &mut File) -> Result<()> {
-        use self::ErrorKind::*;
-
-        writeln!(file, "- {} [{}]", self.name, StampPrinter(self.stamp.ok_or("FlowState::finalize called before FlowState::run")?)).chain_err(|| Io("write to flow file".into()))?;
+    pub fn finalize(&mut self) -> Result<()> {
         for &mut (ref mut c, ref mut stamp) in &mut self.script {
-            write!(file, "    ").chain_err(|| Io("write to flow file".into()))?;
-            c.finalize(file)?;
-            writeln!(file, " [{}]", StampPrinter(stamp.ok_or("FlowState::finalize called before FlowState::run")?)).chain_err(|| Io("write to flow file".into()))?;
+            c.finalize()?;
             *stamp = None;
         }
         self.done = false;
@@ -469,14 +478,19 @@ impl FlowCmd {
         FlowCmd::Int { prompt: prompt, limits: limits, data: None }
     }
 
-    pub fn run<C: Comms>(&mut self, tx: &mpsc::Sender<CmdFrom>, comms: C) -> Result<()> {
+    pub fn run<C: Comms>(&mut self, tx: &mpsc::Sender<CmdFrom>, file: &mut File, comms: C) -> Result<()> {
         use self::ErrorKind::*;
 
         match *self {
-            FlowCmd::Message(ref msg) => comms.send(format!("msg {}", msg)).comms_err()?,
+            FlowCmd::Message(ref msg) => {
+                comms.send(format!("msg {}", msg)).comms_err()?;
+
+                write!(file, "{:?}", msg).chain_err(|| Io("write to flow file".into()))?;
+            }
+
             FlowCmd::Str { ref prompt, ref mut data } => {
                 assert!(data.is_none());
-                *data = Some(comms.rpc(format!("prompt Please enter {}",
+                let data = data.put(comms.rpc(format!("prompt Please enter {}",
                                                prompt),
                                        |x| {
                                            if x.is_empty() {
@@ -486,10 +500,13 @@ impl FlowCmd {
                                            }
                                        }).comms_err()?
                                        .ok_or(ErrorKind::FlowCanceled)?);
+
+                write!(file, "> {:?} [{:?}]", prompt, data).chain_err(|| Io("write to flow file".into()))?;
             }
+
             FlowCmd::Int { ref prompt, limits: (low, high), ref mut data } => {
                 assert!(data.is_none());
-                *data = Some(comms.rpc(format!("prompt Please select {} ({}-{} scale)",
+                let data = data.put(comms.rpc(format!("prompt Please select {} ({}-{} scale)",
                                                prompt, low, high),
                                        |x| {
                                            match x.trim().parse() {
@@ -505,24 +522,41 @@ impl FlowCmd {
                                            }
                                        }).comms_err()?
                                        .ok_or(ErrorKind::FlowCanceled)?);
+
+                write!(file, "> {:?} ({}..{}) [{:?}]", prompt, low, high, data).chain_err(|| Io("write to flow file".into()))?;
             }
+
             FlowCmd::Start(ref service, ref data) => {
                 comms.print(format!("Flow starting service {}", service)).comms_err()?;
                 rpc!(tx, CmdFrom::Start, service.clone(), data.clone()).chain_err(|| Rpc(format!("start {}", service)))?;
                 comms.print(format!("Flow waiting for service {} to start", service)).comms_err()?;
                 thread::sleep(Duration::from_millis(2000));
                 comms.print(format!("Flow done waiting for service {}", service)).comms_err()?;
+
+                write!(file, "start {}", service).chain_err(|| Io("write to flow file".into()))?;
+                if let Some(ref data) = *data {
+                    write!(file, "/{}", data).chain_err(|| Io("write to flow file".into()))?;
+                }
             }
+
             FlowCmd::Stop(ref service) => {
                 rpc!(tx, CmdFrom::Stop, service.clone()).chain_err(|| Rpc(format!("stop {}", service)))?;
+
+                write!(file, "stop {}", service).chain_err(|| Io("write to flow file".into()))?;
             }
+
             FlowCmd::Send(ref string) => {
                 tx.send(CmdFrom::Data(String::from("to ") + string)).chain_err(|| Rpc(format!("send to {}", string)))?;
+
+                write!(file, ": {}", string).chain_err(|| Io("write to flow file".into()))?;
             }
+
             FlowCmd::StopSensors => {
                 for &svc in &["bluefox", "structure", "biotac", "optoforce", "teensy"] {
                     rpc!(tx, CmdFrom::Stop, svc.to_owned()).chain_err(|| Rpc(format!("stop {}", svc)))?;
                 }
+
+                write!(file, "stop").chain_err(|| Io("write to flow file".into()))?;
             }
         }
 
@@ -550,28 +584,11 @@ impl FlowCmd {
         Ok(())
     }
     
-    pub fn finalize(&mut self, file: &mut File) -> Result<()> {
-        use self::ErrorKind::*;
-
+    pub fn finalize(&mut self) -> Result<()> {
         match *self {
-            FlowCmd::Message(ref msg) => write!(file, "{:?}", msg).chain_err(|| Io("write to flow file".into()))?,
-            FlowCmd::Str { ref prompt, ref mut data } => {
-                write!(file, "> {:?} [{:?}]", prompt, data.as_ref().ok_or("FlowCmd::finalize called before FlowCmd::run")?).chain_err(|| Io("write to flow file".into()))?;
-                *data = None;
-            },
-            FlowCmd::Int { ref prompt, limits: (low, high), ref mut data } => {
-                write!(file, "> {:?} ({}..{}) [{:?}]", prompt, low, high, data.ok_or("FlowCmd::finalize called before FlowCmd::run")?).chain_err(|| Io("write to flow file".into()))?;
-                *data = None;
-            },
-            FlowCmd::Start(ref service, ref data) => {
-                write!(file, "start {}", service).chain_err(|| Io("write to flow file".into()))?;
-                if let Some(ref data) = *data {
-                    write!(file, "/{}", data).chain_err(|| Io("write to flow file".into()))?;
-                }
-            },
-            FlowCmd::Stop(ref service) => write!(file, "stop {}", service).chain_err(|| Io("write to flow file".into()))?,
-            FlowCmd::Send(ref string) => write!(file, ": {}", string).chain_err(|| Io("write to flow file".into()))?,
-            FlowCmd::StopSensors => write!(file, "stop").chain_err(|| Io("write to flow file".into()))?,
+            FlowCmd::Str { ref mut data, .. } => *data = None,
+            FlowCmd::Int { ref mut data, .. } => *data = None,
+            _ => {}
         }
 
         Ok(())
