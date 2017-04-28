@@ -28,7 +28,7 @@ use std::path::Path;
 use std::sync::{Mutex, RwLock, mpsc};
 use std::thread::JoinHandle;
 use std::collections::BTreeMap;
-use std::{env, str, thread};
+use std::{str, thread};
 use std::io::Read;
 use std::fs::File;
 use std::process::Command;
@@ -328,17 +328,19 @@ fn retry<R, F: FnMut() -> Option<R>, G: FnOnce() -> R>(times: usize, delay: Dura
 fn disk_free() -> String {
     let re = Regex::new(r" +").unwrap();
 
-    str::from_utf8(
-        &Command::new("df") // measure disk free space
-            .arg("-h")     // human-readable units
-            .arg(env::current_dir().unwrap().to_str().unwrap()) // device corresponding to $PWD
-            .output().unwrap().stdout).unwrap() // read all output
-        .split("\n") // split lines
-        .skip(1) // skip first line
-        .next().unwrap() // use second line
-        .split_re(&re) // split on whitespace
-        .nth(3).unwrap() // fourth column is available space
-        .to_owned()
+    let datadir = &*flow::DATADIR.read().unwrap();
+
+    format!("{} {}", datadir,
+            str::from_utf8(
+                &Command::new("df") // measure disk free space
+                    .arg("-h")     // human-readable units
+                    .arg(datadir) // device corresponding to DATADIR
+                    .output().unwrap().stdout).unwrap() // read all output
+                .split("\n") // split lines
+                .skip(1) // skip first line
+                .next().unwrap() // use second line
+                .split_re(&re) // split on whitespace
+                .nth(3).unwrap()) // fourth column is available space
 }
 
 /// Controllable struct for the web server
