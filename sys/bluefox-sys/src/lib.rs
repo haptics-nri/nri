@@ -6,10 +6,29 @@ extern crate libc;
 #[macro_use] extern crate conv;
 
 use libc::{c_void, c_int, c_uint, c_char, c_double};
+use std::ffi::CString;
 use conv::TryFrom;
 use std::slice;
 use std::mem;
 use std::ptr;
+
+#[derive(Debug)]
+pub enum MVError {
+    Dmr(TDMR_ERROR),
+    Prop(TPROPHANDLING_ERROR)
+}
+
+impl From<TDMR_ERROR> for MVError {
+    fn from(err: TDMR_ERROR) -> MVError {
+        MVError::Dmr(err)
+    }
+}
+
+impl From<TPROPHANDLING_ERROR> for MVError {
+    fn from(err: TPROPHANDLING_ERROR) -> MVError {
+        MVError::Prop(err)
+    }
+}
 
 macro_rules! dmr_status2result {
     ($code:expr) => { dmr_status2result!($code, ()) };
@@ -52,11 +71,8 @@ newtype!(HOBJ  = c_int);
 newtype!(HLIST = c_int);
 
 impl HOBJ {
-    fn get_type(self) -> Result<ComponentType, TPROPHANDLING_ERROR> {
-        unsafe {
-            let mut t: ComponentType = mem::uninitialized();
-            prop_status2result!(OBJ_GetType(self, &mut t), t)
-        }
+    fn into_hlist(self) -> HLIST {
+        HLIST(self.0)
     }
 }
 
@@ -346,40 +362,40 @@ obj_set_impl!(i64, OBJ_GetI64, OBJ_SetI64);
 obj_set_impl!(f64, OBJ_GetF,   OBJ_SetF);
 
 macro_rules! getter {
-    ($name:ident, $prop:expr, $typ:ty) => {
-        pub fn $name(&self) -> Result<$typ,TPROPHANDLING_ERROR> {
-            self.get_prop::<$typ>($prop, 0)
+    ($name:ident, $list:expr, $prop:expr, $typ:ty) => {
+        pub fn $name(&self) -> Result<$typ, MVError> {
+            self.get_prop::<$typ>($list, $prop, 0)
         }
     };
-    ($name:ident, $prop:expr, $typ:ty, $conv_var:ident: $conv_typ:ty => $conv_body:expr) => {
-        pub fn $name(&self) -> Result<$typ,TPROPHANDLING_ERROR> {
-            self.get_prop::<$conv_typ>($prop, 0).map(|$conv_var| $conv_body)
+    ($name:ident, $list:expr, $prop:expr, $typ:ty, |$conv_var:ident: $conv_typ:ty| $conv_body:expr) => {
+        pub fn $name(&self) -> Result<$typ, MVError> {
+            self.get_prop::<$conv_typ>($list, $prop, 0).map(|$conv_var| $conv_body)
         }
     }
 }
 macro_rules! setter {
-    ($name:ident, $prop:expr, $typ:ty) => {
-        pub fn $name(&self, val: $typ) -> Result<(),TPROPHANDLING_ERROR> {
-            self.set_prop::<$typ>($prop, val, 0)
+    ($name:ident, $list:expr, $prop:expr, $typ:ty) => {
+        pub fn $name(&self, val: $typ) -> Result<(), MVError> {
+            self.set_prop::<$typ>($list, $prop, val, 0)
         }
     };
-    ($name:ident, $prop:expr, $typ:ty, $conv_var:ident: $conv_typ:ty => $conv_body:expr) => {
-        pub fn $name(&self, $conv_var: $conv_typ) -> Result<(),TPROPHANDLING_ERROR> {
-            self.set_prop::<$typ>($prop, $conv_body, 0)
+    ($name:ident, $list:expr, $prop:expr, $typ:ty, |$conv_var:ident: $conv_typ:ty| $conv_body:expr) => {
+        pub fn $name(&self, $conv_var: $conv_typ) -> Result<(), MVError> {
+            self.set_prop::<$typ>($list, $prop, $conv_body, 0)
         }
     }
 }
 macro_rules! getset {
-    ($get:ident, $set:ident, $prop:expr, $typ:ty) => {
-        getter!($get, $prop, $typ);
-        setter!($set, $prop, $typ);
+    ($get:ident, $set:ident, $list:expr, $prop:expr, |$rvar:ident: $rty:ty| $r2c:expr, |$cvar:ident: $cty:ty| $c2r:expr) => {
+        getter!($get, $list, $prop, $rty, |$cvar: $cty| $c2r);
+        setter!($set, $list, $prop, $cty, |$rvar: $rty| $r2c);
     };
-    ($get:ident, $set:ident, $prop:expr, $rty:ty as $cty:ty) => {
-        getset!($get, $set, $prop, r: $rty => r as $cty, c: $cty => TryFrom::try_from(c).unwrap());
+    ($get:ident, $set:ident, $list:expr, $prop:expr, $typ:ty) => {
+        getter!($get, $list, $prop, $typ);
+        setter!($set, $list, $prop, $typ);
     };
-    ($get:ident, $set:ident, $prop:expr, $rvar:ident : $rty:ty => $r2c:expr, $cvar:ident : $cty:ty => $c2r:expr) => {
-        getter!($get, $prop, $rty, $cvar: $cty => $c2r);
-        setter!($set, $prop, $cty, $rvar: $rty => $r2c);
+    ($get:ident, $set:ident, $list:expr, $prop:expr, $rty:ty as $cty:ty) => {
+        getset!($get, $set, $list, $prop, |r: $rty| r as $cty, |c: $cty| TryFrom::try_from(c).unwrap());
     }
 }
 
@@ -399,14 +415,28 @@ impl Device {
                                                    &mut this.drv) }, this)
     }
 
-    fn set_prop<T: ObjProp>(&self, prop: HOBJ, value: T, index: c_int) -> Result<(), TPROPHANDLING_ERROR> {
-        prop_status2result!(unsafe { T::set(prop, value, index) })
+    fn lookup_prop(&self, list: &str, prop: &str) -> Result<HOBJ, MVError> {
+        let cstr_list = CString::new(list).unwrap();
+        let cstr_prop = CString::new(prop).unwrap();
+        unsafe {
+            let mut base: HLIST = mem::uninitialized();
+            let mut list: HOBJ = mem::uninitialized();
+            let mut setting: HOBJ = mem::uninitialized();
+            try!(dmr_status2result!(DMR_FindList(self.drv, b"Base\0" as *const [u8] as *const i8, ListType::Setting, 0, &mut base)));
+            try!(prop_status2result!(OBJ_GetHandleEx(base, cstr_list.as_ptr(), &mut list, 0, -1)));
+            try!(prop_status2result!(OBJ_GetHandleEx(list.into_hlist(), cstr_prop.as_ptr(), &mut setting, 0, -1)));
+            Ok(setting)
+        }
     }
 
-    fn get_prop<T: ObjProp>(&self, prop: HOBJ, index: c_int) -> Result<T, TPROPHANDLING_ERROR> {
+    fn set_prop<T: ObjProp>(&self, list: &str, prop: &str, value: T, index: c_int) -> Result<(), MVError> {
+        Ok(try!(prop_status2result!(unsafe { T::set(try!(self.lookup_prop(list, prop)), value, index) })))
+    }
+
+    fn get_prop<T: ObjProp>(&self, list: &str, prop: &str, index: c_int) -> Result<T, MVError> {
         unsafe {
             let mut value: T = mem::uninitialized();
-            prop_status2result!(T::get(prop, &mut value, index), value)
+            Ok(try!(prop_status2result!(T::get(try!(self.lookup_prop(list, prop)), &mut value, index), value)))
         }
     }
 
@@ -454,7 +484,7 @@ impl Device {
 
 pub mod settings {
     use conv::TryFrom;
-    use super::{Device, TPROPHANDLING_ERROR, HOBJ};
+    use super::{Device, MVError};
 
     macro_rules! settings {
         ($(($name:ident: $typ:ty, $get:ident, $set:ident, $($rest:tt)*))*) => {
@@ -470,9 +500,10 @@ pub mod settings {
                     getset!($get, $set, $($rest)*);
                 )*
 
-                pub fn set(&mut self, s: &Settings) -> Result<(), TPROPHANDLING_ERROR> {
+                pub fn set(&mut self, s: &Settings) -> Result<(), MVError> {
                     $(
                         if let Some($name) = s.$name {
+                            println!("BLUEFOX: set {} := {:?}", stringify!($name), $name);
                             self.$set($name)?;
                         }
                     )*
@@ -482,8 +513,14 @@ pub mod settings {
                 pub fn get(&self) -> Settings {
                     Settings {
                         $(
-                            $name: self.$get().ok(),
-                        )*
+                            $name: match self.$get() {
+                                Ok(v) => Some(v),
+                                Err(e) => {
+                                    println!("BLUEFOX: error getting {}: {:?}", stringify!($name), e);
+                                    None
+                                }
+                            }
+                        ),*
                     }
                 }
             }
@@ -491,30 +528,29 @@ pub mod settings {
     }
 
     settings! {
-        (color_proc:    ColorProc,         get_color_proc,    set_color_proc,    HOBJ(0x5E0008), ColorProc         as i32             )
-        (scale_enabled: bool,              get_scale_enabled, set_scale_enabled, HOBJ(0x800001), b: bool => b as i32, i: i32 => i == 1)
-        (scale_mode:    InterpolationMode, get_scale_mode,    set_scale_mode,    HOBJ(0x800002), InterpolationMode as i32             )
-        (scale_width:   i32,               get_scale_width,   set_scale_width,   HOBJ(0x800003), i32                                  )
-        (scale_height:  i32,               get_scale_height,  set_scale_height,  HOBJ(0x800004), i32                                  )
-        (width:         i64,               get_width,         set_width,         HOBJ(0x840004), i64                                  )
-        (height:        i64,               get_height,        set_height,        HOBJ(0x840005), i64                                  )
-        (offset_x:      i64,               get_offset_x,      set_offset_x,      HOBJ(0x840006), i64                                  )
-        (offset_y:      i64,               get_offset_y,      set_offset_y,      HOBJ(0x840007), i64                                  )
-        (cam_format:    CameraPixelFormat, get_cam_format,    set_cam_format,    HOBJ(0x840008), CameraPixelFormat as i64             )
-        (dest_format:   DestPixelFormat,   get_dest_format,   set_dest_format,   HOBJ(0x800000), DestPixelFormat   as i32             )
-        (bin_x:         i64,               get_bin_x,         set_bin_x,         HOBJ(0x84000A), i64                                  )
-        (bin_y:         i64,               get_bin_y,         set_bin_y,         HOBJ(0x84000B), i64                                  )
-        (decimate_x:    i64,               get_decimate_x,    set_decimate_x,    HOBJ(0x84000C), i64                                  )
-        (decimate_y:    i64,               get_decimate_y,    set_decimate_y,    HOBJ(0x84000D), i64                                  )
-        (reverse_x:     bool,              get_reverse_x,     set_reverse_x,     HOBJ(0x84000E), b: bool => b as i32, i: i32 => i == 1)
-        (reverse_y:     bool,              get_reverse_y,     set_reverse_y,     HOBJ(0x84000F), b: bool => b as i32, i: i32 => i == 1)
-        (acq_fr_enable: bool,              get_acq_fr_enable, set_acq_fr_enable, HOBJ(0x850017), b: bool => b as i64, i: i64 => i == 1)
-        (acq_fr:        f64,               get_acq_fr,        set_acq_fr,        HOBJ(0x850018), f64                                  )
-        (exposure_time: f64,               get_exposure_time, set_exposure_time, HOBJ(0x850005), f64                                  )
-        (auto_exposure: bool,              get_auto_exposure, set_auto_exposure, HOBJ(0x850006), b: bool => b as i64, i: i64 => i == 1)
-        (auto_gain:     bool,              get_auto_gain,     set_auto_gain,     HOBJ(0x870003), b: bool => b as i64, i: i64 => i == 1)
-        (white_balance: WhiteBalanceMode,  get_white_balance, set_white_balance, HOBJ(0x870012), WhiteBalanceMode  as i64             )
-        (average_grey:  i64,               get_average_grey,  set_average_grey,  HOBJ(0x870006), i64                                  )
+        (scale_enabled: bool,              get_scale_enabled, set_scale_enabled, "ImageDestination",   "ScalerMode",                   |b: bool| b as i32, |i: i32| i == 1)
+        (scale_mode:    InterpolationMode, get_scale_mode,    set_scale_mode,    "ImageDestination",   "ScalerInterpolationMode",      InterpolationMode as i32           )
+        (scale_width:   i32,               get_scale_width,   set_scale_width,   "ImageDestination",   "ImageWidth",                   i32                                )
+        (scale_height:  i32,               get_scale_height,  set_scale_height,  "ImageDestination",   "ImageHeight",                  i32                                )
+        (offset_x:      i64,               get_offset_x,      set_offset_x,      "ImageFormatControl", "OffsetX",                      i64                                )
+        (offset_y:      i64,               get_offset_y,      set_offset_y,      "ImageFormatControl", "OffsetY",                      i64                                )
+        (cam_format:    CameraPixelFormat, get_cam_format,    set_cam_format,    "ImageFormatControl", "PixelFormat",                  CameraPixelFormat as i64           )
+        (dest_format:   DestPixelFormat,   get_dest_format,   set_dest_format,   "ImageDestination",   "PixelFormat",                  DestPixelFormat   as i32           )
+        (bin_x:         i64,               get_bin_x,         set_bin_x,         "ImageFormatControl", "BinningHorizontal",            i64                                )
+        (bin_y:         i64,               get_bin_y,         set_bin_y,         "ImageFormatControl", "BinningVertical",              i64                                )
+        (decimate_x:    i64,               get_decimate_x,    set_decimate_x,    "ImageFormatControl", "DecimationHorizontal",         i64                                )
+        (decimate_y:    i64,               get_decimate_y,    set_decimate_y,    "ImageFormatControl", "DecimationVertical",           i64                                )
+        (width:         i64,               get_width,         set_width,         "ImageFormatControl", "Width",                        i64                                )
+        (height:        i64,               get_height,        set_height,        "ImageFormatControl", "Height",                       i64                                )
+        (reverse_x:     bool,              get_reverse_x,     set_reverse_x,     "ImageFormatControl", "ReverseX",                     |b: bool| b as i32, |i: i32| i == 1)
+        (reverse_y:     bool,              get_reverse_y,     set_reverse_y,     "ImageFormatControl", "ReverseY",                     |b: bool| b as i32, |i: i32| i == 1)
+        (acq_fr_enable: bool,              get_acq_fr_enable, set_acq_fr_enable, "AcquisitionControl", "mvAcquisitionFrameRateEnable", |b: bool| b as i32, |i: i32| i == 1)
+        (acq_fr:        f64,               get_acq_fr,        set_acq_fr,        "AcquisitionControl", "AcquisitionFrameRate",         f64                                )
+        (exposure_time: f64,               get_exposure_time, set_exposure_time, "AcquisitionControl", "ExposureTime",                 f64                                )
+        (auto_exposure: bool,              get_auto_exposure, set_auto_exposure, "AcquisitionControl", "ExposureAuto",                 |b: bool| b as i32, |i: i32| i == 1)
+        (auto_gain:     bool,              get_auto_gain,     set_auto_gain,     "AnalogControl",      "GainAuto",                     |b: bool| b as i32, |i: i32| i == 1)
+        (white_balance: WhiteBalanceMode,  get_white_balance, set_white_balance, "AnalogControl",      "BalanceWhiteAuto",             WhiteBalanceMode  as i64           )
+        (average_grey:  i64,               get_average_grey,  set_average_grey,  "AcquisitionControl", "mvExposureAutoAverageGrey",    i64                                )
     }
 
     macro_attr! {
@@ -567,18 +603,6 @@ pub mod settings {
             YUV444Packed         = 26,
             YUV444_10Packed      = 27,
             YUV422Planar         = 13,
-        }
-    }
-
-    macro_attr! {
-        #[repr(C)]
-        #[derive(Copy, Clone, Debug, TryFrom!(i32), Serialize, Deserialize)]
-        pub enum ColorProc {
-            Auto             = 0,
-            Raw              = 1,
-            ColorBayer       = 2,
-            ColorBayerToMono = 3,
-            RawToPlanes      = 4,
         }
     }
 

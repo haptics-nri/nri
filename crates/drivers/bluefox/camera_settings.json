@@ -3,12 +3,16 @@
     "height": 1200,
     "offset_x": 0,
     "offset_y": 0,
+    "decimate_x": 1,
+    "decimate_y": 1,
     "cam_format": "RGB8",
     "dest_format": "Auto",
     "acq_fr_enable": true,
     "acq_fr": 15.0,
     "auto_exposure": true,
     "auto_gain": true,
-    "average_grey": 75
+    "average_grey": 80,
+
+    "scale_enabled": false
 }
 
