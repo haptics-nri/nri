@@ -20,14 +20,14 @@ extern crate router;
 extern crate urlencoded;
 extern crate url;
 extern crate hyper;
-extern crate rustc_serialize as serialize;
 extern crate websocket;
 extern crate uuid;
+#[macro_use] extern crate serde_derive;
+#[macro_use] extern crate serde_json;
 
 use std::path::Path;
 use std::sync::{Mutex, RwLock, mpsc};
 use std::thread::JoinHandle;
-use std::collections::BTreeMap;
 use std::{str, thread};
 use std::io::Read;
 use std::fs::File;
@@ -51,9 +51,9 @@ use url::percent_encoding::percent_decode;
 use hyper::server::Listening;
 use hyper::header::ContentType;
 use hyper::mime::{Mime, TopLevel, SubLevel};
-use serialize::json::{ToJson, Json};
 use websocket::result::WebSocketError;
 use uuid::Uuid;
+use serde_json::Value as JsonValue;
 
 /// parsing and running flows
 extern crate flow;
@@ -89,6 +89,7 @@ impl<T> From<PoisonError<T>> for Error {
 /// display in the interface. However, they should probably be unified (TODO). The "web descriptor"
 /// could be just a subfield of the main.rs service descriptor, and then those could get passed in
 /// here (somehow).
+#[derive(Serialize)]
 struct Service {
     name      : String,
     shortname : String,
@@ -99,14 +100,6 @@ impl Service {
     /// Create a new service descriptor with the given name
     fn new(s: &str, t: &str, e: &str) -> Service {
         Service { name: s.to_owned(), shortname: t.to_owned(), extra: e.to_owned() }
-    }
-}
-
-impl ToJson for Service {
-    fn to_json(&self) -> Json {
-        let mut m: BTreeMap<String, Json> = BTreeMap::new();
-        jsonize!(m, self; name, shortname, extra);
-        m.to_json()
     }
 }
 
@@ -128,23 +121,24 @@ lazy_static! {
 }
 
 /// Render a template with the data we always use
-fn render(template: &str, data: BTreeMap<String, Json>) -> String {
+fn render(template: &str, data: JsonValue) -> String {
     TEMPLATES.read().unwrap().render(template, &data).unwrap()
 }
 
 /// Handler for the main page of the web interface
 fn index() -> Box<Handler> {
     Box::new(move |req: &mut Request| -> IronResult<Response> {
-                      let mut data = BTreeMap::<String, Json>::new();
-                      data.insert("services".to_owned(), vec![
+                      let data = json!({
+                          "services": [
                                   Service::new("Structure Sensor", "structure" , "<img class=\"frame structure latest\" /><div class=\"structure framenum\"></div>"),
                                   Service::new("mvBlueFOX3"      , "bluefox"   , "<img class=\"frame bluefox latest\" /><div class=\"bluefox framenum\"></div>"),
                                   Service::new("OptoForce"       , "optoforce" , "<img class=\"frame optoforce latest\" /><div class=\"optoforce framenum\"></div>"),
                                   Service::new("SynTouch BioTac" , "biotac"    , "<img class=\"frame biotac latest\" /><div class=\"biotac framenum\"></div>"),
                                   Service::new("Teensy"          , "teensy"    , "<img class=\"frame teensy latest\" /><div class=\"teensy framenum\"></div>"),
-                      ].to_json());
-                      data.insert("flows".to_owned(), FLOWS.read().unwrap().to_json());
-                      data.insert("server".to_owned(), format!("{}:{}", req.url.host(), config::WS_PORT).to_json());
+                          ],
+                          "flows": &*FLOWS.read().unwrap(),
+                          "server": format!("{}:{}", req.url.host(), config::WS_PORT)
+                      });
 
                       let mut resp = Response::new();
                       resp.set_mut(render("index", data)).set_mut(Header(ContentType(Mime(TopLevel::Text, SubLevel::Html, vec![])))).set_mut(status::Ok);
@@ -272,8 +266,9 @@ fn flow(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
                       };
 
                       // next send some WebSocket updates (retry logic to increase reliability)
-                      let mut data = BTreeMap::<String, Json>::new();
-                      data.insert("flows".to_owned(), FLOWS.read().unwrap().to_json());
+                      let data = json!({
+                          "flows": &*FLOWS.read().unwrap()
+                      });
                       retry(10, Duration::from_millis(500),
                           || {
                                  Ok(())

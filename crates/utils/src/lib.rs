@@ -40,16 +40,6 @@ macro_rules! errorln {
     }}
 }
 
-#[macro_export]
-macro_rules! jsonize {
-    ($map:ident, $selph:ident, $var:ident) => {{
-        $map.insert(stringify!($var).to_owned(), $selph.$var.to_json())
-    }};
-    ($map:ident, $selph:ident; $($var:ident),+) => {{
-        $(jsonize!($map, $selph, $var));+
-    }}
-}
-
 pub fn watch<T, U, F>(mut thing: T,
                   global: &'static U,
                   root: &'static Path,

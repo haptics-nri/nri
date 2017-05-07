@@ -16,5 +16,8 @@ conv                 = "0.3"
 time                 = "0.1"
 serial               = "0.3"
 rustc-serialize      = "0.3" # TODO migrate to serde
+serde                = "0.9"
+serde_derive         = "0.9"
+serde_json           = "0.9"
 gnuplot              = "0.0.22"
 

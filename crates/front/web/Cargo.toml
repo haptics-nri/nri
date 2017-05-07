@@ -14,16 +14,18 @@ log                  = "0.3"
 regex                = "0.2"
 error-chain          = "0.10"
 uuid                 = { version = "0.2", features = ["v4"] }
+serde                = "0.9"
+serde_json           = "0.9"
+serde_derive         = "0.9"
 
 # iron deps
 iron                 = "0.5"
-handlebars-iron      = "0.23"
-handlebars           = "0.25"
+handlebars-iron      = { version = "0.23", default-features = false, features = ["serde_type"] }
+handlebars           = { version = "0.25", default-features = false, features = ["serde_type"] }
 staticfile           = { version = "0.4", default-features = false }
 mount                = "0.3"
 hyper                = "0.10"
 router               = "0.5"
 urlencoded           = "0.5"
 url                  = "1"
-rustc-serialize      = "0.3" # TODO migrate to serde
 websocket            = "0.19"

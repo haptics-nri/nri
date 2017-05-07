@@ -5,11 +5,10 @@
 extern crate teensy;
 extern crate chrono;
 extern crate uuid;
-extern crate rustc_serialize as serialize;
 
 use std::{env, fmt, mem, thread};
 use std::sync::mpsc;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::io::{Write, BufRead, BufReader};
 use std::ffi::OsString;
 use std::fs::{self, File};
@@ -23,7 +22,7 @@ use teensy::ParkState;
 use utils::config;
 use comms::CmdFrom;
 use uuid::Uuid;
-use serialize::json::{ToJson, Json};
+#[macro_use] extern crate serde_derive;
 
 error_chain! {
     errors {
@@ -126,7 +125,7 @@ impl<'a> fmt::Display for StampPrinter<'a> {
 }
 
 /// Descriptor of a data collection flow
-#[derive(Default)]
+#[derive(Default, Serialize)]
 pub struct Flow {
     /// Name of the flow
     pub name: String, pub shortname: String,
@@ -141,10 +140,13 @@ pub struct Flow {
     original_dir: Option<PathBuf>,
     episode_dir: Option<PathBuf>,
     id: Option<Uuid>,
+
+    #[serde(skip_serializing)]
     file: Option<File>,
 }
 
 /// One state in a data collection flow
+#[derive(Serialize)]
 pub struct FlowState {
     /// Name of the flow state
     name: String,
@@ -158,7 +160,7 @@ pub struct FlowState {
 }
 
 /// Different actions that a flow can perform at each state
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub enum FlowCmd {
     Message(String),
     Str {
@@ -594,21 +596,4 @@ impl FlowCmd {
         Ok(())
     }
 }
-
-impl ToJson for Flow {
-    fn to_json(&self) -> Json {
-        let mut m: BTreeMap<String, Json> = BTreeMap::new();
-        jsonize!(m, self; name, shortname, states, active, almostdone);
-        m.to_json()
-    }
-}
-
-impl ToJson for FlowState {
-    fn to_json(&self) -> Json {
-        let mut m: BTreeMap<String, Json> = BTreeMap::new();
-        jsonize!(m, self; name, done);
-        m.to_json()
-    }
-}
-
 

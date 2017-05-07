@@ -6,10 +6,11 @@
 #[macro_use] extern crate guilt_by_association;
 #[macro_use] extern crate macro_attr;
 #[macro_use] extern crate conv;
+#[macro_use] extern crate serde_derive;
 
 macro_attr! {
     /// Which end effector is in use (i.e. not parked)
-    #[derive(Copy, Clone, Eq, PartialEq, Debug, TryFrom!(u8))]
+    #[derive(Copy, Clone, Eq, PartialEq, Debug, Serialize, TryFrom!(u8))]
     pub enum ParkState {
         /// All end effectors parked
         None = 0,
@@ -51,6 +52,7 @@ group_attr!{
     extern crate serial;
     extern crate time;
     extern crate rustc_serialize as serialize;
+    extern crate serde_json;
     extern crate gnuplot;
 
     use comms::{Controllable, CmdFrom, Block, RestartableThread};
