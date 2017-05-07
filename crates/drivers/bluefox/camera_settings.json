@@ -11,8 +11,6 @@
     "acq_fr": 15.0,
     "auto_exposure": true,
     "auto_gain": true,
-    "average_grey": 80,
-
-    "scale_enabled": false
+    "average_grey": 80
 }
 

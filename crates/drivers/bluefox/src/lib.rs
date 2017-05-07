@@ -22,8 +22,7 @@ group_attr!{
     use serialize::base64;
     use serialize::base64::ToBase64;
     use std::fs::File;
-    use std::io::{Read, Write};
-    use std::process::{Command, Stdio};
+    use std::io::Read;
     use std::sync::Mutex;
     use std::sync::mpsc::Sender;
     use comms::{Controllable, CmdFrom, Block, RestartableThread};
@@ -52,21 +51,6 @@ group_attr!{
         stampfile: Writer<[u8]>,
 
         writer: Writer<[u8]>
-    }
-
-    fn set_settings(settings: Settings) {
-        let mut child = Command::new("cargo")
-                                .args(&["run",
-                                        if cfg!(debug_assertions) { "--debug" } else { "--release" },
-                                        "--bin",
-                                        "bluefox-settings"])
-                                .stdin(Stdio::piped())
-                                .spawn().unwrap();
-
-        let settings_str = serde_json::to_string(&settings).unwrap();
-        writeln!(child.stdin.as_mut().unwrap(), "{}", settings_str).unwrap();
-        
-        assert!(child.wait().unwrap().success());
     }
 
     guilty!{
@@ -100,15 +84,17 @@ group_attr!{
                 let mut settings_file = utils::in_original_dir(|| File::open("crates/drivers/bluefox/camera_settings.json").unwrap()).unwrap();
                 let mut settings_data = String::new();
                 settings_file.read_to_string(&mut settings_data).unwrap();
-                let settings = serde_json::from_str(&settings_data).unwrap();
-                set_settings(Settings {
+                let default_settings = serde_json::from_str(&settings_data).unwrap();
+                let settings = Settings {
                     acq_fr: Some(fps),
                     cam_format: Some(format.0),
                     dest_format: Some(format.1),
-                    ..settings });
+                    ..default_settings
+                };
 
-                let device = Device::new().unwrap();
+                let mut device = Device::new().unwrap();
                 device.request_reset().unwrap();
+                device.set(&settings).unwrap();
 
                 let mtx = Mutex::new(tx);
                 Bluefox {
@@ -125,12 +111,17 @@ group_attr!{
                                                                                          h as u32,
                                                                                          unencoded)
                                               .unwrap());
-                        let (ww, hh) = ((w as u32)/4, (h as u32)/4);
-                        let resized = prof!("resize",
-                                            imageops::resize(&to_resize,
-                                                             ww,
-                                                             hh,
-                                                             FilterType::Nearest));
+                        let (ww, hh) = (200, 150);
+                        let resized = prof!("resize", 
+                                            if (w as u32, h as u32) == (ww, hh) {
+                                                to_resize
+                                            } else {
+                                                imageops::resize(&to_resize,
+                                                                 ww,
+                                                                 hh,
+                                                                 FilterType::Nearest)
+                                            });
+
                         prof!("encode",
                               PNGEncoder::new(&mut encoded).encode(&resized, ww, hh, bd).unwrap());
                         prof!("send",
