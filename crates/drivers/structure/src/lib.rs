@@ -70,10 +70,10 @@ group_attr!{
     }
 
     impl Structure {
-        fn timeout<R, F: FnOnce() -> R>(&self, dur: Duration, gerund: String, action: F) -> R {
+        fn timeout<R, F: FnOnce() -> R, S: Into<String>>(&self, dur: Duration, gerund: S, action: F) -> R {
             let pair = Arc::new((Mutex::new(false), Condvar::new()));
             let &(ref lock, ref cvar) = &*pair;
-            self.watchdog.send((pair.clone(), gerund, dur)).unwrap();
+            self.watchdog.send((pair.clone(), gerund.into(), dur)).unwrap();
 
             let ret = action();
 
@@ -131,12 +131,10 @@ group_attr!{
                             resolution_y: 1024,
                             fps: 30
                         }).unwrap();
-                depth.start().unwrap();
-                //ir.start().unwrap();
 
                 let png_tx = tx.clone();
                 let wd_tx = tx.clone();
-                Structure {
+                let this = Structure {
                     device: device,
                     depth: depth,
                     ir: ir,
@@ -174,7 +172,14 @@ group_attr!{
 
                     stampfile: Writer::with_file("structure_times.csv"),
                     writer: Writer::with_files("structure{}.dat"),
-                }
+                };
+
+                this.timeout(Duration::milliseconds(500), "starting depth", || this.depth.start().unwrap());
+                //this.timeout(Duration::milliseconds(500), "starting IR", || this.ir.start().unwrap());
+
+                println!("structure started!");
+
+                this
             }
 
             fn step(&mut self, cmd: Option<String>) {
@@ -196,11 +201,11 @@ group_attr!{
 
                 if self.depth.is_running() {
                     prof!("depth", {
-                        let frame = match prof!("readFrame", self.timeout(Duration::milliseconds(100), "getting depth frame".into(), || self.depth.read_frame(Duration::milliseconds(100)))) {
+                        let frame = match prof!("readFrame", self.timeout(Duration::milliseconds(100), "getting depth frame", || self.depth.read_frame(Duration::milliseconds(100)))) {
                             Ok(frame) => frame,
                             Err(ref e) if e.code() == wrapper::OniErrorCode::TimeOut => {
                                 self.tx.send(CmdFrom::Data("send msg Structure Sensor froze and will be stopped!".into())).unwrap();
-                                self.timeout(Duration::seconds(2), "stopping depth".into(), || self.depth.stop());
+                                self.timeout(Duration::seconds(2), "stopping depth", || self.depth.stop());
                                 return;
                             },
                             e => e.unwrap()
@@ -234,7 +239,7 @@ group_attr!{
 
                 if self.ir.is_running() {
                     prof!("ir", {
-                        let frame = prof!("readFrame", self.timeout(Duration::milliseconds(100), "getting IR frame".into(), || self.ir.read_frame(Duration::milliseconds(100)).unwrap()));
+                        let frame = prof!("readFrame", self.timeout(Duration::milliseconds(100), "getting IR frame", || self.ir.read_frame(Duration::milliseconds(100)).unwrap()));
                         let data: &[u8] = prof!(frame.data());
 
                         if self.writing {
@@ -254,12 +259,12 @@ group_attr!{
 
             fn teardown(&mut self) {
                 let end = time::now();
-                if self.ir.is_running() { self.timeout(Duration::seconds(2), "stopping IR".into(), || self.ir.stop()); }
-                self.timeout(Duration::seconds(1), "destroying IR".into(), || self.ir.destroy());
-                if self.depth.is_running() { self.timeout(Duration::seconds(2), "stopping depth".into(), || self.depth.stop()); }
-                self.timeout(Duration::seconds(2), "destroying depth".into(), || self.depth.destroy());
-                self.timeout(Duration::seconds(2), "closing device".into(), || self.device.close());
-                self.timeout(Duration::seconds(2), "shutting down".into(), || wrapper::shutdown());
+                if self.ir.is_running() { self.timeout(Duration::seconds(2), "stopping IR", || self.ir.stop()); }
+                self.timeout(Duration::seconds(1), "destroying IR", || self.ir.destroy());
+                if self.depth.is_running() { self.timeout(Duration::seconds(2), "stopping depth", || self.depth.stop()); }
+                self.timeout(Duration::seconds(2), "destroying depth", || self.depth.destroy());
+                self.timeout(Duration::seconds(2), "closing device", || self.device.close());
+                self.timeout(Duration::seconds(2), "shutting down", || wrapper::shutdown());
                 let millis = (end - self.start).num_milliseconds() as f64;
                 println!("{} structure frames grabbed in {} s ({} FPS)!", self.i, millis/1000.0, 1000.0*(self.i as f64)/millis);
             }
