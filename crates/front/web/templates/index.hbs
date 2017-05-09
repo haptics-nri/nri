@@ -8,7 +8,9 @@
 
         <link href="/css/bootstrap.min.css" rel="stylesheet">
         <link href="/css/bootstrap-theme.min.css" rel="stylesheet">
+        <link href="/css/jsxgraph.css" rel="stylesheet">
         <script src="/js/jquery.min.js"></script>
+        <script src="/js/jsxgraphcore.js"></script>
         <script src="/js/bootstrap.min.js"></script>
 
         <style>
@@ -17,205 +19,9 @@
     </head>
     <body>
         <script type="text/javascript">
-            var ACTIONS = [];
-            var RUNNING = false;
-            function next() {
-                RUNNING = false;
-
-                var after = ACTIONS.shift();
-                if (after !== undefined) {
-                    handle_rpc(after);
-                }
-            }
-
-            function handle_rpc(data) {
-                if (RUNNING) {
-                    ACTIONS.push(data);
-                } else {
-                    RUNNING = true;
-                    words = data.split(' ');
-                    switch (words[0]) {
-                        case "msg":
-                            alert(data.slice(data.indexOf(" ")),
-                                    null,
-                                    function () {
-                                        $("#abort").click();
-                                    });
-                            break;
-                        case "prompt":
-                            prompt(data.slice(data.indexOf(" ")),
-                                    function (s) {
-                                        send("RPC" + window.wsid + " " + s);
-                                    },
-                                    function () {
-                                        send("RPC" + window.wsid + " ABORT");
-                                    });
-                            break;
-                    }
-                }
-            }
-
-            function alert(text, thenok, thencancel) {
-                thenok = thenok || function () { console.log("alert modal dismissed by clicking OK"); };
-                thencancel = thencancel || function () { console.log("alert modal cancelled"); };
-
-                $("#alert .modal-body").html(text);
-                $("#alert #ok").unbind('click.alert').bind('click.alert', thenok);
-                $("#alert #cancel").unbind('click.alert').bind('click.alert', thencancel);
-                $("#alert").modal("show");
-            }
-            function confirm(text, thenyes, thenno, thencancel) {
-                thenyes = thenyes || function () { console.log("confirm modal dismissed by clicking Yes"); };
-                thenno = thenno || function () { console.log("confirm modal dismissed by clicking No"); };
-                thencancel = thencancel || function () { console.log("confirm modal cancelled"); };
-
-                $("#confirm .modal-body").html(text);
-                $("#confirm #yes").unbind('click.confirm').bind('click.confirm', thenyes);
-                $("#confirm #no").unbind('click.confirm').bind('click.confirm', thenno);
-                $("#confirm #cancel").unbind('click.confirm').bind('click.confirm', thencancel);
-                $("#confirm").modal("show");
-            }
-            function prompt(text, thenok, thencancel) {
-                thenok = thenok || function (s) { console.log("prompt modal dismissed by clicking OK, contents \"" + s + "\""); };
-                thencancel = thencancel || function () { console.log("prompt modal cancelled"); };
-
-                $("#prompt #text").html(text);
-                $("#prompt #input").val("");
-                if (text.endsWith("scale)")) {
-                    $("#prompt #input").attr("type", "number");
-                } else {
-                    $("#prompt #input").attr("type", "text");
-                }
-                $("#prompt #ok").unbind('click.prompt').bind('click.prompt', function () { thenok($("#prompt #input").val()); });
-                $("#prompt #cancel").unbind('click.prompt').bind('click.prompt', thencancel);
-                $("#prompt").modal({ show: true, backdrop: "static" });
-            }
-
-            function send(s) {
-                console.log("send " + s);
-                window.socket.send(s);
-            }
-
-            var timer = null;
-            var dead_man_timer = null;
-
-            function dead_man_switch() {
-                clearTimeout(dead_man_timer);
-                dead_man_timer = setTimeout(dead_man_alarm, 1000);
-            }
-
-            function dead_man_alarm() {
-                if (document.response.document.body.innerText =="") {
-                    alert("Server not responding!");
-                }
-            }
-
-            function start_timer() {
-                dead_man_switch();
-
-                $("#timer").html("0m0s");
-                clearInterval(timer);
-                timer = setInterval(update_timer, 1000);
-            }
-
-            function clear_timer() {
-                dead_man_switch();
-
-                clearInterval(timer);
-                $("#timer").html("");
-            }
-
-            function update_timer() {
-                var cur = $("#timer").html();
-                var parts = cur.match(/(\d+)m(\d+)s/);
-                var min = parseInt(parts[1]);
-                var sec = parseInt(parts[2]);
-
-                sec++;
-                if (sec >= 60) {
-                    sec = 0;
-                    min++;
-                }
-
-                $("#timer").html(min + "m" + sec + "s");
-            }
-
-            function set_datadir() {
-                prompt("Set data directory",
-                        function (s) {
-                            send("DATA" + window.wsid + " set DATADIR " + escape(s));
-                        });
-            }
-
-            window.onload = function() {
-                $("#alert").on("hidden.bs.modal", next);
-                $("#confirm").on("hidden.bs.modal", next);
-                $("#prompt").on("hidden.bs.modal", next);
-                $("#prompt").on("keypress", function (e) {
-                    if (e.which == 13) {
-                        $("#prompt #ok").click();
-                        e.preventDefault();
-                    }
-                });
-            };
-
             window.socket = new WebSocket("ws://{{server}}", "rust-websocket");
-            window.socket.onmessage = function (event) {
-                console.log(event.data.slice(0, 50).replace(/\n+/g, ''));
-                words = event.data.split(' ');
-                switch (words[0]) {
-                    case "hello":
-                        window.wsid = words[1];
-                        $(".wsid").each(function () { this.value = words[1]; });
-                        break;
-                    case "msg":
-                    case "prompt":
-                        handle_rpc(event.data);
-                        break;
-                    case "kick":
-                        $("." + words[1] + ".framenum").each(function () { this.innerHTML = words[2]; });
-                        $("." + words[1] + ".latest")  .each(function () { this.src       = words[3]; });
-                        break;
-                    case "panic":
-                        serv = words[1];
-                        $("#light-" + serv).css("background-color", "blue");
-                        alert("The " + serv + " thread crashed! (" + words.slice(2).join(" ") + ")\n\nIf it was running, you may want to click Start again.");
-                        break;
-                    case "flow":
-                        $("#flows").html(event.data.slice(event.data.indexOf(" ")));
-                        break;
-                    case "start":
-                        serv = words[1];
-                        $("#light-" + serv).css("background-color", "green");
-                        break;
-                    case "stop":
-                        serv = words[1];
-                        $("#light-" + serv).css("background-color", "red");
-                        break;
-                    case "diskfree":
-                        $("#datadir").html(words[1]);
-                        $("#diskfree").html(words[2]);
-                        break;
-                    case "location":
-                        $.ajax({
-                            url: 'https://www.googleapis.com/geolocation/v1/geolocate?key=AIzaSyBLp5ElrEuwr3N9_Xxq7RnQV4E4vjzybS8',
-                            method: 'POST'
-                        }).done(function (data) {
-                            send("GPS" + window.wsid + " " + data.location.lat + " " + data.location.lng);
-                        });
-                        break;
-                }
-            };
-            window.socket.onopen = function (event) {
-                console.log("Server connection ready!");
-            };
-            window.socket.onclose = function (event) {
-                console.log("Server connection lost!");
-            };
-            window.socket.onerror = function (event) {
-                console.log("Server connection error!");
-            };
         </script>
+        <script type="text/javascript" src="/js/main.js"></script>
 
         <div class="container theme-showcase" role="main">
             <div class="jumbotron" style="padding-left: 2em">
@@ -294,7 +100,22 @@
                            name="wsid"
                            class="wsid"
                            value="-1"/>
-                    <hr/>
+                    <button onclick="window.start_demo(); return false;"
+                            name="start_demo"
+                            class="btn btn-success">Start Demo</button>
+                    <button onclick="window.stop_demo(); return false;"
+                            name="stop_demo"
+                            class="btn btn-danger">Stop Demo</button>
+                </form>
+            </div>
+
+            <div class="page-header">
+                <form method="POST"
+                      target="response">
+                    <input type="hidden"
+                           name="wsid"
+                           class="wsid"
+                           value="-1"/>
                     <div id="flows">
                         {{> flows}}
                     </div>
@@ -316,12 +137,15 @@
                             <p>
                             <button formaction="/control/{{shortname}}/start"
                                     type="submit"
+                                    id="start_{{shortname}}"
                                     class="btn btn-success">Start</button>
                             <button formaction="/control/{{shortname}}/stop"
                                     type="submit"
+                                    id="stop_{{shortname}}"
                                     class="btn btn-danger">Stop</button>
                             <button formaction="/control/{{shortname}}/kick"
                                     type="submit"
+                                    id="kick_{{shortname}}"
                                     class="btn btn-warning">Frame</button>
                         </div>
                     {{/each}}
@@ -360,7 +184,7 @@
                     </tr>
                 </table>
             </div>
-            <iframe name="response" style="width: 95%; height: 2.5em"></iframe>
+            <iframe name="response" id="response" onload="schedule();" style="width: 95%; height: 2.5em"></iframe>
         </div>
         <div class="modal fade" id="alert">
             <div class"modal-dialog" style="position: fixed;

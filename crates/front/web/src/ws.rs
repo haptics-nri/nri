@@ -88,14 +88,14 @@ pub fn spawn(ctx: mpsc::Sender<CmdFrom>, wsrx: mpsc::Receiver<Message<'static>>)
             // relay messages from above to all WS threads
             while let Ok(msg) = wsrx.recv() {
                 WS_SENDERS.lock().unwrap().iter_mut().map(|ref mut s| {
-                    s.send_message(&Message::clone(&msg)).unwrap(); // FIXME why is the typechecker so confused here
+                    let _ = s.send_message(&msg);
                 }).count();
             }
 
             println!("web: shutting down websocket servers");
             // kill all WS threads now
             WS_SENDERS.lock().unwrap().iter_mut().map(|ref mut s| {
-                s.send_message(&Message::close()).unwrap();
+                let _ = s.send_message(&Message::close());
             }).count();
             println!("web: finished shutting down websocket servers");
         });

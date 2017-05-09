@@ -151,7 +151,7 @@ group_attr!{
         port: Box<StaticReadWrite>,
         file: Writer<Packet>,
         i: usize,
-        buf: Option<Vec<Packet>>,
+        buf: Vec<Packet>,
         tx: Sender<CmdFrom>,
         png: RestartableThread<PngStuff>,
         start: time::Tm,
@@ -323,7 +323,7 @@ group_attr!{
         }
     }
 
-    const BUF_LEN: usize = 15_000;
+    const BUF_LEN: usize = 6000;
 
     guilty! {
         impl Controllable for Teensy {
@@ -338,7 +338,7 @@ group_attr!{
                 // some stuff for the RestartableThread
                 let mut idx = 0;
                 let mut fig = Figure::new();
-                let mut data = Vec::with_capacity(10240);
+                //let mut data = Vec::with_capacity(10240);
                 let start = time::get_time();
 
                 Teensy {
@@ -347,20 +347,23 @@ group_attr!{
                     i: 0,
                     start: time::now(),
                     tx: tx,
-                    buf: None,
+                    buf: Vec::with_capacity(BUF_LEN),
                     png: RestartableThread::new("Teensy PNG thread", move |(sender, vec): PngStuff| {
                         // process data
-                        let mut t  = [0.0; BUF_LEN];
-                        let mut fx = [0.0; BUF_LEN];
-                        let mut fy = [0.0; BUF_LEN];
-                        let mut fz = [0.0; BUF_LEN];
-                        let mut tx = [0.0; BUF_LEN];
-                        let mut ty = [0.0; BUF_LEN];
-                        let mut tz = [0.0; BUF_LEN];
-                        let mut a  = [0.0; BUF_LEN];
-                        for i in 0..BUF_LEN {
+                        let len = vec.len();
+                        let mut t  = vec![0; len];
+                        let mut fx = vec![0; len];
+                        let mut fy = vec![0; len];
+                        let mut fz = vec![0; len];
+                        let mut tx = vec![0; len];
+                        let mut ty = vec![0; len];
+                        let mut tz = vec![0; len];
+                        let mut a  = vec![0; len];
+                        macro_rules! r { ($f:expr) => { ($f * 1000.0) as i32 } }
+
+                        for i in 0..len {
                             let diff = (vec[i].stamp - start).to_std().unwrap();
-                            t[i] = diff.as_secs() as f64 + (diff.subsec_nanos() as f64 / 1.0e9);
+                            t[i] = r!(diff.as_secs() as f64 + (diff.subsec_nanos() as f64 / 1.0e9));
                             let mut ft = [(((vec[i].ft[0]  as u32) << 8) + (vec[i].ft[1]  as u32)) as i32,
                                           (((vec[i].ft[2]  as u32) << 8) + (vec[i].ft[3]  as u32)) as i32,
                                           (((vec[i].ft[4]  as u32) << 8) + (vec[i].ft[5]  as u32)) as i32,
@@ -372,7 +375,7 @@ group_attr!{
                                     *val -= 4096;
                                 }
                             }
-                            a[i] = ((((((vec[i].ft[18] as u32) << 8) + (vec[i].ft[19] as u32)) as i32) - 2048) as f64) / 4096.0 * 16.0 * 9.81;
+                            a[i] = r!(((((((vec[i].ft[18] as u32) << 8) + (vec[i].ft[19] as u32)) as i32) - 2048) as f64) / 4096.0 * 16.0 * 9.81);
                             // proton mini40
                             const BIAS: [f64; 6] = [-0.1884383674, 0.2850118688, -0.180718143, -0.191009933, 0.3639300747, -0.4307167708];
                             const TF: [[f64; 6]; 6] = [[0.00679, 0.01658, -0.04923, 6.20566, 0.15882, -6.19201],
@@ -405,44 +408,45 @@ group_attr!{
                                                        [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]];
                             */
 
-                            fx[i] = (TF[0][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
-                                  + (TF[0][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
-                                  + (TF[0][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
-                                  + (TF[0][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
-                                  + (TF[0][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
-                                  + (TF[0][5] * (((ft[5] as f64) * SCALE) - BIAS[5]));
-                            fy[i] = (TF[1][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
-                                  + (TF[1][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
-                                  + (TF[1][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
-                                  + (TF[1][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
-                                  + (TF[1][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
-                                  + (TF[1][5] * (((ft[5] as f64) * SCALE) - BIAS[5]));
-                            fz[i] = (TF[2][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
-                                  + (TF[2][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
-                                  + (TF[2][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
-                                  + (TF[2][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
-                                  + (TF[2][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
-                                  + (TF[2][5] * (((ft[5] as f64) * SCALE) - BIAS[5]));
-                            tx[i] = (TF[3][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
-                                  + (TF[3][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
-                                  + (TF[3][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
-                                  + (TF[3][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
-                                  + (TF[3][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
-                                  + (TF[3][5] * (((ft[5] as f64) * SCALE) - BIAS[5]));
-                            ty[i] = (TF[4][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
-                                  + (TF[4][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
-                                  + (TF[4][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
-                                  + (TF[4][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
-                                  + (TF[4][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
-                                  + (TF[4][5] * (((ft[5] as f64) * SCALE) - BIAS[5]));
-                            tz[i] = (TF[5][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
-                                  + (TF[5][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
-                                  + (TF[5][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
-                                  + (TF[5][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
-                                  + (TF[5][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
-                                  + (TF[5][5] * (((ft[5] as f64) * SCALE) - BIAS[5]));
+                            fx[i] = r!((TF[0][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
+                                     + (TF[0][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
+                                     + (TF[0][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
+                                     + (TF[0][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
+                                     + (TF[0][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
+                                     + (TF[0][5] * (((ft[5] as f64) * SCALE) - BIAS[5])));
+                            fy[i] = r!((TF[1][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
+                                     + (TF[1][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
+                                     + (TF[1][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
+                                     + (TF[1][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
+                                     + (TF[1][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
+                                     + (TF[1][5] * (((ft[5] as f64) * SCALE) - BIAS[5])));
+                            fz[i] = r!((TF[2][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
+                                     + (TF[2][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
+                                     + (TF[2][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
+                                     + (TF[2][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
+                                     + (TF[2][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
+                                     + (TF[2][5] * (((ft[5] as f64) * SCALE) - BIAS[5])));
+                            tx[i] = r!((TF[3][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
+                                     + (TF[3][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
+                                     + (TF[3][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
+                                     + (TF[3][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
+                                     + (TF[3][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
+                                     + (TF[3][5] * (((ft[5] as f64) * SCALE) - BIAS[5])));
+                            ty[i] = r!((TF[4][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
+                                     + (TF[4][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
+                                     + (TF[4][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
+                                     + (TF[4][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
+                                     + (TF[4][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
+                                     + (TF[4][5] * (((ft[5] as f64) * SCALE) - BIAS[5])));
+                            tz[i] = r!((TF[5][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
+                                     + (TF[5][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
+                                     + (TF[5][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
+                                     + (TF[5][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
+                                     + (TF[5][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
+                                     + (TF[5][5] * (((ft[5] as f64) * SCALE) - BIAS[5])));
                         }
 
+                        /*
                         // write out plot to file
                         let fname = format!("/tmp/teensy{}.png", idx);
                         fig.clear_axes();
@@ -470,6 +474,10 @@ group_attr!{
 
                         // send to browser
                         sender.send(CmdFrom::Data(format!("send kick teensy {} data:image/png;base64,{}", idx, data.to_base64(base64::STANDARD)))).unwrap();
+                        */
+
+                        #[derive(Serialize)] struct Data<'a> { t: &'a [i32], fx: &'a [i32], fy: &'a [i32], fz: &'a [i32], a: &'a [i32] }
+                        sender.send(CmdFrom::Data(format!("send kick teensy {} {}", idx, serde_json::to_string(&Data { t: &t, fx: &fx, fy: &fy, fz: &fz, a: &a }).unwrap()))).unwrap();
                         idx += 1;
                     })
                 }
@@ -526,7 +534,7 @@ group_attr!{
 
                         match cmd.as_ref().map(|s| s as &str) {
                             Some("kick") => {
-                                self.buf = Some(Vec::with_capacity(BUF_LEN));
+                                self.png.send((self.tx.clone(), self.buf.clone())).unwrap();
                             }
                             Some("ref int") => {
                                 println!("Switching accelerometers to internal reference.");
@@ -539,20 +547,14 @@ group_attr!{
                             _ => {}
                         }
 
-                        let buf_ready = if let Some(ref mut buf) = self.buf {
-                            if buf.len() == BUF_LEN {
-                                true
-                            } else {
-                                buf.push(packet.clone());
-                                false
+                        if self.buf.len() == self.buf.capacity() {
+                            let len = self.buf.len()-1;
+                            unsafe {
+                                ptr::copy(&self.buf[1], &mut self.buf[0], len);
                             }
-                        } else {
-                            false
-                        };
-                        if buf_ready {
-                            self.png.send((self.tx.clone(), self.buf.take().unwrap())).unwrap();
+                            self.buf.truncate(len);
                         }
-
+                        self.buf.push(packet.clone());
                         self.file.write(packet);
                     },
                     Err(e)  => errorln!("Error reading packet from Teensy: {:?}", e)

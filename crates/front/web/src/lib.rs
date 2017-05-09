@@ -130,11 +130,11 @@ fn index() -> Box<Handler> {
     Box::new(move |req: &mut Request| -> IronResult<Response> {
                       let data = json!({
                           "services": [
-                                  Service::new("Structure Sensor", "structure" , "<img class=\"frame structure latest\" /><div class=\"structure framenum\"></div>"),
-                                  Service::new("mvBlueFOX3"      , "bluefox"   , "<img class=\"frame bluefox latest\" /><div class=\"bluefox framenum\"></div>"),
-                                  Service::new("OptoForce"       , "optoforce" , "<img class=\"frame optoforce latest\" /><div class=\"optoforce framenum\"></div>"),
-                                  Service::new("SynTouch BioTac" , "biotac"    , "<img class=\"frame biotac latest\" /><div class=\"biotac framenum\"></div>"),
-                                  Service::new("Teensy"          , "teensy"    , "<img class=\"frame teensy latest\" /><div class=\"teensy framenum\"></div>"),
+                                  Service::new("Structure Sensor", "structure" , &render("frame_img", json!({ "sensor": "structure" }))),
+                                  Service::new("mvBlueFOX3"      , "bluefox"   , &render("frame_img", json!({ "sensor": "bluefox" }))),
+                                  Service::new("OptoForce"       , "optoforce" , &render("frame_graph", json!({ "sensor": "optoforce" }))),
+                                  Service::new("SynTouch BioTac" , "biotac"    , &render("frame_graph", json!({ "sensor": "biotac" }))),
+                                  Service::new("Teensy"          , "teensy"    , &render("frame_graph", json!({ "sensor": "teensy" }))),
                           ],
                           "flows": &*FLOWS.read().unwrap(),
                           "server": format!("{}:{}", req.url.host(), config::WS_PORT)
