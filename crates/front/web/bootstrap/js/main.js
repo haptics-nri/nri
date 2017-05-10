@@ -124,7 +124,7 @@ function update_timer() {
 function set_datadir() {
     prompt("Set data directory",
             function (s) {
-                send("DATA" + window.wsid + " set DATADIR " + escape(s));
+                send("set DATADIR " + escape(s));
             });
 }
 
@@ -140,44 +140,71 @@ function schedule(f) {
     }
 }
 
+var PREDEMO = false;
 var DEMO = false;
+var DEMO_ACTIONS = [];
 var FRAME_TIMINGS = {};
 var DRAW_TIMINGS = {};
 
 function start_demo() {
-    console.log("STARTING DEMO");
+    console.log("PRE-STARTING DEMO");
 
-    // start cameras
-    schedule(function() { $("#start_teensy").click(); });
-    schedule(function() { $("#start_bluefox").click(); });
-    schedule(function() { $("#start_structure").click(); });
+    if (!PREDEMO) {
+        PREDEMO = true;
 
-    // get frames
-    DEMO = true;
-    FRAME_TIMINGS = {'bluefox': [], 'structure': [], 'teensy': []};
-    DRAW_TIMINGS = {'bluefox': [], 'structure': [], 'teensy': []};
-    SENSOR_DATA = {};
-    function bkick() {
-        $("#kick_bluefox").click();
-        if (DEMO) {
-            schedule(skick);
-        }
+        schedule(function() { $("#start_teensy").click(); });
+        schedule();
     }
-    function skick() {
-        $("#kick_structure").click();
-        if (DEMO) {
-            schedule(tkick);
-        }
-    }
-    function tkick() {
-        $("#kick_teensy").click();
-        if (DEMO) {
-            schedule(bkick);
-        }
-    }
-    schedule(bkick);
+}
 
-    schedule();
+function really_start_demo(endeff) {
+    console.log("STARTING " + endeff + " DEMO");
+
+    if (PREDEMO && !DEMO) {
+        PREDEMO = false;
+        DEMO = true;
+
+        // move stuff around
+        $('#chart-container-teensy')[0].parent = $('#chart-container-teensy').parent();
+        $('#chart-container-optoforce')[0].parent = $('#chart-container-optoforce').parent();
+        $('#chart-container-biotac')[0].parent = $('#chart-container-biotac').parent();
+        $('#image-bluefox')[0].parent = $('#image-bluefox').parent();
+        $('#image-structure')[0].parent = $('#image-structure').parent();
+        $('#teensy-cell').append($('#chart-container-teensy'));
+        $('#optoforce-cell').append($('#chart-container-optoforce'));
+        $('#biotac-cell').append($('#chart-container-biotac'));
+        $('#bluefox-cell').append($('#image-bluefox'));
+        $('#structure-cell').append($('#image-structure'));
+        $('#demo').show();
+        $('html, body').animate({ scrollTop: $('#start-demo').offset().top }, 500);
+
+        DEMO_ACTIONS = ['#kick_bluefox', '#kick_structure', '#kick_teensy'];
+
+        // start cameras
+        schedule(function() { $("#start_bluefox").click(); });
+        schedule(function() { $("#start_structure").click(); });
+        switch (endeff) {
+            case "Some(OptoForce)":
+                schedule(function() { $("#start_optoforce").click(); });
+                DEMO_ACTIONS.push('#kick_optoforce');
+                break;
+        }
+
+        // get frames
+        FRAME_TIMINGS = {'bluefox': [], 'structure': [], 'teensy': [], 'optoforce': []};
+        DRAW_TIMINGS = {'bluefox': [], 'structure': [], 'teensy': [], 'optoforce': []};
+        SENSOR_DATA = {};
+        function kick() {
+            if (DEMO) {
+                $(DEMO_ACTIONS[0]).click();
+                DEMO_ACTIONS.push(DEMO_ACTIONS.shift());
+                schedule(kick);
+            }
+        }
+        schedule(kick);
+
+        schedule();
+    }
 }
 
 function stop_demo() {
@@ -185,6 +212,20 @@ function stop_demo() {
 
     if (DEMO) {
         DEMO = false;
+
+        schedule(function() { $("#stop_teensy").click(); });
+        schedule(function() { $("#stop_optoforce").click(); });
+        schedule(function() { $("#stop_biotac").click(); });
+        schedule(function() { $("#stop_bluefox").click(); });
+        schedule(function() { $("#stop_structure").click(); });
+        schedule();
+
+        $('#demo').hide();
+        $('#chart-container-teensy')[0].parent.append($('#chart-container-teensy'));
+        $('#chart-container-optoforce')[0].parent.append($('#chart-container-optoforce'));
+        $('#chart-container-biotac')[0].parent.append($('#chart-container-biotac'));
+        $('#image-bluefox')[0].parent.append($('#image-bluefox'));
+        $('#image-structure')[0].parent.append($('#image-structure'));
 
         var fps_real = {};
         var fps_show = {};
@@ -207,6 +248,7 @@ function stop_demo() {
 }
 
 window.onload = function() {
+    $('#start_teensy').attr('formaction', $('#start_teensy').attr('formaction') + '?cmd=metermaid');
     $("#alert").on("hidden.bs.modal", next);
     $("#confirm").on("hidden.bs.modal", next);
     $("#prompt").on("hidden.bs.modal", next);
@@ -239,6 +281,9 @@ window.socket.onmessage = function (event) {
         case "hello":
             window.wsid = words[1];
             $(".wsid").each(function () { this.value = words[1]; });
+            break;
+        case "status":
+            really_start_demo(words[1]);
             break;
         case "msg":
         case "prompt":
@@ -291,23 +336,30 @@ window.socket.onmessage = function (event) {
 
                     var lines = [];
                     var bbox = [
-                        /* left */   SENSOR_DATA[sensor].t[0],
+                        /* left */   Infinity,
                         /* top  */   -Infinity,
-                        /* right */  SENSOR_DATA[sensor].t[SENSOR_DATA[sensor].t.length-1],
+                        /* right */  -Infinity,
                         /* bottom */ Infinity
                     ];
                     for (var k in SENSOR_DATA[sensor]) {
                         if (k == 't') continue;
-                        lines.push({ name: k, data: [SENSOR_DATA[sensor].t, SENSOR_DATA[sensor][k]] });
-                        bbox[0] = Math.min(bbox[0], SENSOR_DATA[sensor].t[0]);
-                        bbox[2] = Math.max(bbox[2], SENSOR_DATA[sensor].t[SENSOR_DATA[sensor].t.length-1]);
-                        bbox[1] = Math.max(bbox[1], SENSOR_DATA[sensor][k].reduce((a, b) => a > b ? a : b));
-                        bbox[3] = Math.min(bbox[1], SENSOR_DATA[sensor][k].reduce((a, b) => a < b ? a : b));
+                        var t = SENSOR_DATA[sensor].t;
+                        var d = SENSOR_DATA[sensor][k];
+                        var t0 = t[0];
+                        t = t.map(x => x - t0);
+                        lines.push({ name: k, data: [t, d] });
+                        bbox[0] = Math.min(bbox[0], t[0]);
+                        bbox[1] = Math.max(bbox[1], d.reduce((a, b) => a > b ? a : b));
+                        bbox[2] = Math.max(bbox[2], t[t.length-1]);
+                        bbox[3] = Math.min(bbox[1], d.reduce((a, b) => a < b ? a : b));
                     }
                     var tic = new Date();
                     if (typeof this.board !== 'undefined') {
                         JXG.JSXGraph.freeBoard(this.board);
                     }
+                    $(this).height($(this).parent().height());
+                    $(this).width($(this).parent().width());
+                    $(this).css({ marginLeft: 'auto', marginRight: 'auto' });
                     this.board = JXG.JSXGraph.initBoard('chart-container-' + sensor, {
                         boundingbox: bbox,
                         axis: true

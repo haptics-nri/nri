@@ -102,9 +102,11 @@
                            value="-1"/>
                     <button onclick="window.start_demo(); return false;"
                             name="start_demo"
+                            id="start-demo"
                             class="btn btn-success">Start Demo</button>
                     <button onclick="window.stop_demo(); return false;"
                             name="stop_demo"
+                            id="stop-demo"
                             class="btn btn-danger">Stop Demo</button>
                 </form>
             </div>
@@ -193,7 +195,7 @@
                                             width: 80%;
                                             background: white;
                                             border: 1px solid black">
-                <div class"modal-content">
+                <div class="modal-content">
                     <div class="modal-body">
                     </div>
                     <div class="modal-footer">
@@ -210,7 +212,7 @@
                                             width: 80%;
                                             background: white;
                                             border: 1px solid black">
-                <div class"modal-content">
+                <div class="modal-content">
                     <div class="modal-body">
                     </div>
                     <div class="modal-footer">
@@ -228,7 +230,7 @@
                                             width: 80%;
                                             background: white;
                                             border: 1px solid black">
-                <div class"modal-content">
+                <div class="modal-content">
                     <div class="modal-body">
                         <div id="text"></div>
                         <form>
@@ -239,6 +241,59 @@
                         <a href="#" class="btn btn-primary" data-dismiss="modal" id="ok">OK</a>
                         <a href="#" class="btn btn-primary" data-dismiss="modal" id="cancel">Cancel</a>
                     </div>
+                </div>
+            </div>
+        </div>
+        <div id="demo" style="position: fixed;
+                              top: 10%;
+                              left: 10%;
+                              width: 80%;
+                              height: 75%;
+                              background: white;
+                              border: 1px solid black;
+                              text-align: center;
+                              display: none">
+            <h1>Proton Pack Demo</h1>
+            <div style="position: relative;
+                        margin-left: auto; margin-right: auto;
+                        top: 5%;
+                        width: 90%;
+                        height: 40%">
+                <div id="teensy-cell" style="position: relative;
+                                             top: 5%;
+                                             left: 7%;
+                                             width: 40%;
+                                             height: 90%">
+                </div>
+                <div id="optoforce-cell" style="position: relative;
+                                                top: -85%;
+                                                left: 53%;
+                                                width: 40%;
+                                                height: 90%">
+                </div>
+                <div id="biotac-cell" style="position: relative;
+                                             top: -85%;
+                                             left: 53%;
+                                             width: 40%;
+                                             height: 90%">
+                </div>
+            </div>
+            <div style="position: relative;
+                        margin-left: auto; margin-right: auto;
+                        top: 5%;
+                        width: 90%;
+                        height: 40%">
+                <div id="bluefox-cell" style="position: relative;
+                                              top: 5%;
+                                              left: 7%;
+                                              width: 40%;
+                                              height: 90%">
+                </div>
+                <div id="structure-cell" style="position: relative;
+                                                top: -85%;
+                                                left: 53%;
+                                                width: 40%;
+                                                height: 90%">
                 </div>
             </div>
         </div>

@@ -130,11 +130,11 @@ fn index() -> Box<Handler> {
     Box::new(move |req: &mut Request| -> IronResult<Response> {
                       let data = json!({
                           "services": [
-                                  Service::new("Structure Sensor", "structure" , &render("frame_img", json!({ "sensor": "structure" }))),
-                                  Service::new("mvBlueFOX3"      , "bluefox"   , &render("frame_img", json!({ "sensor": "bluefox" }))),
-                                  Service::new("OptoForce"       , "optoforce" , &render("frame_graph", json!({ "sensor": "optoforce" }))),
-                                  Service::new("SynTouch BioTac" , "biotac"    , &render("frame_graph", json!({ "sensor": "biotac" }))),
-                                  Service::new("Teensy"          , "teensy"    , &render("frame_graph", json!({ "sensor": "teensy" }))),
+                                  Service::new("Structure Sensor", "structure" , &render("frame_structure", json!({ "sensor": "structure" }))),
+                                  Service::new("mvBlueFOX3"      , "bluefox"   , &render("frame_bluefox", json!({ "sensor": "bluefox" }))),
+                                  Service::new("OptoForce"       , "optoforce" , &render("frame_opto", json!({ "sensor": "optoforce" }))),
+                                  Service::new("SynTouch BioTac" , "biotac"    , &render("frame_bio", json!({ "sensor": "biotac" }))),
+                                  Service::new("Teensy"          , "teensy"    , &render("frame_teensy", json!({ "sensor": "teensy" }))),
                           ],
                           "flows": &*FLOWS.read().unwrap(),
                           "server": format!("{}:{}", req.url.host(), config::WS_PORT)
@@ -205,11 +205,11 @@ fn control(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
     let mtx = Mutex::new(tx);
     Box::new(move |req: &mut Request| -> IronResult<Response> {
                       params!(req => [URL service, action]
-                              [GET]
+                              [GET cmd]
                               [POST]);
 
                       Ok(match &*action {
-                              "start" => if rpc!(mtx.lock().unwrap(), CmdFrom::Start, service.to_owned(), None).unwrap() {
+                              "start" => if rpc!(mtx.lock().unwrap(), CmdFrom::Start, service.to_owned(), Some(cmd)).unwrap() {
                                   Response::with((status::Ok, format!("Started {}", service)))
                               } else {
                                   Response::with((status::InternalServerError, format!("Failed to start {}", service)))

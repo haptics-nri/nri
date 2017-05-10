@@ -48,6 +48,7 @@
 #[cfg_attr(not(feature="hardware"), macro_use)] extern crate comms;
 
 #[macro_use] extern crate guilt_by_association;
+#[macro_use] extern crate serde_derive;
 
 group_attr!{
     #[cfg(feature = "hardware")]
@@ -57,6 +58,7 @@ group_attr!{
     extern crate time;
     extern crate libc;
     extern crate rustc_serialize as serialize;
+    extern crate serde_json;
     extern crate gnuplot;
 
     use std::thread;
@@ -65,6 +67,7 @@ group_attr!{
     use std::sync::mpsc::Sender;
     use std::time::Duration;
     use std::fs::File;
+    use std::ptr;
     use serialize::base64::{self, ToBase64};
     use gnuplot::{Figure, PlotOption, Coordinate, AxesCommon};
     use comms::{Controllable, CmdFrom, Block, RestartableThread};
@@ -78,7 +81,7 @@ group_attr!{
         tx: Sender<CmdFrom>,
         device: wrapper::Device,
         i: usize,
-        buf: Option<Vec<Packet>>,
+        buf: Vec<Packet>,
         png: RestartableThread<PngStuff>,
         file: Writer<Packet>,
         start: time::Tm
@@ -93,6 +96,9 @@ group_attr!{
     }
 
     unsafe impl Writable for Packet {}
+
+    const BUF_LEN: usize = 2000;
+    #[derive(Serialize)] struct Data<'a> { t: &'a [i32], fx: &'a [i32], fy: &'a [i32], fz: &'a [i32] } // FIXME #41053
 
     guilty!{
         impl Controllable for Optoforce {
@@ -111,7 +117,7 @@ group_attr!{
                 // some stuff for the RestartableThread
                 let mut idx = 0;
                 let mut fig = Figure::new();
-                let mut data = Vec::with_capacity(10240);
+                //let mut data = Vec::with_capacity(10240);
                 let start = time::get_time();
 
                 Optoforce {
@@ -120,21 +126,24 @@ group_attr!{
                     i: 0,
                     file: Writer::with_file("optoforce.dat"),
                     start: time::now(),
-                    buf: None,
+                    buf: Vec::with_capacity(BUF_LEN),
                     png: RestartableThread::new("Optoforce PNG thread", move |(tx, vec): PngStuff| {
                         // process data
-                        let mut t  = [0.0; 1000];
-                        let mut fx = [0.0; 1000];
-                        let mut fy = [0.0; 1000];
-                        let mut fz = [0.0; 1000];
-                        for i in 0..1000 {
+                        let len = vec.len();
+                        let mut t  = vec![0; len];
+                        let mut fx = vec![0; len];
+                        let mut fy = vec![0; len];
+                        let mut fz = vec![0; len];
+                        macro_rules! r { ($f:expr) => { ($f * 1000.0) as i32 } }
+                        for i in 0..len {
                             let diff = (vec[i].stamp - start).to_std().unwrap();
-                            t[i] = diff.as_secs() as f64 + (diff.subsec_nanos() as f64 / 1.0e9);
-                            fx[i] = vec[i].xyz.x.0 as f64;
-                            fy[i] = vec[i].xyz.y.0 as f64;
-                            fz[i] = 32.0 - vec[i].xyz.z.0 as f64; // HACK
+                            t[i] = r!(diff.as_secs() as f64 + (diff.subsec_nanos() as f64 / 1.0e9));
+                            fx[i] = r!(vec[i].xyz.x.0 as f64);
+                            fy[i] = r!(vec[i].xyz.y.0 as f64);
+                            fz[i] = r!(32.0 - vec[i].xyz.z.0 as f64); // HACK
                         }
 
+                        /*
                         // write out plot to file
                         let fname = format!("/tmp/optoforce{}.png", idx);
                         fig.clear_axes();
@@ -158,6 +167,9 @@ group_attr!{
 
                         // send to browser
                         tx.send(CmdFrom::Data(format!("send kick optoforce {} data:image/png;base64,{}", idx, data.to_base64(base64::STANDARD)))).unwrap();
+                        */
+
+                        tx.send(CmdFrom::Data(format!("send kick optoforce {} {}", idx, serde_json::to_string(&Data { t: &t, fx: &fx, fy: &fy, fz: &fz }).unwrap()))).unwrap();
                         idx += 1;
                     })
                 }
@@ -171,27 +183,20 @@ group_attr!{
 
                 match cmd.as_ref().map(|s| s as &str) {
                     Some("kick") => {
-                        println!("Opto: recording");
-                        self.buf = Some(Vec::with_capacity(1000));
+                        println!("Opto: transmitting plot");
+                        self.png.send((self.tx.clone(), self.buf.clone())).unwrap();
                     }
                     _ => {}
                 }
 
-                let buf_ready = if let Some(ref mut buf) = self.buf {
-                    if buf.len() == 1000 {
-                        true
-                    } else {
-                        buf.push(packet.clone());
-                        false
+                if self.buf.len() == self.buf.capacity() {
+                    let len = self.buf.len()-1;
+                    unsafe {
+                        ptr::copy(&self.buf[1], &mut self.buf[0], len);
                     }
-                } else {
-                    false
-                };
-                if buf_ready {
-                    println!("Opto: transmitting plot");
-                    self.png.send((self.tx.clone(), self.buf.take().unwrap())).unwrap();
+                    self.buf.truncate(len);
                 }
-
+                self.buf.push(packet.clone());
                 self.file.write(packet);
                 self.i += 1;
             }
