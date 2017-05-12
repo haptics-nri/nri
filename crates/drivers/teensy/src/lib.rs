@@ -134,7 +134,10 @@ group_attr!{
                 let mut buf = [0u8; 1];
                 match port.read_exact(&mut buf) {
                     Ok(())  => buf[0],
-                    Err(..) => return None
+                    Err(e) => {
+                        println!("TEENSY: error reading ParkState: {:?}", e);
+                        return None;
+                    }
                 }
             };
 
