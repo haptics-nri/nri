@@ -7,6 +7,7 @@
 extern crate teensy;
 
 #[macro_use] extern crate log;
+extern crate time;
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate guilt_by_association;
 #[macro_use] extern crate error_chain;
@@ -28,13 +29,13 @@ extern crate uuid;
 use std::path::Path;
 use std::sync::{Mutex, RwLock, mpsc};
 use std::thread::JoinHandle;
-use std::{str, thread};
+use std::str;
 use std::io::Read;
 use std::fs::File;
 use std::process::Command;
 use std::sync::PoisonError;
 use std::sync::mpsc::RecvError;
-use std::time::Duration;
+use time::Duration;
 use comms::{Controllable, CmdFrom, Power, Block};
 use teensy::ParkState;
 use regex::Regex;
@@ -269,7 +270,7 @@ fn flow(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
                       let data = json!({
                           "flows": &*FLOWS.read().unwrap()
                       });
-                      retry(10, Duration::from_millis(500),
+                      utils::retry(Some("[web] send flow info to client"), 10, Duration::milliseconds(500),
                           || {
                                  Ok(())
                                      .and_then(|_| comms.send(format!("flow {}", render("flows", data.clone()))))
@@ -278,9 +279,6 @@ fn flow(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
                           },
                           || {
                                  // if the WebSocket communications fail, back out and abort the flow
-                                 
-                                 println!("ERROR: Sending flow info to client failed 10 times :(");
-
                                  let mut locked_flows = FLOWS.write().unwrap();
                                  if let Some(found) = locked_flows.get_mut(&*flow) {
                                      found.abort(&*mtx.lock().unwrap(), comms.clone()).unwrap();
@@ -300,23 +298,6 @@ impl RegexSplit for str {
     fn split_re<'r, 't>(&'t self, re: &'r Regex) -> regex::Split<'r, 't> {
         re.split(self)
     }
-}
-
-/// Retry some action on failure
-fn retry<R, F: FnMut() -> Option<R>, G: FnOnce() -> R>(times: usize, delay: Duration, mut action: F, fallback: G) -> R {
-    for i in 0..times {
-        match action() {
-            Some(ret) => return ret,
-            None =>
-                if i == times-1 {
-                    return fallback()
-                } else {
-                    println!("\tretry {}", i);
-                    thread::sleep(delay)
-                }
-        }
-    }
-    unreachable!()
 }
 
 /// Measure free disk space in gigabytes

@@ -63,7 +63,7 @@ group_attr!{
     use std::sync::mpsc::Sender;
     use std::{u8, ptr, mem};
     use std::fmt::{self, Display, Debug, Formatter};
-    use std::time::Duration;
+    use time::Duration;
     use std::num::Wrapping;
     use std::sync::atomic::{AtomicUsize, AtomicBool, ATOMIC_USIZE_INIT, ATOMIC_BOOL_INIT, Ordering};
     use serial::prelude::*;
@@ -111,7 +111,7 @@ group_attr!{
             settings.set_flow_control(serial::FlowNone);
             Ok(())
         }).unwrap();
-        port.set_timeout(Duration::from_millis(100)).unwrap();
+        port.set_timeout(Duration::milliseconds(100).to_std().unwrap()).unwrap();
         if true {
             Box::new(port.coffee(File::create("teensydump.dat").unwrap()))
         } else {
@@ -128,16 +128,19 @@ group_attr!{
                 PARK_STATE.load(Ordering::SeqCst) as u8
             } else {
                 let mut port = serialport();
-
-                port.write_all(&['4' as u8]).unwrap();
-
                 let mut buf = [0u8; 1];
-                match port.read_exact(&mut buf) {
-                    Ok(())  => buf[0],
-                    Err(e) => {
-                        println!("TEENSY: error reading ParkState: {:?}", e);
-                        return None;
-                    }
+
+                let read = utils::retry(Some("[teensy] reading ParkState"), 3, Duration::milliseconds(50),
+                    || {
+                        port.write_all(&['4' as u8]).unwrap();
+                        port.read_exact(&mut buf).ok().map(Some)
+                    },
+                    || {
+                        None
+                    });
+                match read {
+                    Some(()) => buf[0],
+                    None => return None
                 }
             };
 

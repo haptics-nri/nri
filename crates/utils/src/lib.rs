@@ -28,6 +28,28 @@ pub fn in_original_dir<F: FnOnce() -> R, R>(f: F) -> io::Result<R> {
     Ok(ret)
 }
 
+/// Retry some action on failure
+pub fn retry<R, F: FnMut() -> Option<R>, G: FnOnce() -> R>(label: Option<&str>, times: usize, delay: Duration, mut action: F, fallback: G) -> R {
+    for i in 0..times {
+        match action() {
+            Some(ret) => return ret,
+            None =>
+                if i == times-1 {
+                    if let Some(label) = label {
+                        println!("ERROR: {} failed {} times :(", label, times);
+                    }
+                    return fallback()
+                } else {
+                    if let Some(label) = label {
+                        println!("\tRetrying (#{}/{}) {}", i+1, times, label);
+                    }
+                    delay.sleep();
+                }
+        }
+    }
+    unreachable!()
+}
+
 /// Just like println!, but prints to stderr
 #[macro_export]
 macro_rules! errorln {
