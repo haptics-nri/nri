@@ -4,6 +4,7 @@
 #[macro_use] extern crate comms;
 
 #[macro_use] extern crate guilt_by_association;
+#[macro_use] extern crate unborrow;
 #[macro_use] extern crate macro_attr;
 #[macro_use] extern crate conv;
 #[macro_use] extern crate serde_derive;
@@ -59,7 +60,7 @@ group_attr!{
     use scribe::{Writer, Writable};
     use std::io::{self, Read, Write};
     use std::fs::File;
-    use std::thread;
+    use std::{cmp, thread};
     use std::sync::mpsc::Sender;
     use std::{u8, ptr, mem};
     use std::fmt::{self, Display, Debug, Formatter};
@@ -354,7 +355,7 @@ group_attr!{
 
                 // some stuff for the RestartableThread
                 let mut idx = 0;
-                let mut fig = Figure::new();
+                //let mut fig = Figure::new();
                 //let mut data = Vec::with_capacity(10240);
                 let start = time::get_time();
 
@@ -366,50 +367,62 @@ group_attr!{
                     tx: tx,
                     buf: Vec::with_capacity(BUF_LEN),
                     png: RestartableThread::new("Teensy PNG thread", move |(sender, vec): PngStuff| {
+                        let decimate = 5;
+
                         // process data
                         let len = vec.len();
-                        let mut t  = vec![0; len];
-                        let mut fx = vec![0; len];
-                        let mut fy = vec![0; len];
-                        let mut fz = vec![0; len];
+                        let mut t  = Vec::<i32>::with_capacity(len/decimate);
+                        let mut fx = Vec::<i32>::with_capacity(len/decimate);
+                        let mut fy = Vec::<i32>::with_capacity(len/decimate);
+                        let mut fz = Vec::<i32>::with_capacity(len/decimate);
                         //let mut tx = vec![0; len];
                         //let mut ty = vec![0; len];
                         //let mut tz = vec![0; len];
-                        let mut a  = vec![0; len];
-                        macro_rules! r { ($f:expr) => { ($f * 1000.0) as i32 } }
+                        let mut a  = Vec::<i32>::with_capacity(len/decimate);
+
+                        fn r(f: f64) -> i32 {
+                            (f * 1000.0) as i32
+                        }
 
                         let mut delay = 0;
-                        for i in 0..len {
-                            if vec[i].dt.0 > 1000 {
-                                delay = 10;
+                        for i in utils::step(0..len, decimate) {
+                            let diff = (vec[i].stamp - start).to_std().unwrap();
+                            t.push(r(diff.as_secs() as f64 + (diff.subsec_nanos() as f64 / 1.0e9)));
+                            let mut ft = [(((vec[i].ft[0]  as u32) << 8) + (vec[i].ft[1]  as u32)) as i32,
+                                          (((vec[i].ft[2]  as u32) << 8) + (vec[i].ft[3]  as u32)) as i32,
+                                          (((vec[i].ft[4]  as u32) << 8) + (vec[i].ft[5]  as u32)) as i32,
+                                          (((vec[i].ft[6]  as u32) << 8) + (vec[i].ft[7]  as u32)) as i32,
+                                          (((vec[i].ft[8]  as u32) << 8) + (vec[i].ft[9]  as u32)) as i32,
+                                          (((vec[i].ft[10] as u32) << 8) + (vec[i].ft[11] as u32)) as i32];
+                            for val in &mut ft {
+                                if *val >= 2048 {
+                                    *val -= 4096;
+                                }
+                            }
+                            let mut aa = 0.0;
+                            aa += (((((vec[i].ft[18] as u32) << 8) + (vec[i].ft[19] as u32)) as i32) - 2048) as f64;
+                            aa += (((((vec[i].ft[22] as u32) << 8) + (vec[i].ft[23] as u32)) as i32) - 2048) as f64;
+                            aa += (((((vec[i].ft[24] as u32) << 8) + (vec[i].ft[25] as u32)) as i32) - 2048) as f64;
+
+                            if ft[0].abs() > 10_000 {
+                                println!("TEENSY: repairing spike at t={}, ft={:?}", t.last().unwrap(), ft);
+                                delay = 25;
+                                let origin = cmp::min(0, i - delay);
+                                for j in origin..i {
+                                    fx[j] = fx[origin];
+                                    fy[j] = fy[origin];
+                                    fz[j] = fx[origin];
+                                    a[j] = a[origin];
+                                }
                             }
                             if delay > 0 {
                                 delay -= 1;
-                                let diff = (vec[i-1].stamp - start).to_std().unwrap();
-                                t[i] = r!(diff.as_secs() as f64 + (diff.subsec_nanos() as f64 / 1.0e9) + 1.0/3000.0);
-                                fx[i] = fx[i-1];
-                                fy[i] = fy[i-1];
-                                fz[i] = fz[i-1];
-                                a[i] = a[i-1];
+                                unborrow!(fx.push(fx.last().unwrap().clone()));
+                                unborrow!(fy.push(fy.last().unwrap().clone()));
+                                unborrow!(fz.push(fz.last().unwrap().clone()));
+                                unborrow!(a.push(a.last().unwrap().clone()));
                             } else {
-                                let diff = (vec[i].stamp - start).to_std().unwrap();
-                                t[i] = r!(diff.as_secs() as f64 + (diff.subsec_nanos() as f64 / 1.0e9));
-                                let mut ft = [(((vec[i].ft[0]  as u32) << 8) + (vec[i].ft[1]  as u32)) as i32,
-                                              (((vec[i].ft[2]  as u32) << 8) + (vec[i].ft[3]  as u32)) as i32,
-                                              (((vec[i].ft[4]  as u32) << 8) + (vec[i].ft[5]  as u32)) as i32,
-                                              (((vec[i].ft[6]  as u32) << 8) + (vec[i].ft[7]  as u32)) as i32,
-                                              (((vec[i].ft[8]  as u32) << 8) + (vec[i].ft[9]  as u32)) as i32,
-                                              (((vec[i].ft[10] as u32) << 8) + (vec[i].ft[11] as u32)) as i32];
-                                for val in &mut ft {
-                                    if *val >= 2048 {
-                                        *val -= 4096;
-                                    }
-                                }
-                                let mut aa = 0.0;
-                                aa += (((((vec[i].ft[18] as u32) << 8) + (vec[i].ft[19] as u32)) as i32) - 2048) as f64;
-                                aa += (((((vec[i].ft[22] as u32) << 8) + (vec[i].ft[23] as u32)) as i32) - 2048) as f64;
-                                aa += (((((vec[i].ft[24] as u32) << 8) + (vec[i].ft[25] as u32)) as i32) - 2048) as f64;
-                                a[i] = r!(aa / 4096.0 * 16.0 * 9.81 / 3.0);
+                                a.push(r(aa / 4096.0 * 16.0 * 9.81 / 3.0));
                                 // proton mini40
                                 const BIAS: [f64; 6] = [-0.1884383674, 0.2850118688, -0.180718143, -0.191009933, 0.3639300747, -0.4307167708];
                                 const TF: [[f64; 6]; 6] = [[0.00679, 0.01658, -0.04923, 6.20566, 0.15882, -6.19201],
@@ -442,24 +455,24 @@ group_attr!{
                                                            [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]];
                                 */
 
-                                fx[i] = r!((TF[0][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
-                                         + (TF[0][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
-                                         + (TF[0][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
-                                         + (TF[0][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
-                                         + (TF[0][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
-                                         + (TF[0][5] * (((ft[5] as f64) * SCALE) - BIAS[5])));
-                                fy[i] = r!((TF[1][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
-                                         + (TF[1][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
-                                         + (TF[1][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
-                                         + (TF[1][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
-                                         + (TF[1][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
-                                         + (TF[1][5] * (((ft[5] as f64) * SCALE) - BIAS[5])));
-                                fz[i] = r!((TF[2][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
-                                         + (TF[2][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
-                                         + (TF[2][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
-                                         + (TF[2][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
-                                         + (TF[2][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
-                                         + (TF[2][5] * (((ft[5] as f64) * SCALE) - BIAS[5])));
+                                fx.push(r((TF[0][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
+                                        + (TF[0][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
+                                        + (TF[0][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
+                                        + (TF[0][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
+                                        + (TF[0][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
+                                        + (TF[0][5] * (((ft[5] as f64) * SCALE) - BIAS[5]))));
+                                fy.push(r((TF[1][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
+                                        + (TF[1][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
+                                        + (TF[1][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
+                                        + (TF[1][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
+                                        + (TF[1][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
+                                        + (TF[1][5] * (((ft[5] as f64) * SCALE) - BIAS[5]))));
+                                fz.push(r((TF[2][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
+                                        + (TF[2][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
+                                        + (TF[2][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
+                                        + (TF[2][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
+                                        + (TF[2][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
+                                        + (TF[2][5] * (((ft[5] as f64) * SCALE) - BIAS[5]))));
                                 /*
                                 tx[i] = r!((TF[3][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
                                          + (TF[3][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
