@@ -6,6 +6,6 @@ authors = ["Alex Burka <aburka@seas.upenn.edu>"]
 [dependencies]
 lazy_static = "0.2"
 hprof  = "0.1"
-notify = "2.5"
+notify = "4.0"
 time = "0.1"
 
