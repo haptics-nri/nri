@@ -9,6 +9,7 @@
 group_attr!{
     #[cfg(feature = "hardware")]
 
+    #[macro_use] extern crate lazy_static;
     extern crate time;
     extern crate image;
     extern crate rustc_serialize as serialize;
@@ -23,9 +24,13 @@ group_attr!{
     use serialize::base64::ToBase64;
     use std::fs::File;
     use std::io::Read;
-    use std::sync::Mutex;
+    use std::path::Path;
+    use std::sync::{Mutex, RwLock};
     use std::sync::mpsc::Sender;
+    use std::thread;
+    use std::time::Duration;
     use comms::{Controllable, CmdFrom, Block, RestartableThread};
+    use utils::config;
     use scribe::Writer;
     use ll::Device;
     use ll::settings::*;
@@ -81,10 +86,24 @@ group_attr!{
                     }
                 }
 
-                let mut settings_file = utils::in_original_dir(|| File::open("crates/drivers/bluefox/camera_settings.json").unwrap()).unwrap();
-                let mut settings_data = String::new();
-                settings_file.read_to_string(&mut settings_data).unwrap();
-                let default_settings = serde_json::from_str(&settings_data).unwrap();
+                lazy_static! {
+                    static ref SETTINGS: RwLock<Settings> = RwLock::new(Settings::default());
+                }
+                let settings_data = utils::in_original_dir(|| utils::slurp(config::BLUEFOX_SETTINGS).unwrap()).unwrap();
+                let default_settings: Settings = serde_json::from_str(&settings_data).unwrap();
+
+                let txc = Mutex::new(tx.clone());
+                utils::watch(default_settings.clone(),
+                             &SETTINGS,
+                             Path::new(config::BLUEFOX_SETTINGS).parent().unwrap(),
+                             "json",
+                             move |_, path| {
+                                 println!("BLUEFOX: updating settings from {}", path.display());
+                                 thread::sleep(Duration::from_millis(500));
+                                 let data = utils::in_original_dir(|| utils::slurp(path).unwrap()).unwrap();
+                                 txc.lock().unwrap().send(CmdFrom::Data(format!("to bluefox settings {}", data))).unwrap();
+                             });
+
                 let settings = Settings {
                     acq_fr: Some(fps),
                     cam_format: Some(format.0),
@@ -94,7 +113,6 @@ group_attr!{
 
                 let mut device = Device::new().unwrap();
                 device.request_reset().unwrap();
-                device.set(&settings).unwrap();
 
                 let mtx = Mutex::new(tx);
                 Bluefox {
@@ -155,6 +173,16 @@ group_attr!{
                     Some("disk stop") => {
                         println!("Stopped Bluefox recording.");
                         self.writing = false;
+                    },
+                    Some(s) if s.starts_with("settings") => {
+                        if self.writing {
+                            println!("BLUEFOX: currently writing, ignoring new settings");
+                        } else {
+                            println!("BLUEFOX: applying new settings");
+                            let set: Settings = serde_json::from_str(&s[9..]).unwrap();
+                            self.device.request_reset().unwrap();
+                            self.device.set(&set).unwrap();
+                        }
                     },
                     Some(_) | None => ()
                 }

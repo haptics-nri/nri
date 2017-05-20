@@ -488,7 +488,7 @@ pub mod settings {
 
     macro_rules! settings {
         ($(($name:ident: $typ:ty, $get:ident, $set:ident, $($rest:tt)*))*) => {
-            #[derive(Debug, Default, Serialize, Deserialize)]
+            #[derive(Clone, Debug, Default, Serialize, Deserialize)]
             pub struct Settings {
                 $(
                     pub $name: Option<$typ>,

@@ -11,6 +11,7 @@ comms                = { path = "../../back/comms"         }
 scribe               = { path = "../../back/scribe"        }
 utils                = { path = "../../utils"              }
 bluefox-sys          = { path = "../../../sys/bluefox-sys" }
+lazy_static          = "0.2"
 guilt-by-association = "0.4"
 time                 = "0.1"
 libc                 = "0.2"
