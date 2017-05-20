@@ -145,6 +145,7 @@ var DEMO = false;
 var DEMO_ACTIONS = [];
 var FRAME_TIMINGS = {};
 var DRAW_TIMINGS = {};
+var LAST_KICK = {};
 
 function start_demo() {
     console.log("PRE-STARTING DEMO");
@@ -179,6 +180,10 @@ function really_start_demo(endeff) {
         $('html, body').animate({ scrollTop: $('#start-demo').offset().top }, 500);
 
         DEMO_ACTIONS = ['#kick_bluefox', '#kick_structure', '#kick_teensy'];
+        FRAME_TIMINGS = {'bluefox': [], 'structure': [], 'teensy': []};
+        DRAW_TIMINGS = {'bluefox': [], 'structure': [], 'teensy': []};
+        LAST_KICK = {'bluefox': [], 'structure': [], 'teensy': []};
+        SENSOR_DATA = {};
 
         // start cameras
         schedule(function() { $("#start_bluefox").click(); });
@@ -187,15 +192,16 @@ function really_start_demo(endeff) {
             case "Some(OptoForce)":
                 schedule(function() { $("#start_optoforce").click(); });
                 DEMO_ACTIONS.push('#kick_optoforce');
+                FRAME_TIMINGS['optoforce'] = [];
+                DRAW_TIMINGS['optoforce'] = [];
+                LAST_KICK['optoforce'] = [];
                 break;
         }
 
         // get frames
-        FRAME_TIMINGS = {'bluefox': [], 'structure': [], 'teensy': [], 'optoforce': []};
-        DRAW_TIMINGS = {'bluefox': [], 'structure': [], 'teensy': [], 'optoforce': []};
-        SENSOR_DATA = {};
         function kick() {
             if (DEMO) {
+                LAST_KICK[DEMO_ACTIONS[0].split('_')[1]] = new Date();
                 $(DEMO_ACTIONS[0]).click();
                 DEMO_ACTIONS.push(DEMO_ACTIONS.shift());
                 schedule(kick);
@@ -229,6 +235,7 @@ function stop_demo() {
 
         var fps_real = {};
         var fps_show = {};
+        var fps_xfer = {};
         for (cam in FRAME_TIMINGS) {
             var num_diffs = 0;
             var time_diffs = 0;
@@ -242,13 +249,16 @@ function stop_demo() {
             }
             fps_real[cam] = num_diffs / time_diffs * 1000;
             fps_show[cam] = FRAME_TIMINGS[cam].length / time_diffs * 1000;
+            fps_xfer[cam] = FRAME_TIMINGS[cam].map(x => x.xfer).reduce((a, b) => a + b) / FRAME_TIMINGS[cam].length;
         }
-        console.log({'Real FPS': fps_real, 'Shown FPS': fps_show});
+        console.log({'Real FPS': fps_real, 'Shown FPS': fps_show, 'Xfer time': fps_xfer});
     }
 }
 
 window.onload = function() {
     $('#start_teensy').attr('formaction', $('#start_teensy').attr('formaction') + '?cmd=metermaid');
+    $('#kick_bluefox').after('\n<button type="submit" class="btn btn-primary" onclick="show_bluefox_settings();">Settings</button>');
+
     $("#alert").on("hidden.bs.modal", next);
     $("#confirm").on("hidden.bs.modal", next);
     $("#prompt").on("hidden.bs.modal", next);
@@ -274,13 +284,66 @@ function str2ab(str) {
 
 SENSOR_DATA = {};
 
+function show_bluefox_settings() {
+    $('#bluefox-settings').modal({ show: true, backdrop: 'static' });
+}
+
+function set_bluefox_settings() {
+    var settings = {};
+    $('#bluefox-settings input').map(function (x,e) {
+        switch (e.type) {
+            case "number":
+                settings[e.name] = parseInt(e.value);
+                break;
+            case "checkbox":
+                settings[e.name] = e.value == "true";
+                break;
+            default:
+                settings[e.name] = e.value;
+        }
+    });
+    console.log(settings);
+    send(`to bluefox settings ${JSON.stringify(settings)}`);
+}
+
 window.socket.onmessage = function (event) {
     console.log(event.data.slice(0, 50).replace(/\n+/g, '') + ' (' + event.data.length + ')');
     words = event.data.split(' ');
     switch (words[0]) {
         case "hello":
-            window.wsid = words[1];
-            $(".wsid").each(function () { this.value = words[1]; });
+            var init = JSON.parse(event.data.slice(6));
+
+            window.wsid = init.wsid;
+            $(".wsid").each(function () { this.value = init.wsid; });
+            $("#datadir").html(init.datadir);
+            $("#diskfree").html(init.diskfree);
+
+            var table = $("#bluefox-settings form table");
+            for (var setting in init.bluefox) {
+                var label = setting;
+                var value = init.bluefox[setting];
+                switch (typeof(init.bluefox[setting])) {
+                    case "number":
+                        var type = "number";
+                        break;
+                    case "boolean":
+                        var type = "checkbox";
+                        break;
+                    default:
+                        var type = "text";
+                }
+                table.append(`
+                        <tr>
+                            <td align="right">
+                                <label for="bluefox-form-${label}">${label}</label>
+                            </td>
+                            <td>&nbsp;&nbsp;&nbsp;&nbsp;</td>
+                            <td>
+                                <input id="bluefox-form-${label}" name="${label}" type="${type}" value="${value}" />
+                            </td>
+                        </tr>
+                `);
+            }
             break;
         case "status":
             really_start_demo(words[1]);
@@ -295,13 +358,17 @@ window.socket.onmessage = function (event) {
             var payload = words[3];
 
             $("." + sensor + ".framenum").each(function () { this.innerHTML = framenum; });
+            if (DEMO && sensor in FRAME_TIMINGS) {
+                var xfer = (new Date() - LAST_KICK[sensor]);
+                console.log(sensor + " data received in " + xfer + "ms");
+                FRAME_TIMINGS[sensor].push({'num': framenum, 'time': new Date(), 'xfer': xfer});
+            }
             if (words[3].startsWith("data:image/png")) {
+                var tic = new Date();
                 $("." + sensor + ".latest").each(function () { this.src = payload; });
+                var toc = new Date();
             } else {
                 $("." + sensor + ".latest").each(function() {
-                    $(this).width($(this).parent().width());
-                    $(this).height($(this).parent().width() * 0.75);
-
                     var data = JSON.parse(payload);
 
                     // unround
@@ -312,12 +379,14 @@ window.socket.onmessage = function (event) {
                     // merge with the data we have
                     if (sensor in SENSOR_DATA) {
                         overlap = SENSOR_DATA[sensor].t.indexOf(data.t[0]);
-                        console.log(overlap);
+                        console.log(sensor + " data overlap = " + overlap);
                         if (overlap != -1) {
                             for (var k in SENSOR_DATA[sensor]) {
                                 SENSOR_DATA[sensor][k]  = SENSOR_DATA[sensor][k].slice(0, overlap).concat(data[k]);
                             }
                         } else {
+                            //var offset = data.t[0] - SENSOR_DATA[sensor].t[SENSOR_DATA[sensor].t.length-1];
+                            //data.t = data.t.map(x => x - offset); // HACK HACK HACK
                             for (var k in SENSOR_DATA[sensor]) {
                                 SENSOR_DATA[sensor][k]  = SENSOR_DATA[sensor][k].concat(data[k]);
                             }
@@ -347,6 +416,7 @@ window.socket.onmessage = function (event) {
                         var d = SENSOR_DATA[sensor][k];
                         var t0 = t[0];
                         t = t.map(x => x - t0);
+                        if (k == 'a') { d = d.map(x => x + 9); } // HACK HACK HACK
                         lines.push({ name: k, data: [t, d] });
                         bbox[0] = Math.min(bbox[0], t[0]);
                         bbox[1] = Math.max(bbox[1], d.reduce((a, b) => a > b ? a : b));
@@ -382,14 +452,13 @@ window.socket.onmessage = function (event) {
                              });
                     this.board.unsuspendUpdate();
                     var toc = new Date();
-                    console.log(toc - tic);
+                    console.log("drawing graph: " + (toc - tic) + "ms");
+                    /*
                     if (DEMO && sensor in DRAW_TIMINGS) {
                         DRAW_TIMINGS[sensor].push({'num': framenum, 'time': toc - tic});
                     }
+                    */
                 });
-            }
-            if (DEMO && sensor in FRAME_TIMINGS) {
-                FRAME_TIMINGS[sensor].push({'num': framenum, 'time': new Date()});
             }
             break;
         case "panic":

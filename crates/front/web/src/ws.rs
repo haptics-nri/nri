@@ -11,7 +11,7 @@ use websocket::client::{self, ClientBuilder};
 use websocket::server::Server;
 use uuid::Uuid;
 
-use super::{Result, Error};
+use super::{utils, Result, Error};
 
 lazy_static! {
     pub static ref SERVER_ID: Uuid = Uuid::new_v4();
@@ -118,7 +118,13 @@ pub fn spawn(ctx: mpsc::Sender<CmdFrom>, wsrx: mpsc::Receiver<Message<'static>>)
                 let mut locked_senders = WS_SENDERS.lock().unwrap();
                 let wsid = locked_senders.len();
 
-                client.send_message(&Message::text(format!("hello {}_{}", *SERVER_ID, wsid))).unwrap();
+                client.send_message(&Message::text(format!("hello {}",
+                                                           json!({
+                                                               "wsid": format!("{}_{}", *SERVER_ID, wsid),
+                                                               "diskfree": super::disk_free(),
+                                                               "datadir": &*flow::DATADIR.read().unwrap(),
+                                                               "bluefox": utils::in_original_dir(|| utils::slurp(config::BLUEFOX_SETTINGS).unwrap()).unwrap().parse::<::serde_json::Value>().unwrap()
+                                                           })))).unwrap();
 
                 let (mut receiver, sender) = client.split().unwrap();
                 locked_senders.push(sender);

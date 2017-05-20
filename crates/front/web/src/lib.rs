@@ -30,8 +30,6 @@ use std::path::Path;
 use std::sync::{Mutex, RwLock, mpsc};
 use std::thread::JoinHandle;
 use std::str;
-use std::io::Read;
-use std::fs::File;
 use std::process::Command;
 use std::sync::PoisonError;
 use std::sync::mpsc::RecvError;
@@ -115,8 +113,7 @@ lazy_static! {
                                                             Path::new(config::TEMPLATE_PATH),
                                                             "hbs",
                                                             |hbs, path| {
-        let mut source = String::from("");
-        File::open(&path).unwrap().read_to_string(&mut source).unwrap();
+        let source = utils::slurp(&path).unwrap();
         hbs.register_template_string(path.file_stem().unwrap().to_str().unwrap(), source).ok().unwrap();
     });
 }
