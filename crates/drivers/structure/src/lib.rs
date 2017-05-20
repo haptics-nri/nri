@@ -15,12 +15,12 @@ group_attr!{
     extern crate libc;
     extern crate image;
     extern crate rustc_serialize as serialize;
-    use std::{mem, slice};
+    use std::mem;
     use std::process::Command;
     use std::sync::{Arc, Mutex, Condvar};
     use std::sync::mpsc::Sender;
     use time::Duration;
-    use image::{imageops, ImageBuffer, ColorType, FilterType};
+    use image::{imageops, ImageBuffer, ColorType, FilterType, Pixel};
     use image::png::PNGEncoder;
     use serialize::base64;
     use serialize::base64::ToBase64;
@@ -143,17 +143,37 @@ group_attr!{
                     writing: false,
                     tx: tx,
 
-                    png: RestartableThread::new("Structure PNG thread", move |(i, unencoded, do_resize, (h, w), bd): PngData| {
+                    png: RestartableThread::new("Structure PNG thread", move |(i, unenc8, do_resize, (h, w), bd): PngData| {
                         let mut encoded = Vec::with_capacity((w*h) as usize);
 
+                        let unenc16 = unenc8.as_vec_of::<u16>().unwrap();
+
+                        let to_resize = prof!("imagebuffer", ImageBuffer::<image::Luma<u16>, _>::from_raw(w as u32, h as u32, unenc16).unwrap());
+                        let (flipped, ww, hh);
                         if do_resize {
-                            let to_resize = prof!("imagebuffer", ImageBuffer::<image::Rgb<u8>, _>::from_raw(w as u32, h as u32, unencoded).unwrap());
-                            let (ww, hh) = ((w as u32)/4, (h as u32)/4);
+                            ww = (w as u32)/4;
+                            hh = (h as u32)/4;
                             let resized = prof!("resize", imageops::resize(&to_resize, ww, hh, FilterType::Nearest));
-                            prof!("encode", PNGEncoder::new(&mut encoded).encode(&resized, ww, hh, bd).unwrap());
+                            flipped = prof!("flip", imageops::flip_horizontal(&resized));
                         } else {
-                            let (ww, hh) = (w as u32, h as u32);
-                            prof!("encode", PNGEncoder::new(&mut encoded).encode(&unencoded as &[u8], ww, hh, bd).unwrap());
+                            ww = w as u32;
+                            hh = h as u32;
+                            flipped = prof!("flip", imageops::flip_horizontal(&to_resize));
+                        }
+
+                        if bd == ColorType::RGB(8) {
+                            let raw = flipped.into_raw();
+                            prof!("encode", PNGEncoder::new(&mut encoded).encode(raw.as_slice_of::<u8>().unwrap(), ww, hh, ColorType::RGB(8)).unwrap());
+                        } else {
+                            //prof!("encode", PNGEncoder::new(&mut encoded).encode(flipped.into_raw().as_slice_of::<u8>().unwrap(), ww, hh, bd).unwrap());
+                            let mut mapped = ImageBuffer::<image::Rgb<u8>, _>::new(ww, hh);
+                            for y in 0..hh {
+                                for x in 0..ww {
+                                    mapped[(x, y)] = image::Pixel::from_channels(flipped[(x, y)].channels()[0] as u8, 0, 0, 0);
+                                }
+                            }
+                            let raw = mapped.into_raw();
+                            prof!("encode", PNGEncoder::new(&mut encoded).encode(&raw, ww, hh, ColorType::RGB(8)).unwrap());
                         }
 
                         prof!("send", png_tx.send(CmdFrom::Data(format!("send kick structure {} data:image/png;base64,{}", i, encoded.to_base64(base64::STANDARD)))).unwrap());
@@ -210,17 +230,11 @@ group_attr!{
                             },
                             e => e.unwrap()
                         };
-                        let narrow_data: &[u8] = prof!(frame.data());
-                        let data: Vec<u8> = prof!("endianness", {
-                            unsafe { // flip bytes
-                                let wide_data: &[u16] = slice::from_raw_parts(narrow_data as *const _ as *const u16, narrow_data.len()/2);
-                                let mut wide_data_flipped: Vec<u16> = wide_data.into_iter().map(|&word| u16::from_be(word)).collect();
-                                let (ptr, len, cap): (*mut u16, usize, usize) = (wide_data_flipped.as_mut_ptr(),
-                                                                                 wide_data_flipped.len()       ,
-                                                                                 wide_data_flipped.capacity()  );
-                                mem::forget(wide_data_flipped);
-                                Vec::<u8>::from_raw_parts(ptr as *mut u8, len*2, cap*2)
-                            }
+                        let mut data: Vec<u8> = prof!(frame.data().to_vec());
+                        prof!("endianness", {
+                            // flip bytes
+                            let wide_data = data.as_mut_slice_of::<u16>().unwrap();
+                            wide_data.map_in_place(u16::from_be);
                         });
 
                         if self.writing {
