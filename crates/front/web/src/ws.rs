@@ -122,7 +122,6 @@ pub fn spawn(ctx: mpsc::Sender<CmdFrom>, wsrx: mpsc::Receiver<Message<'static>>)
                                                            json!({
                                                                "wsid": format!("{}_{}", *SERVER_ID, wsid),
                                                                "diskfree": super::disk_free(),
-                                                               "datadir": &*flow::DATADIR.read().unwrap(),
                                                                "bluefox": utils::in_original_dir(|| utils::slurp(config::BLUEFOX_SETTINGS).unwrap()).unwrap().parse::<::serde_json::Value>().unwrap()
                                                            })))).unwrap();
 

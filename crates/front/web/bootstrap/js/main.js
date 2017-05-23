@@ -312,11 +312,13 @@ window.socket.onmessage = function (event) {
     switch (words[0]) {
         case "hello":
             var init = JSON.parse(event.data.slice(6));
+            console.log(init);
 
             window.wsid = init.wsid;
             $(".wsid").each(function () { this.value = init.wsid; });
-            $("#datadir").html(init.datadir);
-            $("#diskfree").html(init.diskfree);
+            var free = init.diskfree.split(' ');
+            $("#datadir").html(free[0]);
+            $("#diskfree").html(free[1]);
 
             var table = $("#bluefox-settings form table");
             for (var setting in init.bluefox) {
