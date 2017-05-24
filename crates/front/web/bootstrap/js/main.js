@@ -196,6 +196,13 @@ function really_start_demo(endeff) {
                 DRAW_TIMINGS['optoforce'] = [];
                 LAST_KICK['optoforce'] = [];
                 break;
+            case "Some(BioTac)":
+                schedule(function() { $("#start_biotac").click(); });
+                DEMO_ACTIONS.push('#kick_biotac');
+                FRAME_TIMINGS['biotac'] = [];
+                DRAW_TIMINGS['biotac'] = [];
+                LAST_KICK['biotac'] = [];
+                break;
         }
 
         // get frames
@@ -374,13 +381,15 @@ window.socket.onmessage = function (event) {
                     var data = JSON.parse(payload);
 
                     // unround
-                    for (var k in data) {
-                        data[k] = data[k].map(x => x / 1000);
+                    if (sensor != "biotac") {
+                        for (var k in data) {
+                            data[k] = data[k].map(x => x / 1000);
+                        }
                     }
 
                     // merge with the data we have
                     if (sensor in SENSOR_DATA) {
-                        overlap = SENSOR_DATA[sensor].t.indexOf(data.t[0]);
+                        var overlap = SENSOR_DATA[sensor].t.indexOf(data.t[0]);
                         console.log(sensor + " data overlap = " + overlap);
                         if (overlap != -1) {
                             for (var k in SENSOR_DATA[sensor]) {
@@ -405,56 +414,59 @@ window.socket.onmessage = function (event) {
                         SENSOR_DATA[sensor] = data;
                     }
 
-                    var lines = [];
-                    var bbox = [
-                        /* left */   Infinity,
-                        /* top  */   -Infinity,
-                        /* right */  -Infinity,
-                        /* bottom */ Infinity
-                    ];
-                    for (var k in SENSOR_DATA[sensor]) {
-                        if (k == 't') continue;
-                        var t = SENSOR_DATA[sensor].t;
-                        var d = SENSOR_DATA[sensor][k];
-                        var t0 = t[0];
-                        t = t.map(x => x - t0);
-                        if (k == 'a') { d = d.map(x => x + 9); } // HACK HACK HACK
-                        lines.push({ name: k, data: [t, d] });
-                        bbox[0] = Math.min(bbox[0], t[0]);
-                        bbox[1] = Math.max(bbox[1], d.reduce((a, b) => a > b ? a : b));
-                        bbox[2] = Math.max(bbox[2], t[t.length-1]);
-                        bbox[3] = Math.min(bbox[1], d.reduce((a, b) => a < b ? a : b));
-                    }
                     var tic = new Date();
-                    if (typeof this.board !== 'undefined') {
-                        JXG.JSXGraph.freeBoard(this.board);
-                    }
-                    $(this).height($(this).parent().height());
-                    $(this).width($(this).parent().width());
-                    $(this).css({ marginLeft: 'auto', marginRight: 'auto' });
-                    this.board = JXG.JSXGraph.initBoard('chart-container-' + sensor, {
-                        boundingbox: bbox,
-                        axis: true
-                    });
-                    this.board.suspendUpdate();
-                    var colors = ['red', 'green', 'blue', 'black'];
-                    for (var l in lines) {
-                        this.board.create('curve', lines[l].data, {
-                            name: lines[l].name,
-                            strokeColor: colors[l]
+                    if (true || sensor != "biotac") {
+                        var lines = [];
+                        var bbox = [
+                            /* left */   Infinity,
+                            /* top  */   -Infinity,
+                            /* right */  -Infinity,
+                            /* bottom */ Infinity
+                        ];
+                        for (var k in SENSOR_DATA[sensor]) {
+                            if (k == 't') continue;
+                            var t = SENSOR_DATA[sensor].t;
+                            var d = SENSOR_DATA[sensor][k];
+                            var t0 = t[0];
+                            t = t.map(x => x - t0);
+                            if (k == 'a') { d = d.map(x => x + 9); } // HACK HACK HACK
+                            lines.push({ name: k, data: [t, d] });
+                            bbox[0] = Math.min(bbox[0], t[0]);
+                            bbox[1] = Math.max(bbox[1], d.reduce((a, b) => a > b ? a : b));
+                            bbox[2] = Math.max(bbox[2], t[t.length-1]);
+                            bbox[3] = Math.min(bbox[3], d.reduce((a, b) => a < b ? a : b));
+                        }
+                        if (typeof this.board !== 'undefined') {
+                            JXG.JSXGraph.freeBoard(this.board);
+                        }
+                        $(this).height($(this).parent().height());
+                        $(this).width($(this).parent().width());
+                        $(this).css({ marginLeft: 'auto', marginRight: 'auto' });
+                        this.board = JXG.JSXGraph.initBoard('chart-container-' + sensor, {
+                            boundingbox: bbox,
+                            axis: true
                         });
+                        this.board.suspendUpdate();
+                        var colors = ['red', 'green', 'blue', 'black', 'yellow'];
+                        for (var l in lines) {
+                            this.board.create('curve', lines[l].data, {
+                                name: lines[l].name,
+                                strokeColor: colors[l]
+                            });
+                        }
+                        this.board.create('legend',
+                                [bbox[0] + (bbox[2]-bbox[0])*.75,
+                                 bbox[3] + (bbox[1]-bbox[3])*.5],
+                                 {
+                                     labels: lines.map(l => l.name),
+                                     colors: colors,
+                                     linelength: (bbox[2]-bbox[0])*.1
+                                 });
+                        this.board.unsuspendUpdate();
+                    } else {
                     }
-                    this.board.create('legend',
-                            [bbox[0] + (bbox[2]-bbox[0])*.75,
-                             bbox[3] + (bbox[1]-bbox[3])*.5],
-                             {
-                                 labels: lines.map(l => l.name),
-                                 colors: colors,
-                                 linelength: (bbox[2]-bbox[0])*.1
-                             });
-                    this.board.unsuspendUpdate();
                     var toc = new Date();
-                    console.log("drawing graph: " + (toc - tic) + "ms");
+                    console.log("drawing " + sensor + " graph: " + (toc - tic) + "ms");
                     /*
                     if (DEMO && sensor in DRAW_TIMINGS) {
                         DRAW_TIMINGS[sensor].push({'num': framenum, 'time': toc - tic});

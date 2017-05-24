@@ -3,7 +3,7 @@ extern crate time;
 extern crate notify;
 
 use time::Duration;
-use std::{env, mem, slice, thread};
+use std::{env, mem, slice, thread, ptr};
 use std::io::{self, Read};
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
@@ -32,6 +32,17 @@ pub fn slurp<P: AsRef<Path>>(p: P) -> io::Result<String> {
     let mut data = String::new();
     File::open(p.as_ref())?.read_to_string(&mut data)?;
     Ok(data)
+}
+
+pub fn circular_push<T>(vec: &mut Vec<T>, item: T) {
+    if vec.len() == vec.capacity() {
+        let len = vec.len()-1;
+        unsafe {
+            ptr::copy(&vec[1], &mut vec[0], len);
+        }
+        vec.truncate(len);
+    }
+    vec.push(item);
 }
 
 /// Retry some action on failure

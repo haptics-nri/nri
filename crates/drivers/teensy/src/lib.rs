@@ -601,14 +601,7 @@ group_attr!{
                             _ => {}
                         }
 
-                        if self.buf.len() == self.buf.capacity() {
-                            let len = self.buf.len()-1;
-                            unsafe {
-                                ptr::copy(&self.buf[1], &mut self.buf[0], len);
-                            }
-                            self.buf.truncate(len);
-                        }
-                        self.buf.push(packet.clone());
+                        utils::circular_push(&mut self.buf, packet.clone());
                         self.file.write(packet);
                     },
                     Err(e)  => errorln!("Error reading packet from Teensy: {:?}", e)

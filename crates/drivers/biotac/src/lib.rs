@@ -3,6 +3,7 @@
 #[macro_use] extern crate guilt_by_association;
 #[macro_use] extern crate utils;
 #[macro_use] extern crate comms;
+#[macro_use] extern crate serde_derive;
 
 group_attr! {
     #[cfg(feature = "hardware")]
@@ -11,8 +12,9 @@ group_attr! {
 
     extern crate libc;
     extern crate time;
+    extern crate serde_json;
 
-    use comms::{Controllable, CmdFrom, Block};
+    use comms::{Controllable, CmdFrom, Block, RestartableThread};
     use scribe::{Writer, Writable};
     use std::sync::mpsc::Sender;
     use std::default::Default;
@@ -20,15 +22,22 @@ group_attr! {
 
     mod wrapper;
 
+    type PngStuff = (Sender<CmdFrom>, Vec<Packet>);
+    #[derive(Serialize)] struct Data<'a> { t: &'a [f64], pdc: &'a [u32], et: &'a [u32], eb: &'a [u32], el: &'a [u32], er: &'a [u32] }
+
     pub struct Biotac {
         cheetah: wrapper::biotac::Cheetah,
         info: wrapper::biotac::bt_info,
         finger: u8,
         file: Writer<Packet>,
+        buf: Vec<Packet>,
+        png: RestartableThread<PngStuff>,
+        tx: Sender<CmdFrom>,
         i: usize,
         start: time::Tm,
     }
 
+    #[derive(Clone)]
     #[repr(packed)]
     struct Packet {
         stamp: time::Timespec,
@@ -41,12 +50,14 @@ group_attr! {
 
     unsafe impl Writable for Packet {}
 
+    const BUF_LEN: usize = 200;
+
     guilty! {
         impl Controllable for Biotac {
             const NAME: &'static str = "biotac";
             const BLOCK: Block = Block::Period(10_000_000);
 
-            fn setup(_: Sender<CmdFrom>, _: Option<String>) -> Biotac {
+            fn setup(tx: Sender<CmdFrom>, _: Option<String>) -> Biotac {
                 // initialize Cheetah
                 let mut info = wrapper::biotac::bt_info {
                     spi_clock_speed: 4400,
@@ -92,10 +103,45 @@ group_attr! {
                     assert!(0 == wrapper::biotac::bt_cheetah_configure_batch(cheetah, &mut info, 44));
                 }
 
-                Biotac { cheetah: cheetah, info: info, finger: finger, file: Writer::with_file("biotac.dat"), i: 0, start: time::now() }
+                // some stuff for the RestartableThread
+                let mut idx = 0;
+                let start = time::get_time();
+
+                Biotac {
+                    cheetah: cheetah,
+                    info: info,
+                    finger: finger,
+                    file: Writer::with_file("biotac.dat"),
+                    buf: Vec::with_capacity(BUF_LEN),
+                    png: RestartableThread::new("Biotac PNG thread", move |(sender, vec): PngStuff| {
+                        let len = vec.len();
+                        let mut t = Vec::with_capacity(len);
+                        let mut pdc = Vec::with_capacity(len);
+                        let mut et = Vec::with_capacity(len);
+                        let mut eb = Vec::with_capacity(len);
+                        let mut el = Vec::with_capacity(len);
+                        let mut er = Vec::with_capacity(len);
+
+                        for i in 0..len {
+                            let diff = (vec[i].stamp - start).to_std().unwrap();
+                            t.push(diff.as_secs() as f64 + (diff.subsec_nanos() as f64 / 1.0e9));
+                            pdc.push(vec[i].pdc);
+                            et.push(vec[i].electrode[6..9].iter().sum());
+                            eb.push(vec[i].electrode[17..19].iter().sum());
+                            el.push(vec[i].electrode[10..16].iter().sum());
+                            er.push(vec[i].electrode[0..6].iter().sum());
+                        }
+
+                        sender.send(CmdFrom::Data(format!("send kick biotac {} {}", idx, serde_json::to_string(&Data { t: &t, pdc: &pdc, et: &et, eb: &eb, el: &el, er: &er }).unwrap()))).unwrap();
+                        idx += 1;
+                    }),
+                    tx: tx,
+                    i: 0,
+                    start: time::now()
+                }
             }
 
-            fn step(&mut self, _: Option<String>) {
+            fn step(&mut self, cmd: Option<String>) {
                 static PARITY: [u8; 128] = [0x01, 0x02, 0x04, 0x07, 0x08, 0x0B, 0x0D, 0x0E,
                                             0x10, 0x13, 0x15, 0x16, 0x19, 0x1A, 0x1C, 0x1F,
                                             0x20, 0x23, 0x25, 0x26, 0x29, 0x2A, 0x2C, 0x2F,
@@ -155,6 +201,16 @@ group_attr! {
 
                     packet
                 };
+
+                utils::circular_push(&mut self.buf, packet.clone());
+
+                match cmd.as_ref().map(|s| s as &str) {
+                    Some("kick") => {
+                        println!("Biotac: transmitting plot");
+                        self.png.send((self.tx.clone(), self.buf.clone())).unwrap();
+                    }
+                    _ => {}
+                }
 
                 self.file.write(packet);
             }
