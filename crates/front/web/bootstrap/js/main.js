@@ -188,14 +188,10 @@ function really_start_demo(endeff) {
         }
 
         // move stuff around
-        $('#chart-container-teensy')[0].parent = $('#chart-container-teensy').parent();
-        $('#chart-container-optoforce')[0].parent = $('#chart-container-optoforce').parent();
-        $('#chart-container-biotac')[0].parent = $('#chart-container-biotac').parent();
+        $('.frame.teensy')[0].parent = $('.frame.teensy').parent();
         $('#image-bluefox')[0].parent = $('#image-bluefox').parent();
         $('#image-structure')[0].parent = $('#image-structure').parent();
-        $('#teensy-cell').append($('#chart-container-teensy'));
-        $('#optoforce-cell').append($('#chart-container-optoforce'));
-        $('#biotac-cell').append($('#chart-container-biotac'));
+        $('#teensy-cell').append($('.frame.teensy'));
         $('#bluefox-cell').append($('#image-bluefox'));
         $('#structure-cell').append($('#image-structure'));
         $('#demo').show();
@@ -212,6 +208,8 @@ function really_start_demo(endeff) {
         schedule(function() { $("#start_structure").click(); });
         switch (endeff) {
             case "Some(OptoForce)":
+                $('.frame.optoforce')[0].parent = $('.frame.optoforce').parent();
+                $('#optoforce-cell').append($('.frame.optoforce'));
                 schedule(function() { $("#start_optoforce").click(); });
                 DEMO_ACTIONS.push(['optoforce', 3]);
                 FRAME_TIMINGS['optoforce'] = [];
@@ -219,6 +217,8 @@ function really_start_demo(endeff) {
                 LAST_KICK['optoforce'] = [];
                 break;
             case "Some(BioTac)":
+                $('.frame.biotac')[0].parent = $('.frame.biotac').parent();
+                $('#biotac-cell').append($('.frame.biotac'));
                 schedule(function() { $("#start_biotac").click(); });
                 DEMO_ACTIONS.push(['biotac', 3]);
                 FRAME_TIMINGS['biotac'] = [];
@@ -226,6 +226,8 @@ function really_start_demo(endeff) {
                 LAST_KICK['biotac'] = [];
                 break;
         }
+        
+        DEMO_ACTIONS = [['optoforce', 3]];
 
         // get frames
         function kick() {
@@ -255,18 +257,23 @@ function stop_demo() {
         }
 
         schedule(function() { $("#stop_teensy").click(); });
-        schedule(function() { $("#stop_optoforce").click(); });
-        schedule(function() { $("#stop_biotac").click(); });
         schedule(function() { $("#stop_bluefox").click(); });
         schedule(function() { $("#stop_structure").click(); });
         schedule();
 
         $('#demo').hide();
-        $('#chart-container-teensy')[0].parent.append($('#chart-container-teensy'));
-        $('#chart-container-optoforce')[0].parent.append($('#chart-container-optoforce'));
-        $('#chart-container-biotac')[0].parent.append($('#chart-container-biotac'));
+        $('.frame.teensy')[0].parent.append($('.frame.teensy'));
         $('#image-bluefox')[0].parent.append($('#image-bluefox'));
         $('#image-structure')[0].parent.append($('#image-structure'));
+
+        if ('optoforce' in LAST_KICK) {
+            schedule(function() { $("#stop_optoforce").click(); });
+            $('.frame.optoforce')[0].parent.append($('.frame.optoforce'));
+        }
+        if ('biotac' in LAST_KICK) {
+            schedule(function() { $("#stop_biotac").click(); });
+            $('.frame.biotac')[0].parent.append($('.frame.biotac'));
+        }
 
         var fps_real = {};
         var fps_show = {};
@@ -332,7 +339,16 @@ function standev(arr) {
           })/arr.length));
 }
 
-SENSOR_DATA = {};
+function average(arr, start, end) {
+    if (typeof start == "undefined") {
+        start = 0;
+    }
+    if (typeof end == "undefined") {
+        end = arr.length;
+    }
+    
+    return arr.slice(start, end).reduce((a, b) => a + b, 0)/(end - start);
+}
 
 function show_bluefox_settings() {
     $('#bluefox-settings').modal({ show: true, backdrop: 'static' });
@@ -355,6 +371,10 @@ function set_bluefox_settings() {
     console.log(settings);
     send(`to bluefox settings ${JSON.stringify(settings)}`);
 }
+
+SENSOR_DATA = {};
+SENSOR_MEANS = {};
+SENSOR_RANGES = {};
 
 window.socket.onmessage = function (event) {
     console.log(event.data.slice(0, 50).replace(/\n+/g, '') + ' (' + event.data.length + ')');
@@ -426,6 +446,22 @@ window.socket.onmessage = function (event) {
                     // unround
                     for (var k in data) {
                         data[k] = data[k].map(x => x / 1000);
+
+                        // look for spikes
+                        var mean = average(data[k]);
+                        var std = standev(data[k]);
+                        for (var i = 0; i < data[k].length; i++) {
+                            if (Math.abs(data[k][i] - mean) > 20*std) {
+                                console.log(sensor + " " + k + " SPIKE DETECTED AT " + i);
+                                data[k][i] = data[k][i-1];
+                                for (var kk in data) {
+                                    if (kk == 't') continue;
+                                    if (kk == k) continue;
+                                    data[kk][i] = data[kk][i-1];
+                                }
+                            }
+                        }
+
                     }
 
                     // merge with the data we have
@@ -434,96 +470,100 @@ window.socket.onmessage = function (event) {
                         console.log(sensor + " data overlap = " + overlap);
                         if (overlap != -1) {
                             for (var k in SENSOR_DATA[sensor]) {
-                                SENSOR_DATA[sensor][k]  = SENSOR_DATA[sensor][k].slice(0, overlap).concat(data[k]);
+                                SENSOR_DATA[sensor][k]  = SENSOR_DATA[sensor][k].slice(0, overlap).concat(data[k].map(x => x - SENSOR_MEANS[sensor][k]));
                             }
                         } else {
                             //var offset = data.t[0] - SENSOR_DATA[sensor].t[SENSOR_DATA[sensor].t.length-1];
                             //data.t = data.t.map(x => x - offset); // HACK HACK HACK
                             for (var k in SENSOR_DATA[sensor]) {
-                                SENSOR_DATA[sensor][k]  = SENSOR_DATA[sensor][k].concat(data[k]);
+                                SENSOR_DATA[sensor][k]  = SENSOR_DATA[sensor][k].concat(data[k].map(x => x - SENSOR_MEANS[sensor][k]));
                             }
                         }
 
                         if (SENSOR_DATA[sensor].t[SENSOR_DATA[sensor].t.length-1] - SENSOR_DATA[sensor].t[0] > 10) {
                             var start_time = SENSOR_DATA[sensor].t[SENSOR_DATA[sensor].t.length-1] - 10;
-                            var start_idx = SENSOR_DATA[sensor].t.findIndex(function(t) { return t > start_time; });
+                            var start_idx = SENSOR_DATA[sensor].t.findIndex(t => t > start_time);
                             for (var k in SENSOR_DATA[sensor]) {
+                                if (k != 't' && SENSOR_MEANS[sensor][k] == 0) {
+                                    SENSOR_MEANS[sensor][k] = average(SENSOR_DATA[sensor][k], SENSOR_DATA[sensor][k].length/2);
+                                    SENSOR_RANGES[sensor] = Math.max(SENSOR_RANGES[sensor], SENSOR_DATA[sensor][k].map(Math.abs).reduce((a, b) => a > b ? a : b) / 4);
+                                }
                                 SENSOR_DATA[sensor][k]  = SENSOR_DATA[sensor][k].slice(start_idx);
                             }
                         }
                     } else {
                         SENSOR_DATA[sensor] = data;
+                        SENSOR_MEANS[sensor] = {};
+                        for (var k in data) {
+                            SENSOR_MEANS[sensor][k] = 0;
+                        }
+                        SENSOR_RANGES[sensor] = 5;
                     }
 
                     var tic = new Date();
-                    if (true || sensor != "biotac") { // TODO separate biotac vis
-                        var lines = [];
-                        var bbox = [
-                            /* left */   Infinity,
-                            /* top  */   -Infinity,
-                            /* right */  -Infinity,
-                            /* bottom */ Infinity
-                        ];
-                        for (var k in SENSOR_DATA[sensor]) {
-                            if (k == 't') continue;
-                            var t = SENSOR_DATA[sensor].t;
-                            var d = SENSOR_DATA[sensor][k];
-                            var t0 = t[0];
-                            t = t.map(x => x - t0);
+                    var lines = [];
+                    var bbox = [
+                        /* left */    0,
+                        /* top  */    SENSOR_RANGES[sensor],
+                        /* right */   10,
+                        /* bottom */ -SENSOR_RANGES[sensor]
+                    ];
+                    for (var k in SENSOR_DATA[sensor]) {
+                        if (k == 't') continue;
+                        var t = SENSOR_DATA[sensor].t;
+                        var d = SENSOR_DATA[sensor][k];
+                        var t0 = t[0];
+                        t = t.map(x => x - t0);
 
-                            // look for spikes
-                            var mean = d.reduce((a, b) => a + b)/d.length;
-                            var std = standev(d);
-                            for (var i = 0; i < d.length; i++) {
-                                if (Math.abs(d[i] - mean) > 20*std) {
-                                    console.log(sensor + " " + k + " SPIKE DETECTED AT " + i);
-                                    d[i] = d[i-1];
-                                    for (var kk in SENSOR_DATA[sensor]) {
-                                        if (kk == 't') continue;
-                                        if (kk == 'a') continue;
-                                        SENSOR_DATA[sensor][kk][i] = SENSOR_DATA[sensor][kk][i-1];
-                                    }
-                                }
-                            }
-
-                            if (k == 'a') {
-                                d = d.map(x => x + 9); // HACK HACK HACK
-                            }
-                            lines.push({ name: k, data: [t, d] });
-                            bbox[0] = Math.min(bbox[0], t[0]);
-                            bbox[1] = Math.max(bbox[1], d.reduce((a, b) => a > b ? a : b));
-                            bbox[2] = Math.max(bbox[2], t[t.length-1]);
-                            bbox[3] = Math.min(bbox[3], d.reduce((a, b) => a < b ? a : b));
-                        }
-                        if (typeof this.board !== 'undefined') {
-                            JXG.JSXGraph.freeBoard(this.board);
-                        }
-                        $(this).height($(this).parent().height());
-                        $(this).width($(this).parent().width());
-                        $(this).css({ marginLeft: 'auto', marginRight: 'auto' });
-                        this.board = JXG.JSXGraph.initBoard('chart-container-' + sensor, {
-                            boundingbox: bbox,
-                            axis: true
-                        });
-                        this.board.suspendUpdate();
-                        var colors = ['red', 'green', 'blue', 'black', 'yellow'];
-                        for (var l in lines) {
-                            this.board.create('curve', lines[l].data, {
-                                name: lines[l].name,
-                                strokeColor: colors[l]
-                            });
-                        }
-                        this.board.create('legend',
-                                [bbox[0] + (bbox[2]-bbox[0])*.75,
-                                 bbox[3] + (bbox[1]-bbox[3])*.5],
-                                 {
-                                     labels: lines.map(l => l.name),
-                                     colors: colors,
-                                     linelength: (bbox[2]-bbox[0])*.1
-                                 });
-                        this.board.unsuspendUpdate();
-                    } else {
+                        lines.push({ name: k, data: [t, d] });
+                        bbox[0] = Math.min(bbox[0], t[0]);
+                        bbox[1] = Math.max(bbox[1], d.reduce((a, b) => a > b ? a : b));
+                        bbox[2] = Math.max(bbox[2], t[t.length-1]);
+                        bbox[3] = Math.min(bbox[3], d.reduce((a, b) => a < b ? a : b));
                     }
+                    if (typeof this.board !== 'undefined') {
+                        JXG.JSXGraph.freeBoard(this.board);
+                    }
+                    $(this).height($(this).parent().height());
+                    $(this).width($(this).parent().width());
+                    $(this).css({ marginLeft: 'auto', marginRight: 'auto' });
+                    this.board = JXG.JSXGraph.initBoard('chart-container-' + sensor, {
+                        boundingbox: bbox,
+                        axis: true
+                    });
+                    this.board.suspendUpdate();
+                    var colors = ['red', 'green', 'blue', 'black', 'yellow'];
+                    for (var l in lines) {
+                        this.board.create('curve', lines[l].data, {
+                            name: lines[l].name,
+                            strokeColor: colors[l]
+                        });
+                    }
+                    this.board.create('legend',
+                            [bbox[0] + (bbox[2]-bbox[0])*.75,
+                             bbox[3] + (bbox[1]-bbox[3])*.5],
+                             {
+                                 labels: lines.map(l => l.name),
+                                 colors: colors,
+                                 linelength: (bbox[2]-bbox[0])*.1
+                             });
+                    this.board.unsuspendUpdate();
+
+                    if (sensor == "biotac") {
+                        // biotac has a special visualization
+                        
+                        var means = {};
+                        for (var k in data) {
+                            if (k != 't') {
+                                means[k] = average(data[k]) - SENSOR_MEANS[sensor][k];
+                            }
+                        }
+                        $('#biotac-top').attr('opacity',    0.5 - means.et/100);
+                        $('#biotac-bottom').attr('opacity', 0.5 - means.eb/100);
+                        $('#biotac-left').attr('opacity',   0.5 - means.el/100);
+                        $('#biotac-right').attr('opacity',  0.5 - means.er/100);
+                    }
+
                     var toc = new Date();
                     console.log("drawing " + sensor + " graph: " + (toc - tic) + "ms");
                     /*

@@ -1,5 +1,50 @@
 <div>
-    <div class="frame {{sensor}} latest" id="chart-container-{{sensor}}">
+    <div class="frame {{sensor}} latest">
+        <div style="position: relative; left: 0%; top: 0%; width: 40%; height: 100%" id="{{sensor}}-diagram">
+            <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
+                <g>
+                    <path
+                        id="{{sensor}}-top"
+                        fill="green" stroke="#222222" stroke-width="2"
+                        d="M    0     50
+                           l   50     75
+                           l   50    -75
+                           a 50 50 0 0 0 -50 -50
+                           a 50 50 0 0 0 -50 50
+                           z"
+                        />
+
+                    <path
+                        id="{{sensor}}-bottom"
+                        fill="blue" stroke="#222222" stroke-width="2"
+                        d="M    0    200
+                           l   50    -75
+                           l   50     75
+                           z"
+                        />
+
+                    <path
+                        id="{{sensor}}-left"
+                        fill="black" stroke="#222222" stroke-width="2"
+                        d="M    0    200
+                           l   50    -75
+                           l  -50    -75
+                           z"
+                        />
+
+                    <path
+                        id="{{sensor}}-right"
+                        fill="yellow" stroke="#222222" stroke-width="2"
+                        d="M  100    200
+                           l  -50    -75
+                           l   50    -75
+                           z"
+                        />
+                </g>
+            </svg>
+        </div>
+        <div style="position: relative; left: 40%; top: -100%; width: 60%; height: 100%" id="chart-container-{{sensor}}">
+        </div>
     </div>
 </div>
 <div class="{{sensor}} framenum"></div>
