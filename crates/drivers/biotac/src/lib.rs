@@ -19,11 +19,12 @@ group_attr! {
     use std::sync::mpsc::Sender;
     use std::default::Default;
     use std::{mem, str};
+    use std::ops::Range;
 
     mod wrapper;
 
-    type PngStuff = (Sender<CmdFrom>, Vec<Packet>);
-    #[derive(Serialize)] struct Data<'a> { t: &'a [f64], pdc: &'a [u32], et: &'a [u32], eb: &'a [u32], el: &'a [u32], er: &'a [u32] }
+    type PngStuff = (Sender<CmdFrom>, Vec<Packet>, Option<usize>);
+    #[derive(Serialize)] struct Data<'a> { t: &'a [i32], pdc: &'a [i32], et: &'a [i32], eb: &'a [i32], el: &'a [i32], er: &'a [i32] }
 
     pub struct Biotac {
         cheetah: wrapper::biotac::Cheetah,
@@ -113,7 +114,7 @@ group_attr! {
                     finger: finger,
                     file: Writer::with_file("biotac.dat"),
                     buf: Vec::with_capacity(BUF_LEN),
-                    png: RestartableThread::new("Biotac PNG thread", move |(sender, vec): PngStuff| {
+                    png: RestartableThread::new("Biotac PNG thread", move |(sender, vec, id): PngStuff| {
                         let len = vec.len();
                         let mut t = Vec::with_capacity(len);
                         let mut pdc = Vec::with_capacity(len);
@@ -122,17 +123,28 @@ group_attr! {
                         let mut el = Vec::with_capacity(len);
                         let mut er = Vec::with_capacity(len);
 
-                        for i in 0..len {
-                            let diff = (vec[i].stamp - start).to_std().unwrap();
-                            t.push(diff.as_secs() as f64 + (diff.subsec_nanos() as f64 / 1.0e9));
-                            pdc.push(vec[i].pdc);
-                            et.push(vec[i].electrode[6..9].iter().sum());
-                            eb.push(vec[i].electrode[17..19].iter().sum());
-                            el.push(vec[i].electrode[10..16].iter().sum());
-                            er.push(vec[i].electrode[0..6].iter().sum());
+                        fn r(f: f64) -> i32 {
+                            (f * 1000.0) as i32
+                        }
+                        fn s(f: u32, n: usize) -> i32 {
+                            r((((f as i32) - 2048) as f64) / (n as f64))
+                        }
+                        fn m(v: &[u32], r: Range<usize>) -> i32 {
+                            s(v[r.clone()].iter().sum(), r.end - r.start)
                         }
 
-                        sender.send(CmdFrom::Data(format!("send kick biotac {} {}", idx, serde_json::to_string(&Data { t: &t, pdc: &pdc, et: &et, eb: &eb, el: &el, er: &er }).unwrap()))).unwrap();
+                        for i in 0..len {
+                            let diff = (vec[i].stamp - start).to_std().unwrap();
+                            t.push(r(diff.as_secs() as f64 + (diff.subsec_nanos() as f64 / 1.0e9)));
+                            pdc.push(s(vec[i].pdc, 1));
+                            et.push(m(&vec[i].electrode, 6..9));
+                            eb.push(m(&vec[i].electrode, 17..19));
+                            el.push(m(&vec[i].electrode, 10..16));
+                            er.push(m(&vec[i].electrode, 0..6));
+                        }
+
+                        let id_str = if let Some(id) = id { format!(" {}", id) } else { String::new() };
+                        sender.send(CmdFrom::Data(format!("send{} kick biotac {} {}", id_str, idx, serde_json::to_string(&Data { t: &t, pdc: &pdc, et: &et, eb: &eb, el: &el, er: &er }).unwrap()))).unwrap();
                         idx += 1;
                     }),
                     tx: tx,
@@ -204,10 +216,10 @@ group_attr! {
 
                 utils::circular_push(&mut self.buf, packet.clone());
 
-                match cmd.as_ref().map(|s| s as &str) {
-                    Some("kick") => {
+                match cmd.as_ref() {
+                    Some(s) if s.starts_with("kick") => {
                         println!("Biotac: transmitting plot");
-                        self.png.send((self.tx.clone(), self.buf.clone())).unwrap();
+                        self.png.send((self.tx.clone(), self.buf.clone(), s.split(' ').skip(1).next().map(|s| s.parse().unwrap()))).unwrap();
                     }
                     _ => {}
                 }

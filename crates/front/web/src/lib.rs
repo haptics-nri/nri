@@ -325,7 +325,7 @@ pub struct Web {
     websocket: Option<JoinHandle<()>>,
 
     /// Private channel for sending events to WebSocket clients
-    wstx: Option<mpsc::Sender<ws::Message<'static>>>,
+    wstx: Option<mpsc::Sender<(ws::Message<'static>, Option<usize>)>>,
 }
 
 guilty!{
@@ -366,7 +366,17 @@ guilty!{
 
         fn step(&mut self, data: Option<String>) {
             if let Some(d) = data {
-                self.wstx.as_ref().unwrap().send(ws::Message::text(d)).unwrap();
+                let (idx, opt_id) =
+                    if let Some(id_str) = d.split(' ').next() {
+                        if let Some(id) = id_str.parse().ok() {
+                            (id_str.len()+1, Some(id))
+                        } else {
+                            (0, None)
+                        }
+                    } else {
+                        (0, None)
+                    };
+                self.wstx.as_ref().unwrap().send((ws::Message::text(d[idx..].to_owned()), opt_id)).unwrap();
             }
         }
 

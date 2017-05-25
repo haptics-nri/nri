@@ -26,9 +26,9 @@ group_attr!{
     use serialize::base64::ToBase64;
     use comms::{Controllable, CmdFrom, Block, RestartableThread};
     use scribe::Writer;
-    use utils::*;
+    use utils::prelude::*;
 
-    type PngData = (usize, Vec<u8>, bool, (i32, i32), ColorType);
+    type PngData = (usize, Vec<u8>, bool, (i32, i32), ColorType, Option<usize>);
     type WatchdogData = (Arc<(Mutex<bool>, Condvar)>, String, Duration);
 
     mod wrapper;
@@ -106,7 +106,7 @@ group_attr!{
                     Duration::milliseconds(1000).sleep();
                 }
 
-                in_original_dir(|| wrapper::initialize().unwrap()).unwrap();
+                utils::in_original_dir(|| wrapper::initialize().unwrap()).unwrap();
                 let device = wrapper::Device::new(None).unwrap();
 
                 let depth = wrapper::VideoStream::new(&device, wrapper::OniSensorType::Depth).unwrap();
@@ -143,7 +143,7 @@ group_attr!{
                     writing: false,
                     tx: tx,
 
-                    png: RestartableThread::new("Structure PNG thread", move |(i, unenc8, do_resize, (h, w), bd): PngData| {
+                    png: RestartableThread::new("Structure PNG thread", move |(i, unenc8, do_resize, (h, w), bd, id): PngData| {
                         let mut encoded = Vec::with_capacity((w*h) as usize);
 
                         let unenc16 = unenc8.as_vec_of::<u16>().unwrap();
@@ -176,7 +176,8 @@ group_attr!{
                             prof!("encode", PNGEncoder::new(&mut encoded).encode(&raw, ww, hh, ColorType::RGB(8)).unwrap());
                         }
 
-                        prof!("send", png_tx.send(CmdFrom::Data(format!("send kick structure {} data:image/png;base64,{}", i, encoded.to_base64(base64::STANDARD)))).unwrap());
+                        let id_str = if let Some(id) = id { format!(" {}", id) } else { String::new() };
+                        prof!("send", png_tx.send(CmdFrom::Data(format!("send{} kick structure {} data:image/png;base64,{}", id_str, i, encoded.to_base64(base64::STANDARD)))).unwrap());
                     }),
 
                     watchdog: RestartableThread::new("Structure watchdog thread", move |(pair, gerund, timeout): WatchdogData| {
@@ -243,8 +244,8 @@ group_attr!{
                             self.stampfile.write(format!("{},structure{}.dat,{:.9}\n", self.i, self.i, stamp.sec as f64 + stamp.nsec as f64 / 1_000_000_000f64).as_bytes());
                         }
                         match cmd.as_ref().map(|s| s as &str) {
-                            Some("kick") => {
-                                prof!("send to thread", self.png.send((self.i, data, false, (frame.height, frame.width), ColorType::Gray(16))).unwrap());
+                            Some(s) if s.starts_with("kick") => {
+                                prof!("send to thread", self.png.send((self.i, data, false, (frame.height, frame.width), ColorType::Gray(16), s.split(' ').skip(1).next().map(|s| s.parse().unwrap()))).unwrap());
                             },
                             Some(_) | None => ()
                         }
@@ -262,8 +263,8 @@ group_attr!{
                             self.stampfile.write(format!("{},structure{}.dat,{:.9}\n", self.i, self.i, stamp.sec as f64 + stamp.nsec as f64 / 1_000_000_000f64).as_bytes());
                         }
                         match cmd.as_ref().map(|s| s as &str) {
-                            Some("kick") => {
-                                prof!("send to thread", self.png.send((self.i, data.into(), true, (frame.height, frame.width), ColorType::RGB(8))).unwrap());
+                            Some(s) if s.starts_with("kick") => {
+                                prof!("send to thread", self.png.send((self.i, data.into(), true, (frame.height, frame.width), ColorType::RGB(8), s.split(' ').skip(1).next().map(|s| s.parse().unwrap()))).unwrap());
                             },
                             Some(_) | None => ()
                         }

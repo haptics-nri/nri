@@ -165,6 +165,28 @@ function really_start_demo(endeff) {
         PREDEMO = false;
         DEMO = true;
 
+        // gin up some more sockets
+        window.sockets = [];
+        window.wsids = [];
+        for (var i = 0; i < 4; i++) {
+            window.sockets[i] = new WebSocket(window.socket.url, window.socket.protocol);
+            window.sockets[i].onmessage = (
+                    function (i) {
+                        return function (event) {
+                            console.log(i + ': ' + event.data.slice(0, 50).replace(/\n+/g, '') + ' (' + event.data.length + ')');
+                            words = event.data.split(' ');
+                            switch (words[0]) {
+                                case "hello":
+                                    var init = JSON.parse(event.data.slice(6));
+                                    window.wsids[i] = init.wsid.split('_')[1];
+                                    break;
+                                default:
+                                    window.socket.onmessage(event);
+                            }
+                        };
+                    })(i);
+        }
+
         // move stuff around
         $('#chart-container-teensy')[0].parent = $('#chart-container-teensy').parent();
         $('#chart-container-optoforce')[0].parent = $('#chart-container-optoforce').parent();
@@ -179,7 +201,7 @@ function really_start_demo(endeff) {
         $('#demo').show();
         $('html, body').animate({ scrollTop: $('#start-demo').offset().top }, 500);
 
-        DEMO_ACTIONS = ['#kick_bluefox', '#kick_structure', '#kick_teensy'];
+        DEMO_ACTIONS = [['bluefox', 0], ['structure', 1], ['teensy', 2]];
         FRAME_TIMINGS = {'bluefox': [], 'structure': [], 'teensy': []};
         DRAW_TIMINGS = {'bluefox': [], 'structure': [], 'teensy': []};
         LAST_KICK = {'bluefox': [], 'structure': [], 'teensy': []};
@@ -191,14 +213,14 @@ function really_start_demo(endeff) {
         switch (endeff) {
             case "Some(OptoForce)":
                 schedule(function() { $("#start_optoforce").click(); });
-                DEMO_ACTIONS.push('#kick_optoforce');
+                DEMO_ACTIONS.push(['optoforce', 3]);
                 FRAME_TIMINGS['optoforce'] = [];
                 DRAW_TIMINGS['optoforce'] = [];
                 LAST_KICK['optoforce'] = [];
                 break;
             case "Some(BioTac)":
                 schedule(function() { $("#start_biotac").click(); });
-                DEMO_ACTIONS.push('#kick_biotac');
+                DEMO_ACTIONS.push(['biotac', 3]);
                 FRAME_TIMINGS['biotac'] = [];
                 DRAW_TIMINGS['biotac'] = [];
                 LAST_KICK['biotac'] = [];
@@ -208,13 +230,15 @@ function really_start_demo(endeff) {
         // get frames
         function kick() {
             if (DEMO) {
-                LAST_KICK[DEMO_ACTIONS[0].split('_')[1]] = new Date();
-                $(DEMO_ACTIONS[0]).click();
+                var sensor = DEMO_ACTIONS[0][0];
+                var sock = DEMO_ACTIONS[0][1];
+                LAST_KICK[sensor] = new Date();
+                console.log("DEMO KICK " + sensor);
+                send("kick " + sensor + " " + window.wsids[sock]);
                 DEMO_ACTIONS.push(DEMO_ACTIONS.shift());
-                schedule(kick);
             }
         }
-        schedule(kick);
+        setInterval(kick, 5);
 
         schedule();
     }
@@ -225,6 +249,10 @@ function stop_demo() {
 
     if (DEMO) {
         DEMO = false;
+
+        for (var i = 0; i < window.sockets.length; i++) {
+            window.sockets[i].close();
+        }
 
         schedule(function() { $("#stop_teensy").click(); });
         schedule(function() { $("#stop_optoforce").click(); });
@@ -256,7 +284,7 @@ function stop_demo() {
             }
             fps_real[cam] = num_diffs / time_diffs * 1000;
             fps_show[cam] = FRAME_TIMINGS[cam].length / time_diffs * 1000;
-            fps_xfer[cam] = FRAME_TIMINGS[cam].map(x => x.xfer).reduce((a, b) => a + b) / FRAME_TIMINGS[cam].length;
+            fps_xfer[cam] = FRAME_TIMINGS[cam].map(x => x.xfer).reduce((a, b) => a + b, 0) / FRAME_TIMINGS[cam].length;
         }
         console.log({'Real FPS': fps_real, 'Shown FPS': fps_show, 'Xfer time': fps_xfer});
     }
@@ -287,6 +315,21 @@ function str2ab(str) {
     bufView[i] = str.charCodeAt(i);
   }
   return buf;
+}
+
+// https://stackoverflow.com/a/32201390/1114328
+function standev(arr) {
+   var i,j,total = 0, mean = 0, diffSqredArr = [];
+   for(i=0;i<arr.length;i+=1){
+       total+=arr[i];
+   }
+   mean = total/arr.length;
+   for(j=0;j<arr.length;j+=1){
+       diffSqredArr.push(Math.pow((arr[j]-mean),2));
+   }
+   return (Math.sqrt(diffSqredArr.reduce(function(firstEl, nextEl){
+            return firstEl + nextEl;
+          })/arr.length));
 }
 
 SENSOR_DATA = {};
@@ -381,10 +424,8 @@ window.socket.onmessage = function (event) {
                     var data = JSON.parse(payload);
 
                     // unround
-                    if (sensor != "biotac") {
-                        for (var k in data) {
-                            data[k] = data[k].map(x => x / 1000);
-                        }
+                    for (var k in data) {
+                        data[k] = data[k].map(x => x / 1000);
                     }
 
                     // merge with the data we have
@@ -415,7 +456,7 @@ window.socket.onmessage = function (event) {
                     }
 
                     var tic = new Date();
-                    if (true || sensor != "biotac") {
+                    if (true || sensor != "biotac") { // TODO separate biotac vis
                         var lines = [];
                         var bbox = [
                             /* left */   Infinity,
@@ -429,7 +470,25 @@ window.socket.onmessage = function (event) {
                             var d = SENSOR_DATA[sensor][k];
                             var t0 = t[0];
                             t = t.map(x => x - t0);
-                            if (k == 'a') { d = d.map(x => x + 9); } // HACK HACK HACK
+
+                            // look for spikes
+                            var mean = d.reduce((a, b) => a + b)/d.length;
+                            var std = standev(d);
+                            for (var i = 0; i < d.length; i++) {
+                                if (Math.abs(d[i] - mean) > 20*std) {
+                                    console.log(sensor + " " + k + " SPIKE DETECTED AT " + i);
+                                    d[i] = d[i-1];
+                                    for (var kk in SENSOR_DATA[sensor]) {
+                                        if (kk == 't') continue;
+                                        if (kk == 'a') continue;
+                                        SENSOR_DATA[sensor][kk][i] = SENSOR_DATA[sensor][kk][i-1];
+                                    }
+                                }
+                            }
+
+                            if (k == 'a') {
+                                d = d.map(x => x + 9); // HACK HACK HACK
+                            }
                             lines.push({ name: k, data: [t, d] });
                             bbox[0] = Math.min(bbox[0], t[0]);
                             bbox[1] = Math.max(bbox[1], d.reduce((a, b) => a > b ? a : b));

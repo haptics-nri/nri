@@ -133,6 +133,7 @@ use std::sync::mpsc::{channel, Sender};
 use std::collections::HashMap;
 use std::time::Duration;
 use comms::{Controllable, CmdTo, CmdFrom, Power};
+use utils::prelude::*;
 use cli::CLI;
 use web::Web;
 use teensy::Teensy;
@@ -372,8 +373,8 @@ fn try_main() -> Result<()> {
                         let mut words = d.split(' ');
                         match &*words.next().unwrap_or("") {
                             "send" => { send_to(&services, "web".to_owned(), CmdTo::Data(d[5..].to_owned()))?; },
-                            "kick" => { send_to(&services, words.next().unwrap_or("").to_owned(), CmdTo::Data("kick".to_owned()))?; },
-                            "to"   => { send_to(&services, words.next().unwrap_or("").to_owned(), CmdTo::Data(words.collect::<Vec<_>>().join(" ")))?; },
+                            "kick" => { send_to(&services, words.next().unwrap_or("").to_owned(), CmdTo::Data(join!("kick" => words, " ")))?; },
+                            "to"   => { send_to(&services, words.next().unwrap_or("").to_owned(), CmdTo::Data(join!(words, " ")))?; },
                             "set"  => match (words.next(), words.next()) {
                                 (Some("DATADIR"), Some(dir)) => {
                                     println!("Setting DATADIR = {:?}", dir);

@@ -78,7 +78,7 @@ impl flow::Comms for Comms {
     }
 }
 
-pub fn spawn(ctx: mpsc::Sender<CmdFrom>, wsrx: mpsc::Receiver<Message<'static>>) -> thread::JoinHandle<()> {
+pub fn spawn(ctx: mpsc::Sender<CmdFrom>, wsrx: mpsc::Receiver<(Message<'static>, Option<usize>)>) -> thread::JoinHandle<()> {
     thread::spawn(move || {
         let ws = Server::bind(("0.0.0.0", config::WS_PORT)).unwrap();
 
@@ -86,10 +86,17 @@ pub fn spawn(ctx: mpsc::Sender<CmdFrom>, wsrx: mpsc::Receiver<Message<'static>>)
 
         let marshal = thread::spawn(move || {
             // relay messages from above to all WS threads
-            while let Ok(msg) = wsrx.recv() {
-                WS_SENDERS.lock().unwrap().iter_mut().map(|ref mut s| {
-                    let _ = s.send_message(&msg);
-                }).count();
+            while let Ok((msg, id)) = wsrx.recv() {
+                if let Some(id) = id {
+                    let tic = ::time::now();
+                    let _ = WS_SENDERS.lock().unwrap().get_mut(id).map(|s| s.send_message(&msg));
+                    let toc = ::time::now();
+                    println!("WEB: send to {}: {}ms", id, (toc - tic).num_milliseconds());
+                } else {
+                    WS_SENDERS.lock().unwrap().iter_mut().map(|ref mut s| {
+                        let _ = s.send_message(&msg);
+                    }).count();
+                }
             }
 
             println!("web: shutting down websocket servers");

@@ -155,7 +155,7 @@ group_attr!{
         }
     }
 
-    type PngStuff = (Sender<CmdFrom>, Vec<Packet>);
+    type PngStuff = (Sender<CmdFrom>, Vec<Packet>, Option<usize>);
 
     pub struct Teensy {
         port: Box<StaticReadWrite>,
@@ -366,7 +366,7 @@ group_attr!{
                     start: time::now(),
                     tx: tx,
                     buf: Vec::with_capacity(BUF_LEN),
-                    png: RestartableThread::new("Teensy PNG thread", move |(sender, vec): PngStuff| {
+                    png: RestartableThread::new("Teensy PNG thread", move |(sender, vec, id): PngStuff| {
                         let decimate = 5;
 
                         // process data
@@ -384,7 +384,6 @@ group_attr!{
                             (f * 1000.0) as i32
                         }
 
-                        let mut delay = 0;
                         for i in utils::step(0..len, decimate) {
                             let diff = (vec[i].stamp - start).to_std().unwrap();
                             t.push(r(diff.as_secs() as f64 + (diff.subsec_nanos() as f64 / 1.0e9)));
@@ -404,96 +403,77 @@ group_attr!{
                             aa += (((((vec[i].ft[22] as u32) << 8) + (vec[i].ft[23] as u32)) as i32) - 2048) as f64;
                             aa += (((((vec[i].ft[24] as u32) << 8) + (vec[i].ft[25] as u32)) as i32) - 2048) as f64;
 
-                            if ft[0].abs() > 10_000 {
-                                println!("TEENSY: repairing spike at t={}, ft={:?}", t.last().unwrap(), ft);
-                                delay = 25;
-                                let origin = cmp::min(0, i - delay);
-                                for j in origin..i {
-                                    fx[j] = fx[origin];
-                                    fy[j] = fy[origin];
-                                    fz[j] = fx[origin];
-                                    a[j] = a[origin];
-                                }
-                            }
-                            if delay > 0 {
-                                delay -= 1;
-                                unborrow!(fx.push(fx.last().unwrap().clone()));
-                                unborrow!(fy.push(fy.last().unwrap().clone()));
-                                unborrow!(fz.push(fz.last().unwrap().clone()));
-                                unborrow!(a.push(a.last().unwrap().clone()));
-                            } else {
-                                a.push(r(aa / 4096.0 * 16.0 * 9.81 / 3.0));
-                                // proton mini40
-                                const BIAS: [f64; 6] = [-0.1884383674, 0.2850118688, -0.180718143, -0.191009933, 0.3639300747, -0.4307167708];
-                                const TF: [[f64; 6]; 6] = [[0.00679, 0.01658, -0.04923, 6.20566, 0.15882, -6.19201],
-                                                           [0.11638, -7.31729, -0.04322, 3.54949, -0.08024, 3.57115],
-                                                           [10.35231, 0.32653, 10.61091, 0.29668, 10.33382, 0.25761],
-                                                           [0.00022, -0.0414, 0.14917, 0.02435, -0.15234, 0.01567],
-                                                           [-0.16837, -0.00464, 0.08561, -0.03311, 0.08763, 0.03721],
-                                                           [0.00128, -0.08962, 0.00085, -0.08785, 0.00204, -0.0879]];
-                                 
-                                                           
-                                const SCALE: f64 = 0.002;
-                                /* // STB mini40
-                                const BIAS: [f64; 6] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
-                                const TF: [[f64; 6]; 6] = [[ 0.165175269,   6.193716635,    -0.05972626,    0.020033203,    -0.136667224,   -6.42215241 ],
-                                      [ 0.002429674,  -3.63579423,    0.466390998,    7.308900211,    -0.18369186,    -3.65179797 ],
-                                      [ -10.5385017,  0.802731009,    -10.1357248,    0.359714766,    -10.0934065,    0.442593679 ],
-                                      [ 0.144765089,  -0.032574325,   0.004132077,    0.038285567,    -0.145061852,   -0.010347366],
-                                      [ -0.089833077, -0.024635731,   0.165602185,    -0.009131771,   -0.080132747,   0.039589968 ],
-                                      [ 0.001846317,  0.085776855,    0.005262967,    0.088317691,    0.001450272,    0.087714269 ]];
-                                      */
-                                
+                            a.push(r(aa / 4096.0 * 16.0 * 9.81 / 3.0));
+                            // proton mini40
+                            const BIAS: [f64; 6] = [-0.1884383674, 0.2850118688, -0.180718143, -0.191009933, 0.3639300747, -0.4307167708];
+                            const TF: [[f64; 6]; 6] = [[0.00679, 0.01658, -0.04923, 6.20566, 0.15882, -6.19201],
+                                                       [0.11638, -7.31729, -0.04322, 3.54949, -0.08024, 3.57115],
+                                                       [10.35231, 0.32653, 10.61091, 0.29668, 10.33382, 0.25761],
+                                                       [0.00022, -0.0414, 0.14917, 0.02435, -0.15234, 0.01567],
+                                                       [-0.16837, -0.00464, 0.08561, -0.03311, 0.08763, 0.03721],
+                                                       [0.00128, -0.08962, 0.00085, -0.08785, 0.00204, -0.0879]];
+                             
+                                                       
+                            const SCALE: f64 = 0.002;
+                            /* // STB mini40
+                            const BIAS: [f64; 6] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+                            const TF: [[f64; 6]; 6] = [[ 0.165175269,   6.193716635,    -0.05972626,    0.020033203,    -0.136667224,   -6.42215241 ],
+                                  [ 0.002429674,  -3.63579423,    0.466390998,    7.308900211,    -0.18369186,    -3.65179797 ],
+                                  [ -10.5385017,  0.802731009,    -10.1357248,    0.359714766,    -10.0934065,    0.442593679 ],
+                                  [ 0.144765089,  -0.032574325,   0.004132077,    0.038285567,    -0.145061852,   -0.010347366],
+                                  [ -0.089833077, -0.024635731,   0.165602185,    -0.009131771,   -0.080132747,   0.039589968 ],
+                                  [ 0.001846317,  0.085776855,    0.005262967,    0.088317691,    0.001450272,    0.087714269 ]];
+                                  */
+                            
 
-                                /* // zeroed out
-                                const BIAS: [f64; 6] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
-                                const TF: [[f64; 6]; 6] = [[1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                                           [0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
-                                                           [0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
-                                                           [0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-                                                           [0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
-                                                           [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]];
-                                */
+                            /* // zeroed out
+                            const BIAS: [f64; 6] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+                            const TF: [[f64; 6]; 6] = [[1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                                                       [0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+                                                       [0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+                                                       [0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+                                                       [0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                                                       [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]];
+                            */
 
-                                fx.push(r((TF[0][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
-                                        + (TF[0][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
-                                        + (TF[0][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
-                                        + (TF[0][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
-                                        + (TF[0][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
-                                        + (TF[0][5] * (((ft[5] as f64) * SCALE) - BIAS[5]))));
-                                fy.push(r((TF[1][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
-                                        + (TF[1][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
-                                        + (TF[1][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
-                                        + (TF[1][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
-                                        + (TF[1][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
-                                        + (TF[1][5] * (((ft[5] as f64) * SCALE) - BIAS[5]))));
-                                fz.push(r((TF[2][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
-                                        + (TF[2][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
-                                        + (TF[2][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
-                                        + (TF[2][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
-                                        + (TF[2][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
-                                        + (TF[2][5] * (((ft[5] as f64) * SCALE) - BIAS[5]))));
-                                /*
-                                tx[i] = r!((TF[3][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
-                                         + (TF[3][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
-                                         + (TF[3][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
-                                         + (TF[3][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
-                                         + (TF[3][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
-                                         + (TF[3][5] * (((ft[5] as f64) * SCALE) - BIAS[5])));
-                                ty[i] = r!((TF[4][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
-                                         + (TF[4][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
-                                         + (TF[4][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
-                                         + (TF[4][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
-                                         + (TF[4][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
-                                         + (TF[4][5] * (((ft[5] as f64) * SCALE) - BIAS[5])));
-                                tz[i] = r!((TF[5][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
-                                         + (TF[5][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
-                                         + (TF[5][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
-                                         + (TF[5][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
-                                         + (TF[5][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
-                                         + (TF[5][5] * (((ft[5] as f64) * SCALE) - BIAS[5])));
-                                         */
-                            }
+                            fx.push(r((TF[0][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
+                                    + (TF[0][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
+                                    + (TF[0][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
+                                    + (TF[0][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
+                                    + (TF[0][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
+                                    + (TF[0][5] * (((ft[5] as f64) * SCALE) - BIAS[5]))));
+                            fy.push(r((TF[1][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
+                                    + (TF[1][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
+                                    + (TF[1][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
+                                    + (TF[1][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
+                                    + (TF[1][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
+                                    + (TF[1][5] * (((ft[5] as f64) * SCALE) - BIAS[5]))));
+                            fz.push(r((TF[2][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
+                                    + (TF[2][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
+                                    + (TF[2][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
+                                    + (TF[2][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
+                                    + (TF[2][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
+                                    + (TF[2][5] * (((ft[5] as f64) * SCALE) - BIAS[5]))));
+                            /*
+                            tx[i] = r!((TF[3][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
+                                     + (TF[3][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
+                                     + (TF[3][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
+                                     + (TF[3][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
+                                     + (TF[3][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
+                                     + (TF[3][5] * (((ft[5] as f64) * SCALE) - BIAS[5])));
+                            ty[i] = r!((TF[4][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
+                                     + (TF[4][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
+                                     + (TF[4][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
+                                     + (TF[4][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
+                                     + (TF[4][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
+                                     + (TF[4][5] * (((ft[5] as f64) * SCALE) - BIAS[5])));
+                            tz[i] = r!((TF[5][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
+                                     + (TF[5][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
+                                     + (TF[5][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
+                                     + (TF[5][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
+                                     + (TF[5][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
+                                     + (TF[5][5] * (((ft[5] as f64) * SCALE) - BIAS[5])));
+                                     */
                         }
 
                         /*
@@ -527,7 +507,8 @@ group_attr!{
                         */
 
                         #[derive(Serialize)] struct Data<'a> { t: &'a [i32], fx: &'a [i32], fy: &'a [i32], fz: &'a [i32], a: &'a [i32] }
-                        sender.send(CmdFrom::Data(format!("send kick teensy {} {}", idx, serde_json::to_string(&Data { t: &t, fx: &fx, fy: &fy, fz: &fz, a: &a }).unwrap()))).unwrap();
+                        let id_str = if let Some(id) = id { format!(" {}", id) } else { String::new() };
+                        sender.send(CmdFrom::Data(format!("send{} kick teensy {} {}", id_str, idx, serde_json::to_string(&Data { t: &t, fx: &fx, fy: &fy, fz: &fz, a: &a }).unwrap()))).unwrap();
                         idx += 1;
                     })
                 }
@@ -583,9 +564,9 @@ group_attr!{
                         };
 
                         match cmd.as_ref().map(|s| s as &str) {
-                            Some("kick") => {
+                            Some(s) if s.starts_with("kick") => {
                                 println!("Teensy: transmitting plot");
-                                self.png.send((self.tx.clone(), self.buf.clone())).unwrap();
+                                self.png.send((self.tx.clone(), self.buf.clone(), s.split(' ').skip(1).next().map(|s| s.parse().unwrap()))).unwrap();
                             }
                             Some("metermaid") => {
                                 self.tx.send(CmdFrom::Data(format!("send status {:?}", ParkState::metermaid()))).unwrap();

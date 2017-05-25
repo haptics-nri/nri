@@ -35,7 +35,7 @@ group_attr!{
     use ll::Device;
     use ll::settings::*;
 
-    type PngStuff = (usize, Vec<u8>, (usize, usize), ColorType);
+    type PngStuff = (usize, Vec<u8>, (usize, usize), ColorType, Option<usize>);
 
     /// Controllable struct for the camera
     pub struct Bluefox {
@@ -122,7 +122,7 @@ group_attr!{
                     start: time::now(),
 
                     png: RestartableThread::new("Bluefox PNG thread",
-                                                move |(i, unencoded, (h, w), bd)| {
+                                                move |(i, unencoded, (h, w), bd, id)| {
                         let mut encoded = Vec::with_capacity(w*h);
                         let to_resize = prof!("imagebuffer",
                                               ImageBuffer::<image::Rgb<u8>, _>::from_raw(w as u32,
@@ -142,14 +142,15 @@ group_attr!{
 
                         prof!("encode",
                               PNGEncoder::new(&mut encoded).encode(&resized, ww, hh, bd).unwrap());
+                        let id_str = if let Some(id) = id { format!(" {}", id) } else { String::new() };
                         prof!("send",
                               mtx
                                 .lock()
                                 .unwrap()
                                 .send(
                                     CmdFrom::Data(
-                                        format!("send kick bluefox {} data:image/png;base64,{}",
-                                                i,
+                                        format!("send{} kick bluefox {} data:image/png;base64,{}",
+                                                id_str, i,
                                                 prof!("base64",
                                                       encoded.to_base64(base64::STANDARD)))))
                                 .unwrap());
@@ -202,7 +203,7 @@ group_attr!{
                 }
 
                 match data.as_ref().map(|s| s as &str) {
-                    Some("kick") => {
+                    Some(s) if s.starts_with("kick") => {
                         //self.device.set_reverse_x(!self.device.get_reverse_x().unwrap());
                         //self.device.set_reverse_y(!self.device.get_reverse_y().unwrap());
                         println!("buf = {:?}", image.buf);
@@ -210,7 +211,8 @@ group_attr!{
                               self.png.send((self.i,
                                              image.data().into(),
                                              image.size(),
-                                             ColorType::RGB(8)))
+                                             ColorType::RGB(8),
+                                             s.split(' ').skip(1).next().map(|s| s.parse().unwrap())))
                               .unwrap())
                     },
                     _ => {}

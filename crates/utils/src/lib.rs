@@ -10,6 +10,18 @@ use std::path::{Path, PathBuf};
 use std::ops::{self, Deref, Add};
 use std::sync::{mpsc, RwLock, Mutex};
 
+pub mod prelude {
+    pub use super::config;
+    pub use super::DurationExt;
+    
+    pub use super::Pod;
+    pub use super::AsVecOf;
+    pub use super::AsSliceOfExt;
+    pub use super::AsMutSliceOfExt;
+
+    pub use super::SliceExt;
+}
+
 pub mod config;
 
 pub fn in_original_dir<F: FnOnce() -> R, R>(f: F) -> io::Result<R> {
@@ -358,5 +370,18 @@ impl<T> SliceExt<T> for [T] {
             self[i] = f(self[i]);
         }
     }
+}
+
+#[macro_export]
+macro_rules! join {
+    ($iter:expr, $sep:expr) => {
+        $iter.collect::<Vec<_>>().join($sep)
+    };
+    ($prefix:expr => $iter:expr, $sep:expr) => {
+        join!(::std::iter::once($prefix).chain($iter), $sep)
+    };
+    ($prefix:expr => $iter:expr => $suffix:expr, $sep:expr) => {
+        join!(::std::iter::once($prefix).chain($iter).chain(::std::iter::once($suffix)), $sep)
+    };
 }
 

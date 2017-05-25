@@ -75,7 +75,7 @@ group_attr!{
 
     mod wrapper;
 
-    type PngStuff = (Sender<CmdFrom>, Vec<Packet>);
+    type PngStuff = (Sender<CmdFrom>, Vec<Packet>, Option<usize>);
 
     pub struct Optoforce {
         tx: Sender<CmdFrom>,
@@ -127,7 +127,7 @@ group_attr!{
                     file: Writer::with_file("optoforce.dat"),
                     start: time::now(),
                     buf: Vec::with_capacity(BUF_LEN),
-                    png: RestartableThread::new("Optoforce PNG thread", move |(tx, vec): PngStuff| {
+                    png: RestartableThread::new("Optoforce PNG thread", move |(tx, vec, id): PngStuff| {
                         // process data
                         let len = vec.len();
                         let mut t  = vec![0; len];
@@ -169,7 +169,8 @@ group_attr!{
                         tx.send(CmdFrom::Data(format!("send kick optoforce {} data:image/png;base64,{}", idx, data.to_base64(base64::STANDARD)))).unwrap();
                         */
 
-                        tx.send(CmdFrom::Data(format!("send kick optoforce {} {}", idx, serde_json::to_string(&Data { t: &t, fx: &fx, fy: &fy, fz: &fz }).unwrap()))).unwrap();
+                        let id_str = if let Some(id) = id { format!(" {}", id) } else { String::new() };
+                        tx.send(CmdFrom::Data(format!("send{} kick optoforce {} {}", id_str, idx, serde_json::to_string(&Data { t: &t, fx: &fx, fy: &fy, fz: &fz }).unwrap()))).unwrap();
                         idx += 1;
                     })
                 }
@@ -182,9 +183,9 @@ group_attr!{
                 };
 
                 match cmd.as_ref().map(|s| s as &str) {
-                    Some("kick") => {
+                    Some(s) if s.starts_with("kick") => {
                         println!("Opto: transmitting plot");
-                        self.png.send((self.tx.clone(), self.buf.clone())).unwrap();
+                        self.png.send((self.tx.clone(), self.buf.clone(), s.split(' ').skip(1).next().map(|s| s.parse().unwrap()))).unwrap();
                     }
                     _ => {}
                 }
