@@ -248,7 +248,7 @@ function really_start_demo(endeff) {
                 DEMO_ACTIONS.push(DEMO_ACTIONS.shift());
             }
         }
-        setInterval(kick, 5);
+        setInterval(kick, 50);
 
         schedule();
     }
