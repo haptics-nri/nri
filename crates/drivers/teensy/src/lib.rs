@@ -444,12 +444,12 @@ group_attr!{
                                   + (TF[1][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
                                   + (TF[1][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
                                   + (TF[1][5] * (((ft[5] as f64) * SCALE) - BIAS[5])));
-                            fz.push(TF[2][0] * (((ft[0] as f64) * SCALE) - BIAS[0])
+                            fz.push((TF[2][0] * (((ft[0] as f64) * SCALE) - BIAS[0])
                                   + (TF[2][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
                                   + (TF[2][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
                                   + (TF[2][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
                                   + (TF[2][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
-                                  + (TF[2][5] * (((ft[5] as f64) * SCALE) - BIAS[5])));
+                                  + (TF[2][5] * (((ft[5] as f64) * SCALE) - BIAS[5]))));
 
                             // look for spikes
                             // j-3 j-2 j-1 j
