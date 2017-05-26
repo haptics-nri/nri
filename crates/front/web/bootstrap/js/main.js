@@ -22,6 +22,9 @@ function handle_rpc(data) {
                         function () {
                             $("#abort").click();
                         });
+                if (DEMO) {
+                    stop_demo();
+                }
                 break;
             case "prompt":
                 prompt(data.slice(data.indexOf(" ")),
@@ -239,7 +242,9 @@ function really_start_demo(endeff) {
                 var sock = DEMO_ACTIONS[0][1];
                 LAST_KICK[sensor] = new Date();
                 console.log("DEMO KICK " + sensor);
-                send("kick " + sensor + " " + window.wsids[sock]);
+                if (typeof window.wsids[sock] != "undefined") {
+                    send("kick " + sensor + " " + window.wsids[sock]);
+                }
                 DEMO_ACTIONS.push(DEMO_ACTIONS.shift());
             }
         }
@@ -473,7 +478,7 @@ window.socket.onmessage = function (event) {
                             for (var k in SENSOR_DATA[sensor]) {
                                 if (k != 't' && SENSOR_MEANS[sensor][k] == 0) {
                                     SENSOR_MEANS[sensor][k] = average(SENSOR_DATA[sensor][k], SENSOR_DATA[sensor][k].length/2);
-                                    SENSOR_RANGES[sensor] = Math.max(SENSOR_RANGES[sensor], SENSOR_DATA[sensor][k].map(Math.abs).reduce((a, b) => a > b ? a : b) / 4);
+                                    SENSOR_RANGES[sensor] = Math.max(SENSOR_RANGES[sensor], SENSOR_DATA[sensor][k].slice(SENSOR_DATA[sensor][k].length/2).map(Math.abs).reduce((a, b) => a > b ? a : b) / 4);
                                 }
                                 SENSOR_DATA[sensor][k]  = SENSOR_DATA[sensor][k].slice(start_idx);
                             }
@@ -565,6 +570,9 @@ window.socket.onmessage = function (event) {
             serv = words[1];
             $("#light-" + serv).css("background-color", "blue");
             alert("The " + serv + " thread crashed! (" + words.slice(2).join(" ") + ")\n\nIf it was running, you may want to click Start again.");
+            if (DEMO) {
+                stop_demo();
+            }
             break;
         case "flow":
             $("#flows").html(event.data.slice(event.data.indexOf(" ")));
