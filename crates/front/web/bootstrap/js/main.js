@@ -226,8 +226,11 @@ function really_start_demo(endeff) {
                 LAST_KICK['biotac'] = [];
                 break;
         }
-        
-        DEMO_ACTIONS = [['optoforce', 3]];
+        if (endeff == "Some(Stick)") {
+            $('#teensy-cell').css({ width: '80%', left: '10%' });
+        } else {
+            $('#teensy-cell').css({ width: '40%', left: '7%' });
+        }
 
         // get frames
         function kick() {
@@ -443,25 +446,9 @@ window.socket.onmessage = function (event) {
                 $("." + sensor + ".latest").each(function() {
                     var data = JSON.parse(payload);
 
-                    // unround
                     for (var k in data) {
+                        // unround
                         data[k] = data[k].map(x => x / 1000);
-
-                        // look for spikes
-                        var mean = average(data[k]);
-                        var std = standev(data[k]);
-                        for (var i = 0; i < data[k].length; i++) {
-                            if (Math.abs(data[k][i] - mean) > 20*std) {
-                                console.log(sensor + " " + k + " SPIKE DETECTED AT " + i);
-                                data[k][i] = data[k][i-1];
-                                for (var kk in data) {
-                                    if (kk == 't') continue;
-                                    if (kk == k) continue;
-                                    data[kk][i] = data[kk][i-1];
-                                }
-                            }
-                        }
-
                     }
 
                     // merge with the data we have

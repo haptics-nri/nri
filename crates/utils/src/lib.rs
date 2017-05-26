@@ -385,3 +385,15 @@ macro_rules! join {
     };
 }
 
+#[macro_export]
+macro_rules! foreach {
+    ($dol:tt $var:tt => [$($val:ident),*] { $($body:tt)* }) => {{
+        macro_rules! __foreach {
+            ($dol $var:ident) => {
+                $($body)*
+            }
+        }
+        $(__foreach!($val);)*
+    }}
+}
+

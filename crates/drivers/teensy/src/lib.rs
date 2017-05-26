@@ -371,22 +371,18 @@ group_attr!{
 
                         // process data
                         let len = vec.len();
-                        let mut t  = Vec::<i32>::with_capacity(len/decimate);
-                        let mut fx = Vec::<i32>::with_capacity(len/decimate);
-                        let mut fy = Vec::<i32>::with_capacity(len/decimate);
-                        let mut fz = Vec::<i32>::with_capacity(len/decimate);
+                        let mut t  = Vec::with_capacity(len/decimate);
+                        let mut fx = Vec::with_capacity(len/decimate);
+                        let mut fy = Vec::with_capacity(len/decimate);
+                        let mut fz = Vec::with_capacity(len/decimate);
                         //let mut tx = vec![0; len];
                         //let mut ty = vec![0; len];
                         //let mut tz = vec![0; len];
-                        let mut a  = Vec::<i32>::with_capacity(len/decimate);
-
-                        fn r(f: f64) -> i32 {
-                            (f * 1000.0) as i32
-                        }
+                        let mut a  = Vec::with_capacity(len/decimate);
 
                         for i in utils::step(0..len, decimate) {
                             let diff = (vec[i].stamp - start).to_std().unwrap();
-                            t.push(r(diff.as_secs() as f64 + (diff.subsec_nanos() as f64 / 1.0e9)));
+                            t.push(diff.as_secs() as f64 + (diff.subsec_nanos() as f64 / 1.0e9));
                             let mut ft = [(((vec[i].ft[0]  as u32) << 8) + (vec[i].ft[1]  as u32)) as i32,
                                           (((vec[i].ft[2]  as u32) << 8) + (vec[i].ft[3]  as u32)) as i32,
                                           (((vec[i].ft[4]  as u32) << 8) + (vec[i].ft[5]  as u32)) as i32,
@@ -403,7 +399,7 @@ group_attr!{
                             aa += (((((vec[i].ft[22] as u32) << 8) + (vec[i].ft[23] as u32)) as i32) - 2048) as f64;
                             aa += (((((vec[i].ft[24] as u32) << 8) + (vec[i].ft[25] as u32)) as i32) - 2048) as f64;
 
-                            a.push(r(aa / 4096.0 * 16.0 * 9.81 / 3.0));
+                            a.push(aa / 4096.0 * 16.0 * 9.81 / 3.0);
                             // proton mini40
                             const BIAS: [f64; 6] = [-0.1884383674, 0.2850118688, -0.180718143, -0.191009933, 0.3639300747, -0.4307167708];
                             const TF: [[f64; 6]; 6] = [[0.00679, 0.01658, -0.04923, 6.20566, 0.15882, -6.19201],
@@ -436,44 +432,38 @@ group_attr!{
                                                        [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]];
                             */
 
-                            fx.push(r((TF[0][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
-                                    + (TF[0][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
-                                    + (TF[0][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
-                                    + (TF[0][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
-                                    + (TF[0][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
-                                    + (TF[0][5] * (((ft[5] as f64) * SCALE) - BIAS[5]))));
-                            fy.push(r((TF[1][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
-                                    + (TF[1][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
-                                    + (TF[1][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
-                                    + (TF[1][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
-                                    + (TF[1][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
-                                    + (TF[1][5] * (((ft[5] as f64) * SCALE) - BIAS[5]))));
-                            fz.push(r((TF[2][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
-                                    + (TF[2][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
-                                    + (TF[2][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
-                                    + (TF[2][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
-                                    + (TF[2][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
-                                    + (TF[2][5] * (((ft[5] as f64) * SCALE) - BIAS[5]))));
-                            /*
-                            tx[i] = r!((TF[3][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
-                                     + (TF[3][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
-                                     + (TF[3][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
-                                     + (TF[3][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
-                                     + (TF[3][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
-                                     + (TF[3][5] * (((ft[5] as f64) * SCALE) - BIAS[5])));
-                            ty[i] = r!((TF[4][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
-                                     + (TF[4][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
-                                     + (TF[4][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
-                                     + (TF[4][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
-                                     + (TF[4][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
-                                     + (TF[4][5] * (((ft[5] as f64) * SCALE) - BIAS[5])));
-                            tz[i] = r!((TF[5][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
-                                     + (TF[5][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
-                                     + (TF[5][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
-                                     + (TF[5][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
-                                     + (TF[5][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
-                                     + (TF[5][5] * (((ft[5] as f64) * SCALE) - BIAS[5])));
-                                     */
+                            fx.push((TF[0][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
+                                  + (TF[0][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
+                                  + (TF[0][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
+                                  + (TF[0][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
+                                  + (TF[0][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
+                                  + (TF[0][5] * (((ft[5] as f64) * SCALE) - BIAS[5])));
+                            fy.push((TF[1][0] * (((ft[0] as f64) * SCALE) - BIAS[0]))
+                                  + (TF[1][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
+                                  + (TF[1][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
+                                  + (TF[1][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
+                                  + (TF[1][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
+                                  + (TF[1][5] * (((ft[5] as f64) * SCALE) - BIAS[5])));
+                            fz.push(TF[2][0] * (((ft[0] as f64) * SCALE) - BIAS[0])
+                                  + (TF[2][1] * (((ft[1] as f64) * SCALE) - BIAS[1]))
+                                  + (TF[2][2] * (((ft[2] as f64) * SCALE) - BIAS[2]))
+                                  + (TF[2][3] * (((ft[3] as f64) * SCALE) - BIAS[3]))
+                                  + (TF[2][4] * (((ft[4] as f64) * SCALE) - BIAS[4]))
+                                  + (TF[2][5] * (((ft[5] as f64) * SCALE) - BIAS[5])));
+
+                            // look for spikes
+                            // j-3 j-2 j-1 j
+                            //     |
+                            //     ^ checking for spike here
+                            if i > decimate*3 {
+                                let j = a.len() - 1;
+                                foreach!($v => [a, fx, fy, fz] {
+                                    if ($v[j-2] - $v[j-3]).abs() - ($v[j] - $v[j-3]).abs() > 1.0 {
+                                        println!("TEENSY: repairing spike at {} ({}={:?})", t[j], stringify!($v), &$v[j-3..j+1]);
+                                        $v[j-2] = $v[j-3];
+                                    }
+                                });
+                            }
                         }
 
                         /*
@@ -508,7 +498,7 @@ group_attr!{
 
                         #[derive(Serialize)] struct Data<'a> { t: &'a [i32], fx: &'a [i32], fy: &'a [i32], fz: &'a [i32], a: &'a [i32] }
                         let id_str = if let Some(id) = id { format!(" {}", id) } else { String::new() };
-                        sender.send(CmdFrom::Data(format!("send{} kick teensy {} {}", id_str, idx, serde_json::to_string(&Data { t: &t, fx: &fx, fy: &fy, fz: &fz, a: &a }).unwrap()))).unwrap();
+                        sender.send(CmdFrom::Data(format!("send{} kick teensy {} {}", id_str, idx, serde_json::to_string(&Data { t: &t.iter().map(|&f| (f * 1000.0) as i32).collect::<Vec<_>>(), fx: &fx.iter().map(|&f| (f * 1000.0) as i32).collect::<Vec<_>>(), fy: &fy.iter().map(|&f| (f * 1000.0) as i32).collect::<Vec<_>>(), fz: &fz.iter().map(|&f| (f * 1000.0) as i32).collect::<Vec<_>>(), a: &a.iter().map(|&f| (f * 1000.0) as i32).collect::<Vec<_>>() }).unwrap()))).unwrap();
                         idx += 1;
                     })
                 }
