@@ -16,3 +16,6 @@
 [submodule "hprof"]
 	path = overrides/hprof
 	url = git@github.com:cmr/hprof
+[submodule "overrides/urlencoded"]
+	path = overrides/urlencoded
+	url = git@github.com:haptics-nri/urlencoded
