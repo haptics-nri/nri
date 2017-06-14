@@ -12,7 +12,7 @@
 	url = git@github.com:haptics-nri/liboptoforce
 [submodule "remake"]
 	path = crates/drivers/optoforce/remake
-	url = git@github.com:kralf/remake
+	url = git@github.com:haptics-nri/remake
 [submodule "hprof"]
 	path = overrides/hprof
 	url = git@github.com:cmr/hprof
