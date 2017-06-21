@@ -5,7 +5,7 @@ LDFLAGS = -loptoforce
 
 all: liboptoforce_adapter.so
 
-liboptoforce_adapter.so: adapter.cpp
+liboptoforce_adapter.so: adapter.cpp liboptoforce/build/src/lib/optoforce/liboptoforce.so
 	cp liboptoforce/build/src/lib/optoforce/liboptoforce.so .
 	g++ -shared -fPIC -std=c++11 -o $@ $^ $(CXXFLAGS) $(LDFLAGS)
 
