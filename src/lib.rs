@@ -3,6 +3,8 @@ extern crate lodepng;
 extern crate libc;
 extern crate hprof;
 extern crate num_cpus;
+extern crate indicatif;
+#[macro_use] extern crate closet;
 
 use std::{env, fs, process, mem, ptr, thread};
 use std::io::{self, Read, Write};
@@ -12,8 +14,16 @@ use std::sync::{mpsc, Arc};
 use std::path::{Path, PathBuf};
 use std::str;
 use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT};
-use self::lodepng::{encode_file, ColorType};
-use self::hprof::Profiler;
+use lodepng::{encode_file, ColorType};
+use hprof::Profiler;
+pub use indicatif::{ProgressBar, ProgressStyle, MultiProgress};
+
+/// Single, multiple or no progress bar(s)
+pub enum Bar {
+    Multi(&'static str, Arc<MultiProgress>),
+    Single,
+    None
+}
 
 /// Verbosity
 ///
@@ -155,7 +165,7 @@ pub fn parse_out_arg<I>(args: &mut I) -> String
     args.next().unwrap()
 }
 
-pub fn do_binary<Data: Debug>(header: &str, (inname, outname): (String, Option<String>)) -> Vec<Data> {
+pub fn do_binary<Data: Debug>(header: &str, bars: Bar, (inname, outname): (String, Option<String>)) -> Vec<Data> {
     indentln!("packet size {}", mem::size_of::<Data>());
 
     // open files
@@ -170,27 +180,38 @@ pub fn do_binary<Data: Debug>(header: &str, (inname, outname): (String, Option<S
     attempt!(infile.read_to_end(&mut vec));
     indentln!("file size = {} ({} packets)", vec.len(), vec.len() as f64 / mem::size_of::<Data>() as f64);
 
+    let chunks = vec.chunks(mem::size_of::<Data>());
+    let bar = ProgressBar::new(chunks.len() as u64);
+    bar.set_style(ProgressStyle::default_bar().template("[{elapsed_precise}] {bar:80.cyan/blue} {pos:>7}/{len:7} {msg}").progress_chars("##-"));
+    let bar = match bars {
+        Bar::Multi(label, ref bars) => { let bar = bars.add(bar); bar.set_message(label); Some(bar) },
+        Bar::Single => Some(bar),
+        Bar::None => None
+    };
     let mut i = 0;
-    let datums = vec
-        .chunks(mem::size_of::<Data>())
-        .map(|chunk: &[u8]| {
-            i += 1;
-            let mut data: Data = unsafe { mem::uninitialized() };
-            unsafe {
-                ptr::copy(chunk.as_ptr(), &mut data as *mut _ as *mut _, mem::size_of_val(&data));
-            }
-            outfile.as_mut().map(|ref mut f| attempt!(writeln!(f, "{:?}", data)));
-            data
-        })
-        .collect();
+    let datums = chunks.map(|chunk: &[u8]| {
+        i += 1;
+        if let Some(ref bar) = bar { if i % 100 == 0 { bar.inc(100); } }
+        let mut data: Data = unsafe { mem::uninitialized() };
+        unsafe {
+            ptr::copy(chunk.as_ptr(), &mut data as *mut _ as *mut _, mem::size_of_val(&data));
+        }
+        outfile.as_mut().map(|ref mut f| attempt!(writeln!(f, "{:?}", data)));
+        data
+    }).collect::<Vec<_>>();
 
-    indentln!("translated {} packets", i);
+    match bars {
+        Bar::Multi(..) => bar.unwrap().finish(),
+        Bar::Single => bar.unwrap().finish_and_clear(),
+        Bar::None => {}
+    }
+    indentln!("translated {} packets", datums.len());
     datums
 }
 
 pub fn read_binary<Data: Debug>(header: &str) -> Vec<Data> {
     let (inname, outname) = parse_inout_args(&mut env::args());
-    do_binary::<Data>(header, (inname, Some(outname)))
+    do_binary::<Data>(header, Bar::Single, (inname, Some(outname)))
 }
 
 pub trait Pixels<T> {
@@ -207,24 +228,29 @@ pub fn do_camera<T: Copy, Data: Debug + Pixels<T>, F: for<'a> Fn(String, C, &'a 
     let mut csvwtr = csv::Writer::from_memory();
     attempt!(csvwtr.encode(("Frame number", "Filename", "Unix timestamp")));
 
+    let records = csvrdr.decode().collect::<Vec<_>>();
+
     let num_threads = num_cpus::get();
     print!("Creating {} threads...", num_threads);
     let mut threads = vec![];
+    let bar = Arc::new(ProgressBar::new(records.len() as u64));
+    bar.set_style(ProgressStyle::default_bar().template("[{elapsed_precise}] {bar:80.cyan/blue} {pos:>7}/{len:7} {msg}").progress_chars("##-"));
     for i in 0..num_threads {
         print!("{}...", i);
         let (tx, rx) = mpsc::channel::<PathBuf>();
         let name = String::from(name);
         let (func, param) = (func.clone(), param.clone());
         threads.push(Some((
-            thread::spawn(move || {
+            thread::spawn(clone_army!([bar] move || {
                 let prof = Profiler::new(format!("thread #{}", i).leak());
                 for dat_path in rx {
+                    bar.inc(1);
                     let _g = prof.enter("frame");
                     let dat = dat_path.to_str().unwrap().to_string();
                     let png = dat_path.parent().unwrap().join(&name).join(dat_path.file_name().unwrap()).with_extension("png").to_str().unwrap().to_string();
                     let rows = {
                         let _g = prof.enter("do_binary");
-                        do_binary::<Data>("", (dat, None))
+                        do_binary::<Data>("", Bar::None, (dat, None))
                     };
                     let pixels = {
                         let _g = prof.enter("into vec");
@@ -250,7 +276,7 @@ pub fn do_camera<T: Copy, Data: Debug + Pixels<T>, F: for<'a> Fn(String, C, &'a 
                     let _g = s.lock();
                     //prof.print_timing();
                 }
-            }),
+            })),
             tx
         )));
     }
@@ -258,7 +284,7 @@ pub fn do_camera<T: Copy, Data: Debug + Pixels<T>, F: for<'a> Fn(String, C, &'a 
 
     let mut i = 0;
     let mut t = 0;
-    for row in csvrdr.decode() {
+    for row in records {
         let (num, fname, stamp): (usize, String, f64) = row.expect(&format!("failed to parse row {} of {}", i, inname));
         attempt!(csvwtr.encode((num, Path::new(&fname).with_extension("png").to_str().unwrap().to_string(), stamp)));
         i += 1;
@@ -266,13 +292,13 @@ pub fn do_camera<T: Copy, Data: Debug + Pixels<T>, F: for<'a> Fn(String, C, &'a 
         attempt!(threads[t].as_ref().unwrap().1.send(dat_path));
         t = (t + 1) % 4;
     }
-    println!("finished {} frames", i);
 
     for mut thread in threads {
         let present = thread.take().unwrap(); // unwrap the present
         drop(present.1); // drop Sender causing the thread to stop looping
         attempt!(present.0.join()); // now safe to join the thread
     }
+    bar.finish_and_clear();
 
     attempt!(attempt!(File::create(Path::new(&inname).parent().unwrap().join(name).join(Path::new(&inname).file_name().unwrap()))).write_all(csvwtr.as_bytes()));
 
