@@ -181,6 +181,7 @@ group_attr!{
                     stamp: time::get_time(),
                     xyz: self.device.read()
                 };
+                //println!("[OPTO] {:?}", packet.xyz);
 
                 match cmd.as_ref().map(|s| s as &str) {
                     Some(s) if s.starts_with("kick") => {

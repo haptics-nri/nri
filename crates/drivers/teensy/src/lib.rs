@@ -9,9 +9,12 @@
 #[macro_use] extern crate conv;
 #[macro_use] extern crate serde_derive;
 
+extern crate strum;
+#[macro_use] extern crate strum_macros;
+
 macro_attr! {
     /// Which end effector is in use (i.e. not parked)
-    #[derive(Copy, Clone, Eq, PartialEq, Debug, Serialize, TryFrom!(u8))]
+    #[derive(Copy, Clone, Eq, PartialEq, Debug, Serialize, EnumString, TryFrom!(u8))]
     pub enum ParkState {
         /// All end effectors parked
         None = 0,

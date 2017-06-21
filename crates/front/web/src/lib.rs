@@ -26,6 +26,7 @@ extern crate uuid;
 #[macro_use] extern crate serde_derive;
 #[macro_use] extern crate serde_json;
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Mutex, RwLock, mpsc};
 use std::thread::JoinHandle;
@@ -63,7 +64,7 @@ mod middleware;
 /// websocket server and utilities
 mod ws;
 
-use self::flow::{FLOWS, Comms};
+use self::flow::{Flow, FLOWS, Comms};
 
 error_chain! {
     errors {
@@ -118,6 +119,18 @@ lazy_static! {
     });
 }
 
+fn get_flows() -> HashMap<String, Flow> {
+    let flows = FLOWS.read().unwrap();
+    let eff = teensy::ParkState::metermaid().unwrap();
+    flows.iter().filter_map(|(n, f)| {
+        if f.endeffs.is_empty() || f.endeffs.contains(&eff) {
+            Some((n.clone(), f.clone()))
+        } else {
+            None
+        }
+    }).collect()
+}
+
 /// Render a template with the data we always use
 fn render(template: &str, data: JsonValue) -> String {
     TEMPLATES.read().unwrap().render(template, &data).unwrap()
@@ -134,7 +147,7 @@ fn index() -> Box<Handler> {
                                   Service::new("SynTouch BioTac" , "biotac"    , &render("frame_bio", json!({ "sensor": "biotac" }))),
                                   Service::new("Teensy"          , "teensy"    , &render("frame_teensy", json!({ "sensor": "teensy" }))),
                           ],
-                          "flows": &*FLOWS.read().unwrap(),
+                          "flows": get_flows(),
                           "server": format!("{}:{}", req.url.host(), config::WS_PORT)
                       });
 
@@ -265,7 +278,7 @@ fn flow(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
 
                       // next send some WebSocket updates (retry logic to increase reliability)
                       let data = json!({
-                          "flows": &*FLOWS.read().unwrap()
+                          "flows": get_flows()
                       });
                       utils::retry(Some("[web] send flow info to client"), 10, Duration::milliseconds(500),
                           || {

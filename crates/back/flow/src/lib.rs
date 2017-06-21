@@ -129,6 +129,7 @@ impl<'a> fmt::Display for StampPrinter<'a> {
 pub struct Flow {
     /// Name of the flow
     pub name: String, pub shortname: String,
+    pub endeffs: Vec<ParkState>,
     /// States in the flow
     states: Vec<FlowState>,
     /// Is this the active flow?
@@ -145,8 +146,25 @@ pub struct Flow {
     file: Option<File>,
 }
 
+impl Clone for Flow {
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name.clone(), shortname: self.shortname.clone(),
+            endeffs: self.endeffs.clone(),
+            states: self.states.clone(),
+            active: self.active,
+            almostdone: self.almostdone,
+            stamp: self.stamp.clone(),
+            original_dir: self.original_dir.clone(),
+            episode_dir: self.episode_dir.clone(),
+            id: self.id.clone(),
+            file: None,
+        }
+    }
+}
+
 /// One state in a data collection flow
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub struct FlowState {
     /// Name of the flow state
     name: String,
@@ -160,7 +178,7 @@ pub struct FlowState {
 }
 
 /// Different actions that a flow can perform at each state
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub enum FlowCmd {
     Message(String),
     Str {
@@ -179,13 +197,8 @@ pub enum FlowCmd {
 }
 
 impl Flow {
-    pub fn new(name: String, shortname: String, states: Vec<FlowState>) -> Flow {
-        Flow {
-            name: name,
-            shortname: shortname,
-            states: states,
-            .. Flow::default()
-        }
+    pub fn new(name: String, shortname: String, endeffs: Vec<ParkState>, states: Vec<FlowState>) -> Flow {
+        Flow { name, shortname, endeffs, states, .. Flow::default() }
     }
     
     pub fn abort<C: Comms>(&mut self, tx: &mpsc::Sender<CmdFrom>, comms: C) -> Result<()> {
@@ -331,7 +344,13 @@ impl Flow {
                              .map(|s| s.trim_right().to_owned())
                              .peekable();
                           
-        let name = lines.find(|s| !s.is_empty()).ok_or(ParseFlow(0, "Empty file"))?;
+        let header = lines.find(|s| !s.is_empty()).ok_or(ParseFlow(0, "Empty file"))?;
+        let header = header.split(":").collect::<Vec<_>>();
+        let (name, endeffs) = match header.len() {
+            1 => (header[0].trim().to_owned(), vec![]),
+            2 => (header[0].trim().to_owned(), header[1].trim().split(",").map(|s| s.trim().parse()).collect::<StdResult<Vec<_>, _>>().chain_err(|| ParseFlow(0, "invalid end-effector specifier"))?),
+            _ => Err(ParseFlow(0, "bad header"))?
+        };
         let mut states = vec![];
         
         let mut i = 0;
@@ -424,7 +443,7 @@ impl Flow {
             states.push(FlowState::new(name, park, script));
         }
         
-        Ok(Flow::new(name, shortname, states))
+        Ok(Flow::new(name, shortname, endeffs, states))
     }
 
 }

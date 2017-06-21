@@ -1061,8 +1061,22 @@ version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "strum"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
 name = "strum_macros"
 version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "quote 0.3.15 (registry+https://github.com/rust-lang/crates.io-index)",
+ "syn 0.11.11 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "quote 0.3.15 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1102,6 +1116,8 @@ dependencies = [
  "serde_derive 0.9.15 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 0.9.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "serial 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "strum 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "strum_macros 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "time 0.1.37 (registry+https://github.com/rust-lang/crates.io-index)",
  "unborrow 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "utils 0.1.0",
@@ -1495,7 +1511,9 @@ dependencies = [
 "checksum slab 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)" = "d807fd58c4181bbabed77cb3b891ba9748241a552bcc5be698faaebefc54f46e"
 "checksum staticfile 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "31493480e073d52522a94cdf56269dd8eb05f99549effd1826b0271690608878"
 "checksum strum 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "6c613d76f7673dc3d8a8d3da6aa7f3788ee7de7ca03850c309cf1b1d71bf7268"
+"checksum strum 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)" = "7cc92123e54d309f0124e8feb474e4819127511585a927d3c642da61f97433d2"
 "checksum strum_macros 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "1eb67cf6a433aaa911a63f3a68091c3cb9e0630fef5e7a724fb40c213fc1137c"
+"checksum strum_macros 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)" = "59f8524bec2b5fe01bc18108b43ea0d18ddbc48069e0bd3fed4f2b3851f764a7"
 "checksum syn 0.11.11 (registry+https://github.com/rust-lang/crates.io-index)" = "d3b891b9015c88c576343b9b3e41c2c11a51c219ef067b264bd9c8aa9b441dad"
 "checksum synom 0.11.3 (registry+https://github.com/rust-lang/crates.io-index)" = "a393066ed9010ebaed60b9eafa373d4b1baac186dd7e008555b0f702b51945b6"
 "checksum termios 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "d5d9cf598a6d7ce700a4e6a9199da127e6819a61e64b68609683cc9a01b5683a"

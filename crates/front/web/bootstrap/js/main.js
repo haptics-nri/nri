@@ -547,7 +547,7 @@ window.socket.onmessage = function (event) {
                         var means = {};
                         for (var k in data) {
                             if (k != 't') {
-                                means[k] = average(data[k]) - SENSOR_MEANS[sensor][k];
+                                means[k] = average(data[k].slice(data[k].length/2)) - SENSOR_MEANS[sensor][k];
                             }
                         }
                         $('#biotac-top').attr('opacity',    0.5 - means.et/100);
