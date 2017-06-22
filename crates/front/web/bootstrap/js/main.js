@@ -59,9 +59,17 @@ function confirm(text, thenyes, thenno, thencancel) {
     $("#confirm #cancel").unbind('click.confirm').bind('click.confirm', thencancel);
     $("#confirm").modal("show");
 }
+
+COMPLETES = {};
 function prompt(text, thenok, thencancel) {
     thenok = thenok || function (s) { console.log("prompt modal dismissed by clicking OK, contents \"" + s + "\""); };
     thencancel = thencancel || function () { console.log("prompt modal cancelled"); };
+
+    function thenok_wrap(s) {
+        COMPLETES[text] = COMPLETES[text] || [];
+        COMPLETES[text].push(s);
+        return thenok(s);
+    }
 
     $("#prompt #text").html(text);
     $("#prompt #input").val("");
@@ -70,7 +78,9 @@ function prompt(text, thenok, thencancel) {
     } else {
         $("#prompt #input").attr("type", "text");
     }
-    $("#prompt #ok").unbind('click.prompt').bind('click.prompt', function () { thenok($("#prompt #input").val()); });
+    $("#prompt #input").autocomplete({ source: COMPLETES[text] || [] });
+    $(".ui-autocomplete").css("z-index", "10000000");
+    $("#prompt #ok").unbind('click.prompt').bind('click.prompt', function () { thenok_wrap($("#prompt #input").val()); });
     $("#prompt #cancel").unbind('click.prompt').bind('click.prompt', thencancel);
     $("#prompt").modal({ show: true, backdrop: "static" });
 }
