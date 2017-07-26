@@ -7,6 +7,8 @@ echo "NRI SUPERVISOR"
 echo ""
 
 if systemctl is-enabled -q network-manager; then
+    sudo create_ap --fix-unmanaged
+    sudo nmcli c u id AirPennNet
     while true; do
         echo "pinging $SERVER..."
         curl -s --data 'pw=proton' "$SERVER"
