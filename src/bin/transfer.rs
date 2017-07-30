@@ -1,5 +1,7 @@
 #[macro_use] extern crate clap;
+extern crate errno;
 #[macro_use] extern crate error_chain;
+extern crate indicatif;
 extern crate glob;
 extern crate regex;
 extern crate ssh2;
@@ -8,7 +10,7 @@ extern crate libc;
 extern crate nri;
 #[macro_use] extern crate closet;
 
-use std::{cmp, fmt, fs, mem, thread};
+use std::{fs, mem, thread};
 use std::ffi::CString;
 use std::io::{self, BufRead, BufReader};
 use std::net::TcpStream;
@@ -18,11 +20,15 @@ use std::process::{Command, Stdio, ExitStatus};
 use std::sync::Arc;
 use std::sync::atomic::{self, AtomicBool};
 
+use errno::errno;
+use indicatif::HumanBytes as Bytes;
 use regex::Regex;
 use ssh2::{Session, Sftp};
 
 use nri::{MultiProgress, make_bar, make_bar_bytes};
 
+/// Append a bunch of strings to a path
+// FIXME: don't use to_string_lossy
 macro_rules! path {
     ($begin:tt $(/ $component:tt)*) => {
         &[&*$begin.to_string_lossy(), $($component),*].iter().collect::<PathBuf>().to_string_lossy()
@@ -45,6 +51,7 @@ error_chain! {
 }
 use ErrorKind::*;
 
+/// Parameters for making an SSH connection
 #[derive(Clone)]
 struct SshInfo {
     user: String,
@@ -52,8 +59,6 @@ struct SshInfo {
     host: String,
     dir: PathBuf
 }
-
-struct Bytes(u64);
 
 fn main() {
     if let Err(ref e) = try_main() {
@@ -93,7 +98,7 @@ fn try_main() -> Result<()> {
     /* check epdir is a real directory */
     check_dir(&epdir)?;
 
-    /* check that dest is a dir or matches [username[:pw]@]hostname:dir */
+    /* check that dest is a dir or matches username:pw@hostname:dir */
     let scp_regex = Regex::new(r"^(?P<user>[^:]+):(?P<pass>[^@]+)@(?P<host>[^:]+):(?P<dir>.*)$").unwrap();
     let ssh_info = match scp_regex.captures(&dest) {
         Some(captures) => {
@@ -154,11 +159,11 @@ fn try_main() -> Result<()> {
     let size = local_du(&epdir)?;
     let free = ssh_info.clone().map(remote_df).unwrap_or_else(|| local_df(Path::new(&dest)))?;
     println!("{} required, {} free", size, free);
-    if size > free {
+    if size.0 > free.0 {
         bail!("not enough space at destination");
     }
 
-    /* rsync $epdir $dest */
+    /* rsync -avh $epdir $dest (with progress bars!) */
     println!("Rsyncing...");
     let rsync_args = &["-avh"];
     let mut cmd = if let Some(ssh) = ssh_info.clone() {
@@ -176,13 +181,15 @@ fn try_main() -> Result<()> {
            .arg(&dest);
         cmd
     };
-    cmd.stdout(Stdio::piped());
+    cmd.stdout(Stdio::piped()); // capture stdout for the progress bar
     let mut child = cmd.spawn().chain_err(|| Io("run", "rsync".into()))?;
+
     let bars = MultiProgress::new();
-    let num_bar = bars.add(make_bar((flows.len() + pngs.len() + csvs.len()) as u64));
-    let size_bar = bars.add(make_bar_bytes(size.0 as u64));
+    let num_bar = bars.add(make_bar((flows.len() + pngs.len() + csvs.len()) as u64)); // the first progress bar counts files transferred/evaluated
+    let size_bar = bars.add(make_bar_bytes(size.0 as u64)); // the second progress bar measures disk space
     num_bar.set_message("Files");
     size_bar.set_message("Bytes");
+
     let num_progress = thread::spawn(move || -> Result<ExitStatus> {
         num_bar.set_position(0);
         for line in BufReader::new(child.stdout.as_mut().unwrap()).lines() {
@@ -192,16 +199,19 @@ fn try_main() -> Result<()> {
             }
         }
         num_bar.finish();
+
+        // this shouldn't wait at all because the process is definitely done (it closed stdout)
         Ok(child.wait().chain_err(|| Io("wait on", "rsync".into()))?)
     });
-    let rsync_done = Arc::new(AtomicBool::new(false));
+
+    let rsync_done = Arc::new(AtomicBool::new(false)); // signal for telling size progress bar to stop
     let size_progress = thread::spawn(clone_army!([rsync_done, ssh_info] move || -> Result<()> {
         size_bar.set_position(0);
         while !rsync_done.load(atomic::Ordering::SeqCst) {
             size_bar.set_position(ssh_info.clone()
                                           .map(|SshInfo { user, pass, host, dir }| {
                                               let mut dir = PathBuf::from(dir);
-                                              dir.push(epdir.file_name().unwrap());
+                                              dir.push(epdir.file_name().unwrap()); // du -sh $REMOTE_DIR/$(basename $LOCAL_DIR)
                                               remote_du(SshInfo { user, pass, host, dir })
                                           })
                                           .unwrap_or_else(|| local_du(Path::new(&dest)))?.0);
@@ -209,13 +219,17 @@ fn try_main() -> Result<()> {
         size_bar.finish();
         Ok(())
     }));
+
+    // and one thread to bind them
     let progress = thread::spawn(move || -> Result<()> {
         bars.join().chain_err(|| Io("draw", "progress bar".into()))
     });
-    let status = num_progress.join().unwrap()?;
-    rsync_done.store(true, atomic::Ordering::SeqCst);
-    size_progress.join().unwrap()?;
-    progress.join().unwrap()?;
+
+    let status = num_progress.join().unwrap()?; // first thread exits when rsync does
+    rsync_done.store(true, atomic::Ordering::SeqCst); // signal second thread to exit
+    size_progress.join().unwrap()?; // wait until it does (could be in the middle of a du)
+    progress.join().unwrap()?; // progress bar drawer thread should exit right away
+
     if !status.success() {
         bail!("rsync failed");
     }
@@ -224,6 +238,7 @@ fn try_main() -> Result<()> {
     Ok(())
 }
 
+/// Set up an SSH connection
 fn ssh(user: &str, pass: &str, host: &str) -> Result<(TcpStream, Session)> {
     let tcp = TcpStream::connect((host, 22)).chain_err(|| Io("connect to", host.into()))?;
     let mut sess = Session::new().unwrap();
@@ -233,30 +248,35 @@ fn ssh(user: &str, pass: &str, host: &str) -> Result<(TcpStream, Session)> {
     Ok((tcp, sess))
 }
 
+/// Make sure a given local path represents a directory
 fn check_dir<P: AsRef<Path>>(p: P) -> Result<()> {
     let p = p.as_ref();
+    // Path::is_dir doesn't differentiate between an error and a non-directory, so do it separately
     if !fs::metadata(p).chain_err(|| Io("stat", p.into()))?.is_dir() {
         bail!("{} is not a directory", p.display());
     }
     Ok(())
 }
 
+/// Make sure a given remote path represents a directory
 fn check_scp(SshInfo { user, pass, host, dir }: SshInfo) -> Result<()> {
     let (_tcp, sess) = ssh(&user, &pass, &host)?;
 
-    if !sess.sftp()?.stat(Path::new(&dir))?.is_dir() {
+    if !sess.sftp()?.stat(&dir)?.is_dir() {
         bail!("{}@{}:{} is not a directory", user, host, dir.display());
     }
 
     Ok(())
 }
 
+/// Find all files matching a glob and collect them into a Vec of paths
 fn glob(pattern: &str) -> Result<Vec<PathBuf>> {
     glob::glob(pattern)?
         .map(|r| r.map_err(|e| e.into()))
-        .collect::<Result<Vec<_>>>()
+        .collect()
 }
 
+/// Measure the size-on-disk of a local directory
 fn local_du(path: &Path) -> Result<Bytes> {
     Ok(path.read_dir().chain_err(|| Io("list", path.into()))?
            .map(|res| {
@@ -291,6 +311,7 @@ fn local_du(path: &Path) -> Result<Bytes> {
            .fold(Bytes(0), |Bytes(a), Bytes(b)| Bytes(a+b)))
 }
 
+/// Measure the size-on-disk of a remote directory
 fn remote_du(SshInfo { user, pass, host, dir }: SshInfo) -> Result<Bytes> {
     fn subdir(sftp: &Sftp, host: &str, path: &Path) -> Result<Bytes> {
         Ok(sftp.readdir(path)?
@@ -318,51 +339,23 @@ fn remote_du(SshInfo { user, pass, host, dir }: SshInfo) -> Result<Bytes> {
     subdir(&sftp, &host, &dir)
 }
 
+/// Check free space on the volume containing a local path
 fn local_df(path: &Path) -> Result<Bytes> {
     unsafe {
         let mut stat: libc::statfs = mem::zeroed();
         if libc::statfs(CString::new(path.as_os_str().as_bytes()).unwrap().as_ptr(), &mut stat) == 0 {
             Ok(Bytes(stat.f_bavail * stat.f_bsize as u64))
         } else {
-            Err(Error::with_chain(io::Error::from_raw_os_error(*libc::__errno_location()), Io("measure", path.into())))
+            Err(Error::with_chain(io::Error::from_raw_os_error(errno().0), Io("measure", path.into())))
         }
     }
 }
 
+/// Check free space on the volume containing a remote path
 fn remote_df(SshInfo { user, pass, host, dir }: SshInfo) -> Result<Bytes> {
     let (_tcp, sess) = ssh(&user, &pass, &host)?;
     let sftp = sess.sftp()?;
     let attrs = sftp.open(&dir)?.statvfs()?;
     Ok(Bytes(attrs.f_bavail * attrs.f_bsize))
-}
-
-impl PartialEq for Bytes {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-impl PartialOrd for Bytes {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        self.0.partial_cmp(&other.0)
-    }
-}
-
-impl fmt::Display for Bytes {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        const K: f64 = 1024.0;
-        let bytes = self.0 as f64;
-        if bytes < K {
-            write!(f, "{}B", bytes)
-        } else if bytes < K*K {
-            write!(f, "{:.1}KB", bytes / K)
-        } else if bytes < K*K*K {
-            write!(f, "{:.1}MB", bytes / (K*K))
-        } else if bytes < K*K*K*K {
-            write!(f, "{:.1}GB", bytes / (K*K*K))
-        } else {
-            write!(f, "{:.1}TB", bytes / (K*K*K*K))
-        }
-    }
 }
 
