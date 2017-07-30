@@ -2,10 +2,11 @@
 extern crate errno;
 #[macro_use] extern crate error_chain;
 extern crate indicatif;
-extern crate glob;
+extern crate globset;
+extern crate libc;
 extern crate regex;
 extern crate ssh2;
-extern crate libc;
+extern crate walkdir;
 
 extern crate nri;
 #[macro_use] extern crate closet;
@@ -21,19 +22,13 @@ use std::sync::Arc;
 use std::sync::atomic::{self, AtomicBool};
 
 use errno::errno;
+use globset::Glob;
 use indicatif::HumanBytes as Bytes;
 use regex::Regex;
 use ssh2::{Session, Sftp};
+use walkdir::WalkDir;
 
 use nri::{MultiProgress, make_bar, make_bar_bytes};
-
-/// Append a bunch of strings to a path
-// FIXME: don't use to_string_lossy
-macro_rules! path {
-    ($begin:tt $(/ $component:tt)*) => {
-        &[&*$begin.to_string_lossy(), $($component),*].iter().collect::<PathBuf>().to_string_lossy()
-    }
-}
 
 error_chain! {
     errors {
@@ -45,8 +40,8 @@ error_chain! {
 
     foreign_links {
         Ssh(ssh2::Error);
-        Glob(glob::GlobError);
-        GlobPattern(glob::PatternError);
+        Glob(globset::Error);
+        WalkDir(walkdir::Error);
     }
 }
 use ErrorKind::*;
@@ -118,7 +113,7 @@ fn try_main() -> Result<()> {
     };
 
     /* process data if necessary */
-    let dats = glob(path!(epdir / "**" / "*.dat"))?;
+    let dats = glob(&epdir, "*.dat")?;
     if dats.len() != 0 {
         /* ./run.sh all $epdir */
         println!("Processing data...");
@@ -133,12 +128,12 @@ fn try_main() -> Result<()> {
 
     /* check PNG/CSV/DAT file counts */
     println!("Checking file counts...");
-    let dats = glob(path!(epdir / "**" / "*.dat"))?;
-    let flows = glob(path!(epdir / "**" / "*.flow"))?;
-    let pngs = glob(path!(epdir / "**" / "*.png"))?;
-    let csvs = glob(path!(epdir / "**" / "*.csv"))?;
-    let bcsvs = glob(path!(epdir / "**" / "biotac.csv"))?;
-    let ocsvs = glob(path!(epdir / "**" / "optoforce.csv"))?;
+    let dats  = glob(&epdir, "*.dat")?;
+    let flows = glob(&epdir, "*.flow")?;
+    let pngs  = glob(&epdir, "*.png")?;
+    let csvs  = glob(&epdir, "*.csv")?;
+    let bcsvs = glob(&epdir, "biotac.csv")?;
+    let ocsvs = glob(&epdir, "optoforce.csv")?;
     println!("{} pngs, {} csvs, {} dats", pngs.len(), csvs.len(), dats.len());
     if csvs.len() != 9*flows.len() + bcsvs.len() + ocsvs.len() {
         bail!("Wrong number of CSV files!");
@@ -269,49 +264,31 @@ fn check_scp(SshInfo { user, pass, host, dir }: SshInfo) -> Result<()> {
     Ok(())
 }
 
-/// Find all files matching a glob and collect them into a Vec of paths
-fn glob(pattern: &str) -> Result<Vec<PathBuf>> {
-    glob::glob(pattern)?
-        .map(|r| r.map_err(|e| e.into()))
+/// find $dir -name $name
+fn glob<P: AsRef<Path>>(dir: P, name: &str) -> Result<Vec<PathBuf>> {
+    let pattern = Glob::new(name)?.compile_matcher();
+    WalkDir::new(dir).into_iter()
+        .filter(|entry| entry.as_ref().ok()
+                             .map_or(true, |entry| pattern.is_match(entry.file_name())))
+        .map(|entry| entry.map(|entry| entry.path().to_owned())
+                          .map_err(Into::into))
         .collect()
 }
 
 /// Measure the size-on-disk of a local directory
-fn local_du(path: &Path) -> Result<Bytes> {
-    Ok(path.read_dir().chain_err(|| Io("list", path.into()))?
-           .map(|res| {
-               match res {
-                   Ok(entry) => {
-                       match entry.metadata() {
-                           Ok(meta) => {
-                               if meta.is_dir() {
-                                   local_du(&entry.path()).unwrap_or_else(|e| {
-                                       println!("warning: could not list directory {} (skipping): {}",
-                                       entry.path().display(), e);
-                                       Bytes(0)
-                                   })
-                               } else {
-                                   Bytes(meta.len())
-                               }
-                           }
-                           Err(e) => {
-                               println!("warning: could not stat {} (skipping): {}",
-                                        entry.path().display(), e);
-                               Bytes(0)
-                           }
-                       }
-                   }
-                   Err(e) => {
-                       println!("warning: could not stat entry in {} (skipping): {}",
-                                path.display(), e);
-                       Bytes(0)
-                   }
-               }
-           })
-           .fold(Bytes(0), |Bytes(a), Bytes(b)| Bytes(a+b)))
+fn local_du<P: AsRef<Path>>(path: P) -> Result<Bytes> {
+    WalkDir::new(path).into_iter()
+        .map(|entry| entry.and_then(|entry| entry.metadata())
+                          .map(|meta| meta.len()))
+        .fold(Ok(0), |a, b| match (a, b) {
+            (Ok(a), Ok(b)) => Ok(a + b),
+            (err, _) => err
+        })
+        .map(Bytes)
 }
 
 /// Measure the size-on-disk of a remote directory
+// TODO combine walkdir + ssh2
 fn remote_du(SshInfo { user, pass, host, dir }: SshInfo) -> Result<Bytes> {
     fn subdir(sftp: &Sftp, host: &str, path: &Path) -> Result<Bytes> {
         Ok(sftp.readdir(path)?
