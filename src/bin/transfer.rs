@@ -3,14 +3,25 @@
 extern crate glob;
 extern crate regex;
 extern crate ssh2;
+extern crate libc;
 
-use std::fs;
+extern crate nri;
+#[macro_use] extern crate closet;
+
+use std::{cmp, fmt, fs, mem, thread};
+use std::ffi::CString;
+use std::io::{self, BufRead, BufReader};
 use std::net::TcpStream;
+use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio, ExitStatus};
+use std::sync::Arc;
+use std::sync::atomic::{self, AtomicBool};
 
 use regex::Regex;
-use ssh2::Session;
+use ssh2::{Session, Sftp};
+
+use nri::{MultiProgress, make_bar, make_bar_bytes};
 
 macro_rules! path {
     ($begin:tt $(/ $component:tt)*) => {
@@ -34,12 +45,15 @@ error_chain! {
 }
 use ErrorKind::*;
 
-struct SshInfo<'a> {
-    user: &'a str,
-    pass: &'a str,
-    host: &'a str,
-    dir: &'a str
+#[derive(Clone)]
+struct SshInfo {
+    user: String,
+    pass: String,
+    host: String,
+    dir: PathBuf
 }
+
+struct Bytes(u64);
 
 fn main() {
     if let Err(ref e) = try_main() {
@@ -71,27 +85,29 @@ fn try_main() -> Result<()> {
         (@arg DEST: +required "Destination (path or SSH address)")
     }.get_matches();
 
-    let epdir = Path::new(matches.value_of("EPDIR").unwrap());
-    let dest = matches.value_of("DEST").unwrap();
+    let epdir = Path::new(matches.value_of("EPDIR").unwrap()).to_owned();
+    let dest = matches.value_of("DEST").unwrap().to_owned();
 
     println!("Checking arguments...");
 
     /* check epdir is a real directory */
-    check_dir(epdir)?;
+    check_dir(&epdir)?;
 
     /* check that dest is a dir or matches [username[:pw]@]hostname:dir */
     let scp_regex = Regex::new(r"^(?P<user>[^:]+):(?P<pass>[^@]+)@(?P<host>[^:]+):(?P<dir>.*)$").unwrap();
-    let ssh_info = match scp_regex.captures(dest) {
+    let ssh_info = match scp_regex.captures(&dest) {
         Some(captures) => {
-            let user = captures.name("user").unwrap().as_str();
-            let pass = captures.name("pass").unwrap().as_str();
-            let host = captures.name("host").unwrap().as_str();
-            let dir = captures.name("dir").unwrap().as_str();
-            check_scp(user, pass, host, dir)?;
-            Some(SshInfo { user, pass, host, dir })
+            let info = SshInfo {
+                user: captures.name("user").unwrap().as_str().to_owned(),
+                pass: captures.name("pass").unwrap().as_str().to_owned(),
+                host: captures.name("host").unwrap().as_str().to_owned(),
+                dir: PathBuf::from(captures.name("dir").unwrap().as_str()),
+            };
+            check_scp(info.clone())?;
+            Some(info)
         }
         None => {
-            check_dir(dest)?;
+            check_dir(&dest)?;
             None
         }
     };
@@ -102,7 +118,7 @@ fn try_main() -> Result<()> {
         /* ./run.sh all $epdir */
         println!("Processing data...");
         let status = Command::new("./run.sh")
-            .arg("all").arg(epdir)
+            .arg("all").arg(&epdir)
             .current_dir(env!("CARGO_MANIFEST_DIR"))
             .status().chain_err(|| Io("run", "run.sh".into()))?;
         if !status.success() {
@@ -127,35 +143,94 @@ fn try_main() -> Result<()> {
     }
 
     /* find $epdir -name '*.dat' -exec rm {} \; */
-    println!("Deleting *.dat files...");
-    for dat in dats {
-        fs::remove_file(&dat).chain_err(|| Io("delete", dat))?;
+    if dats.len() > 0 {
+        println!("Deleting *.dat files...");
+        for dat in dats {
+            fs::remove_file(&dat).chain_err(|| Io("delete", dat))?;
+        }
+    }
+
+    /* check disk space */
+    let size = local_du(&epdir)?;
+    let free = ssh_info.clone().map(remote_df).unwrap_or_else(|| local_df(Path::new(&dest)))?;
+    println!("{} required, {} free", size, free);
+    if size > free {
+        bail!("not enough space at destination");
     }
 
     /* rsync $epdir $dest */
     println!("Rsyncing...");
-    let mut cmd = if let Some(ssh) = ssh_info {
+    let rsync_args = &["-avh"];
+    let mut cmd = if let Some(ssh) = ssh_info.clone() {
         let mut cmd = Command::new("sshpass");
         cmd.arg("-p").arg(ssh.pass)
            .arg("rsync")
-           .arg("-avhW")
-           .arg(&*epdir.to_string_lossy())
-           .arg(format!("{}@{}:{}", ssh.user, ssh.host, ssh.dir));
+           .args(rsync_args)
+           .arg(&epdir)
+           .arg(format!("{}@{}:{}", ssh.user, ssh.host, ssh.dir.display()));
         cmd
     } else {
         let mut cmd = Command::new("rsync");
-        cmd.arg("-avhW")
-           .arg(&*epdir.to_string_lossy())
-           .arg(dest);
+        cmd.args(rsync_args)
+           .arg(&epdir)
+           .arg(&dest);
         cmd
     };
-    let status = cmd.status().chain_err(|| Io("run", "rsync".into()))?;
+    cmd.stdout(Stdio::piped());
+    let mut child = cmd.spawn().chain_err(|| Io("run", "rsync".into()))?;
+    let bars = MultiProgress::new();
+    let num_bar = bars.add(make_bar((flows.len() + pngs.len() + csvs.len()) as u64));
+    let size_bar = bars.add(make_bar_bytes(size.0 as u64));
+    num_bar.set_message("Files");
+    size_bar.set_message("Bytes");
+    let num_progress = thread::spawn(move || -> Result<ExitStatus> {
+        num_bar.set_position(0);
+        for line in BufReader::new(child.stdout.as_mut().unwrap()).lines() {
+            let line = line.chain_err(|| Io("read output", "rsync".into()))?;
+            if line.ends_with(".flow") || line.ends_with(".png") || line.ends_with(".csv") {
+                num_bar.inc(1);
+            }
+        }
+        num_bar.finish();
+        Ok(child.wait().chain_err(|| Io("wait on", "rsync".into()))?)
+    });
+    let rsync_done = Arc::new(AtomicBool::new(false));
+    let size_progress = thread::spawn(clone_army!([rsync_done, ssh_info] move || -> Result<()> {
+        size_bar.set_position(0);
+        while !rsync_done.load(atomic::Ordering::SeqCst) {
+            size_bar.set_position(ssh_info.clone()
+                                          .map(|SshInfo { user, pass, host, dir }| {
+                                              let mut dir = PathBuf::from(dir);
+                                              dir.push(epdir.file_name().unwrap());
+                                              remote_du(SshInfo { user, pass, host, dir })
+                                          })
+                                          .unwrap_or_else(|| local_du(Path::new(&dest)))?.0);
+        }
+        size_bar.finish();
+        Ok(())
+    }));
+    let progress = thread::spawn(move || -> Result<()> {
+        bars.join().chain_err(|| Io("draw", "progress bar".into()))
+    });
+    let status = num_progress.join().unwrap()?;
+    rsync_done.store(true, atomic::Ordering::SeqCst);
+    size_progress.join().unwrap()?;
+    progress.join().unwrap()?;
     if !status.success() {
         bail!("rsync failed");
     }
 
     println!("Done!");
     Ok(())
+}
+
+fn ssh(user: &str, pass: &str, host: &str) -> Result<(TcpStream, Session)> {
+    let tcp = TcpStream::connect((host, 22)).chain_err(|| Io("connect to", host.into()))?;
+    let mut sess = Session::new().unwrap();
+    sess.handshake(&tcp)?;
+    sess.userauth_password(user, pass)?;
+    if !sess.authenticated() { bail!("SSH authentication failed"); }
+    Ok((tcp, sess))
 }
 
 fn check_dir<P: AsRef<Path>>(p: P) -> Result<()> {
@@ -166,15 +241,11 @@ fn check_dir<P: AsRef<Path>>(p: P) -> Result<()> {
     Ok(())
 }
 
-fn check_scp(user: &str, pass: &str, host: &str, dir: &str) -> Result<()> {
-    let tcp = TcpStream::connect((host, 22)).chain_err(|| Io("connect to", host.into()))?;
-    let mut sess = Session::new().unwrap();
-    sess.handshake(&tcp)?;
-    sess.userauth_password(user, pass)?;
-    if !sess.authenticated() { bail!("SSH authentication failed"); }
+fn check_scp(SshInfo { user, pass, host, dir }: SshInfo) -> Result<()> {
+    let (_tcp, sess) = ssh(&user, &pass, &host)?;
 
-    if !sess.sftp()?.stat(Path::new(dir))?.is_dir() {
-        bail!("{}@{}:{} is not a directory", user, host, dir);
+    if !sess.sftp()?.stat(Path::new(&dir))?.is_dir() {
+        bail!("{}@{}:{} is not a directory", user, host, dir.display());
     }
 
     Ok(())
@@ -184,5 +255,114 @@ fn glob(pattern: &str) -> Result<Vec<PathBuf>> {
     glob::glob(pattern)?
         .map(|r| r.map_err(|e| e.into()))
         .collect::<Result<Vec<_>>>()
+}
+
+fn local_du(path: &Path) -> Result<Bytes> {
+    Ok(path.read_dir().chain_err(|| Io("list", path.into()))?
+           .map(|res| {
+               match res {
+                   Ok(entry) => {
+                       match entry.metadata() {
+                           Ok(meta) => {
+                               if meta.is_dir() {
+                                   local_du(&entry.path()).unwrap_or_else(|e| {
+                                       println!("warning: could not list directory {} (skipping): {}",
+                                       entry.path().display(), e);
+                                       Bytes(0)
+                                   })
+                               } else {
+                                   Bytes(meta.len())
+                               }
+                           }
+                           Err(e) => {
+                               println!("warning: could not stat {} (skipping): {}",
+                                        entry.path().display(), e);
+                               Bytes(0)
+                           }
+                       }
+                   }
+                   Err(e) => {
+                       println!("warning: could not stat entry in {} (skipping): {}",
+                                path.display(), e);
+                       Bytes(0)
+                   }
+               }
+           })
+           .fold(Bytes(0), |Bytes(a), Bytes(b)| Bytes(a+b)))
+}
+
+fn remote_du(SshInfo { user, pass, host, dir }: SshInfo) -> Result<Bytes> {
+    fn subdir(sftp: &Sftp, host: &str, path: &Path) -> Result<Bytes> {
+        Ok(sftp.readdir(path)?
+               .into_iter()
+               .map(|(path, stat)| {
+                   if stat.is_dir() {
+                       subdir(sftp, host, &path).unwrap_or_else(|e| {
+                           println!("warning: could not list directory {}:{} (skipping): {}",
+                                    host, path.display(), e);
+                           Bytes(0)
+                       })
+                   } else {
+                       Bytes(stat.size.unwrap_or_else(|| {
+                           println!("warning: could not read file size of {}:{} (skipping)",
+                                    host, path.display());
+                           0
+                       }))
+                   }
+               })
+               .fold(Bytes(0), |Bytes(a), Bytes(b)| Bytes(a+b)))
+    }
+
+    let (_tcp, sess) = ssh(&user, &pass, &host)?;
+    let sftp = sess.sftp()?;
+    subdir(&sftp, &host, &dir)
+}
+
+fn local_df(path: &Path) -> Result<Bytes> {
+    unsafe {
+        let mut stat: libc::statfs = mem::zeroed();
+        if libc::statfs(CString::new(path.as_os_str().as_bytes()).unwrap().as_ptr(), &mut stat) == 0 {
+            Ok(Bytes(stat.f_bavail * stat.f_bsize as u64))
+        } else {
+            Err(Error::with_chain(io::Error::from_raw_os_error(*libc::__errno_location()), Io("measure", path.into())))
+        }
+    }
+}
+
+fn remote_df(SshInfo { user, pass, host, dir }: SshInfo) -> Result<Bytes> {
+    let (_tcp, sess) = ssh(&user, &pass, &host)?;
+    let sftp = sess.sftp()?;
+    let attrs = sftp.open(&dir)?.statvfs()?;
+    Ok(Bytes(attrs.f_bavail * attrs.f_bsize))
+}
+
+impl PartialEq for Bytes {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl PartialOrd for Bytes {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        self.0.partial_cmp(&other.0)
+    }
+}
+
+impl fmt::Display for Bytes {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        const K: f64 = 1024.0;
+        let bytes = self.0 as f64;
+        if bytes < K {
+            write!(f, "{}B", bytes)
+        } else if bytes < K*K {
+            write!(f, "{:.1}KB", bytes / K)
+        } else if bytes < K*K*K {
+            write!(f, "{:.1}MB", bytes / (K*K))
+        } else if bytes < K*K*K*K {
+            write!(f, "{:.1}GB", bytes / (K*K*K))
+        } else {
+            write!(f, "{:.1}TB", bytes / (K*K*K*K))
+        }
+    }
 }
 
