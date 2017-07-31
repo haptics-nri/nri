@@ -1,6 +1,7 @@
 #[macro_use] extern crate clap;
 extern crate errno;
 #[macro_use] extern crate error_chain;
+extern crate fallible_iterator;
 extern crate indicatif;
 extern crate globset;
 extern crate libc;
@@ -22,6 +23,7 @@ use std::sync::Arc;
 use std::sync::atomic::{self, AtomicBool};
 
 use errno::errno;
+use fallible_iterator::{Convert, FallibleIterator};
 use globset::Glob;
 use indicatif::HumanBytes as Bytes;
 use regex::Regex;
@@ -45,6 +47,18 @@ error_chain! {
     }
 }
 use ErrorKind::*;
+use std::result::Result as StdResult;
+
+/// Extension trait to convert an Iterator to a FallibleIterator
+trait FallibleConverter: Iterator + Sized {
+    fn fallible(self) -> Convert<Self>;
+}
+
+impl<T, E, I: Iterator<Item=StdResult<T, E>>> FallibleConverter for I {
+    fn fallible(self) -> Convert<Self> {
+        fallible_iterator::convert(self)
+    }
+}
 
 /// Parameters for making an SSH connection
 #[derive(Clone)]
@@ -267,24 +281,18 @@ fn check_scp(SshInfo { user, pass, host, dir }: SshInfo) -> Result<()> {
 /// find $dir -name $name
 fn glob<P: AsRef<Path>>(dir: P, name: &str) -> Result<Vec<PathBuf>> {
     let pattern = Glob::new(name)?.compile_matcher();
-    WalkDir::new(dir).into_iter()
-        .filter(|entry| entry.as_ref().ok()
-                             .map_or(true, |entry| pattern.is_match(entry.file_name())))
-        .map(|entry| entry.map(|entry| entry.path().to_owned())
-                          .map_err(Into::into))
-        .collect()
+    Ok(WalkDir::new(dir).into_iter().fallible()
+        .filter(|entry| pattern.is_match(entry.file_name()))
+        .map(|entry| entry.path().to_owned())
+        .collect()?)
 }
 
 /// Measure the size-on-disk of a local directory
 fn local_du<P: AsRef<Path>>(path: P) -> Result<Bytes> {
-    WalkDir::new(path).into_iter()
-        .map(|entry| entry.and_then(|entry| entry.metadata())
-                          .map(|meta| meta.len()))
-        .fold(Ok(0), |a, b| match (a, b) {
-            (Ok(a), Ok(b)) => Ok(a + b),
-            (err, _) => err
-        })
-        .map(Bytes)
+    Ok(WalkDir::new(path).into_iter().fallible()
+        .and_then(|entry| Ok(entry.metadata()?.len()))
+        .fold(0, |a, b| a + b)
+        .map(Bytes)?)
 }
 
 /// Measure the size-on-disk of a remote directory
