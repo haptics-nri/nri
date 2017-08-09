@@ -8,4 +8,6 @@ lazy_static = "0.2"
 hprof  = "0.1"
 notify = "4.0"
 time = "0.1"
+libc = "0.2"
+errno = "0.2"
 

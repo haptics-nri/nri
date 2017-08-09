@@ -1,13 +1,18 @@
 #[macro_use] extern crate lazy_static;
 extern crate time;
 extern crate notify;
+extern crate libc;
+extern crate errno;
 
+use errno::errno;
 use time::Duration;
 use std::{env, mem, slice, thread, ptr};
 use std::io::{self, Read};
+use std::ffi::CString;
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::ops::{self, Deref, Add};
+use std::os::unix::ffi::OsStrExt;
 use std::sync::{mpsc, RwLock, Mutex};
 
 pub mod prelude {
@@ -395,5 +400,17 @@ macro_rules! foreach {
         }
         $(__foreach!($val);)*
     }}
+}
+
+/// Check free space on the volume containing a local path
+pub fn df(path: &Path) -> io::Result<u64> {
+    unsafe {
+        let mut stat: libc::statfs = mem::zeroed();
+        if libc::statfs(CString::new(path.as_os_str().as_bytes()).unwrap().as_ptr(), &mut stat) == 0 {
+            Ok(stat.f_bavail * stat.f_bsize as u64)
+        } else {
+            Err(io::Error::from_raw_os_error(errno().0))
+        }
+    }
 }
 

@@ -1,28 +1,24 @@
 #[macro_use] extern crate clap;
-extern crate errno;
 #[macro_use] extern crate error_chain;
 extern crate fallible_iterator;
 extern crate indicatif;
 extern crate globset;
-extern crate libc;
 extern crate regex;
 extern crate ssh2;
 extern crate walkdir;
 
 extern crate nri;
+extern crate utils;
 #[macro_use] extern crate closet;
 
-use std::{fs, mem, thread};
-use std::ffi::CString;
-use std::io::{self, BufRead, BufReader};
+use std::{fs, thread};
+use std::io::{BufRead, BufReader};
 use std::net::TcpStream;
-use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio, ExitStatus};
 use std::sync::Arc;
 use std::sync::atomic::{self, AtomicBool};
 
-use errno::errno;
 use fallible_iterator::{Convert, FallibleIterator};
 use globset::Glob;
 use indicatif::HumanBytes as Bytes;
@@ -327,14 +323,9 @@ fn remote_du(SshInfo { user, pass, host, dir }: SshInfo) -> Result<Bytes> {
 
 /// Check free space on the volume containing a local path
 fn local_df(path: &Path) -> Result<Bytes> {
-    unsafe {
-        let mut stat: libc::statfs = mem::zeroed();
-        if libc::statfs(CString::new(path.as_os_str().as_bytes()).unwrap().as_ptr(), &mut stat) == 0 {
-            Ok(Bytes(stat.f_bavail * stat.f_bsize as u64))
-        } else {
-            Err(Error::with_chain(io::Error::from_raw_os_error(errno().0), Io("measure", path.into())))
-        }
-    }
+    utils::df(path)
+        .chain_err(|| Io("measure", path.into()))
+        .map(Bytes)
 }
 
 /// Check free space on the volume containing a remote path

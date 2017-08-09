@@ -379,6 +379,7 @@ fn try_main() -> Result<()> {
                                 (Some("DATADIR"), Some(dir)) => {
                                     println!("Setting DATADIR = {:?}", dir);
                                     *flow::DATADIR.write().unwrap() = dir.into();
+                                    send_to(&services, "web".to_owned(), CmdTo::Data(format!("diskfree {}", web::disk_free())))?;
                                 },
                                 (Some(d), None)              => { errorln!("No value provided to set variable {}", d); },
                                 (Some(d), _)                 => { errorln!("Unknown variable {}", d); },

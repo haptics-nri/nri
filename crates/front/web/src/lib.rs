@@ -31,7 +31,6 @@ use std::path::Path;
 use std::sync::{Mutex, RwLock, mpsc};
 use std::thread::JoinHandle;
 use std::str;
-use std::process::Command;
 use std::sync::PoisonError;
 use std::sync::mpsc::RecvError;
 use time::Duration;
@@ -311,22 +310,14 @@ impl RegexSplit for str {
 }
 
 /// Measure free disk space in gigabytes
-fn disk_free() -> String {
-    let re = Regex::new(r" +").unwrap();
-
+pub fn disk_free() -> String {
     let datadir = &*flow::DATADIR.read().unwrap();
-
     format!("{} {}", datadir,
-            str::from_utf8(
-                &Command::new("df") // measure disk free space
-                    .arg("-h")     // human-readable units
-                    .arg(datadir) // device corresponding to DATADIR
-                    .output().unwrap().stdout).unwrap() // read all output
-                .split("\n") // split lines
-                .skip(1) // skip first line
-                .next().unwrap() // use second line
-                .split_re(&re) // split on whitespace
-                .nth(3).unwrap()) // fourth column is available space
+            if let Ok(bytes) = utils::df(Path::new(datadir)) {
+                format!("{}G", bytes/1024/1024/1024)
+            } else {
+                "DNE!".into()
+            })
 }
 
 /// Controllable struct for the web server
