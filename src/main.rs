@@ -148,7 +148,7 @@ extern crate env_logger;
 extern crate hprof;
 extern crate chrono;
 
-use chrono::UTC;
+use chrono::Utc;
 
 error_chain! {
 }
@@ -357,14 +357,14 @@ fn try_main() -> Result<()> {
                     CmdFrom::Timeout { thread: who, .. }  => {
                         // TODO actually time the service and do something if it times out
                         if find(&services, who.to_owned()).is_some() {
-                            timers.insert(who, UTC::now());
+                            timers.insert(who, Utc::now());
                         } else {
                             bail!("Nonexistent service asked for timeout");
                         }
                     },
                     CmdFrom::Timein { thread: who }    => {
                         if let Some(then) = timers.remove(who) {
-                            println!("Service {} took {} ms", who, UTC::now().signed_duration_since(then));
+                            println!("Service {} took {} ms", who, Utc::now().signed_duration_since(then));
                         } else {
                             bail!("Timein with no matching timeout");
                         }
