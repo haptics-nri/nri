@@ -659,7 +659,7 @@ dependencies = [
 [[package]]
 name = "indicatif"
 version = "0.6.0"
-source = "git+git://github.com/durka/indicatif.git?branch=noclear#b9e9ab16d54f738b9bb333b8d36e46a38eb3206a"
+source = "git+git://github.com/durka/indicatif.git?branch=noclear#ce9604382b65d4bafae4e0025f62bbee68dae702"
 dependencies = [
  "console 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",

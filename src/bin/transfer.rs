@@ -194,6 +194,7 @@ fn try_main() -> Result<()> {
     let mut child = cmd.spawn().chain_err(|| Io("run", "rsync".into()))?;
 
     let bars = MultiProgress::new();
+    bars.set_move_cursor(true);
     let num_bar = bars.add(make_bar((flows.len() + pngs.len() + csvs.len()) as u64)); // the first progress bar counts files transferred/evaluated
     let size_bar = bars.add(make_bar_bytes(size.0 as u64)); // the second progress bar measures disk space
     num_bar.set_message("Files");

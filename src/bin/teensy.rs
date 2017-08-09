@@ -99,6 +99,7 @@ fn main() {
     let inname = nri::parse_in_arg(&mut env::args().skip(1));
 
     let bars = Arc::new(nri::MultiProgress::new());
+    bars.set_move_cursor(true);
     let mut spawner = Spawner::new();
 
     spawner.spawn_collected(clone_army!([bars, inname] move || {
