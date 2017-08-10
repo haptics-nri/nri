@@ -48,6 +48,7 @@ group_attr!{
         /// Number of frames captured since setup() was last called (used for calculating frame rates)
         i: usize,
         writing: bool,
+        balanced: bool,
 
         /// PNG writer rebootable thread
         png: RestartableThread<PngStuff>,
@@ -108,17 +109,20 @@ group_attr!{
                     acq_fr: Some(fps),
                     cam_format: Some(format.0),
                     dest_format: Some(format.1),
+                    white_balance: Some(WhiteBalanceMode::Once),
                     ..default_settings
                 };
 
                 let mut device = Device::new().unwrap();
                 device.request_reset().unwrap();
+                device.set(&settings).unwrap();
 
                 let mtx = Mutex::new(tx);
                 Bluefox {
                     device: device,
                     i: 0,
                     writing: false,
+                    balanced: false,
                     start: time::now(),
 
                     png: RestartableThread::new("Bluefox PNG thread",
@@ -178,6 +182,8 @@ group_attr!{
                     Some(s) if s.starts_with("settings") => {
                         if self.writing {
                             println!("BLUEFOX: currently writing, ignoring new settings");
+                        } else if !self.balanced {
+                            println!("BLUEFOX: not white balanced yet, ignoring new setings");
                         } else {
                             println!("BLUEFOX: applying new settings");
                             let set: Settings = serde_json::from_str(&s[9..]).unwrap();
@@ -186,6 +192,15 @@ group_attr!{
                         }
                     },
                     Some(_) | None => ()
+                }
+
+                if !self.balanced && self.i == 15 {
+                    self.device.close().unwrap();
+                    self.device = Device::new().unwrap();
+                    self.device.request_reset().unwrap();
+                    let wb = self.device.get_all_wb().unwrap();
+                    println!("BLUEFOX: finished white balance: {:?} (r={}, b={})", wb.mode, wb.red, wb.blue);
+                    self.balanced = true;
                 }
 
                 let image = self.device.request().unwrap();
