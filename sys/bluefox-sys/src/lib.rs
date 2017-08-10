@@ -558,6 +558,7 @@ pub mod settings {
         (acq_fr:        f64,               get_acq_fr,        set_acq_fr,        "AcquisitionControl", "AcquisitionFrameRate",         f64                                )
         (exposure_time: f64,               get_exposure_time, set_exposure_time, "AcquisitionControl", "ExposureTime",                 f64                                )
         (auto_exposure: bool,              get_auto_exposure, set_auto_exposure, "AcquisitionControl", "ExposureAuto",                 |b: bool| b as i64, |i: i64| i == 1)
+        (gain:          f64,               get_gain,          set_gain,          "AnalogControl",      "Gain",                         f64                                )
         (auto_gain:     bool,              get_auto_gain,     set_auto_gain,     "AnalogControl",      "GainAuto",                     |b: bool| b as i64, |i: i64| i == 1)
         (white_balance: WhiteBalanceMode,  get_white_balance, set_white_balance, "AnalogControl",      "BalanceWhiteAuto",             WhiteBalanceMode  as i64           )
         (wb_ratio:      f64,               get_wb_ratio,      set_wb_ratio,      "AnalogControl",      "BalanceRatio",                 f64                                )

@@ -48,7 +48,7 @@ group_attr!{
         /// Number of frames captured since setup() was last called (used for calculating frame rates)
         i: usize,
         writing: bool,
-        balanced: bool,
+        balanced: Option<usize>,
 
         /// PNG writer rebootable thread
         png: RestartableThread<PngStuff>,
@@ -122,7 +122,7 @@ group_attr!{
                     device: device,
                     i: 0,
                     writing: false,
-                    balanced: false,
+                    balanced: Some(0),
                     start: time::now(),
 
                     png: RestartableThread::new("Bluefox PNG thread",
@@ -179,28 +179,68 @@ group_attr!{
                         println!("Stopped Bluefox recording.");
                         self.writing = false;
                     },
+                    /*
+                    Some("auto") => {
+                        println!("bluefox auto brightness");
+                        let mut set = self.device.get();
+                        let greys = [60, 65, 70, 75, 80, 85, 90, 95, 100];
+                        let mut brightness = [0.0; 9];
+                        for i in 0..greys.len() {
+                            let grey = greys[i];
+                            println!("\ttrying {}...", grey);
+                            set.average_grey = grey;
+                            self.device.request_reset().unwrap();
+                            self.device.set(&set).unwrap();
+                            thread::sleep_ms(1000);
+                            let image = self.device.request().unwrap();
+                            let (h, w) = image.size();
+                            let image = prof!("imagebuffer",
+                                              ImageBuffer::<image::Rgb<u8>, _>::from_raw(w as u32,
+                                                                                         h as u32,
+                                                                                         image.data().into())
+                                              .unwrap());
+                            brightness[i] = image.pixels()
+                                .fold(0.0, |acc, rgb| acc + rgb.to_luma()[0] as f64);
+                        }
+                        let grey = greys[brightness.iter().map(|b| (b - 245000000.0).abs()).enumerate().min_by_key(|&(_, d)| d).0.unwrap()];
+                        println!("\tbest brightness at grey={}", grey);
+                        set.average_grey = grey;
+                        self.device.request_reset().unwrap();
+                        self.device.set(&set).unwrap();
+                    },
+                    */
                     Some(s) if s.starts_with("settings") => {
                         if self.writing {
                             println!("BLUEFOX: currently writing, ignoring new settings");
-                        } else if !self.balanced {
+                        } else if self.balanced.is_some() {
                             println!("BLUEFOX: not white balanced yet, ignoring new setings");
                         } else {
                             println!("BLUEFOX: applying new settings");
                             let set: Settings = serde_json::from_str(&s[9..]).unwrap();
                             self.device.request_reset().unwrap();
                             self.device.set(&set).unwrap();
+                            self.balanced = Some(self.i);
                         }
                     },
                     Some(_) | None => ()
                 }
 
-                if !self.balanced && self.i == 15 {
-                    self.device.close().unwrap();
-                    self.device = Device::new().unwrap();
-                    self.device.request_reset().unwrap();
-                    let wb = self.device.get_all_wb().unwrap();
-                    println!("BLUEFOX: finished white balance: {:?} (r={}, b={})", wb.mode, wb.red, wb.blue);
-                    self.balanced = true;
+                if let Some(from) = self.balanced {
+                    if self.i - from == 30 /* 2 seconds */ {
+                        // turn off auto crap
+                        self.device.set(&Settings {
+                            auto_gain: Some(false),
+                            auto_exposure: Some(false),
+                            white_balance: Some(WhiteBalanceMode::Off),
+                            ..Default::default() }).unwrap();
+
+                        let wb = self.device.get_all_wb().unwrap();
+                        println!("BLUEFOX: finished white balance: {:?} (r={}, b={}, gain={}, exp={})",
+                                 wb.mode, wb.red, wb.blue,
+                                 self.device.get_gain().unwrap(), self.device.get_exposure_time().unwrap());
+
+                        self.balanced = None;
+                    }
                 }
 
                 let image = self.device.request().unwrap();
