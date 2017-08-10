@@ -510,6 +510,7 @@ pub mod settings {
                     Ok(())
                 }
 
+                // TODO return Result
                 pub fn get(&self) -> Settings {
                     Settings {
                         $(
@@ -522,6 +523,15 @@ pub mod settings {
                             }
                         ),*
                     }
+                }
+
+                pub fn get_all_wb(&self) -> Result<WhiteBalance, MVError> {
+                    let mode = self.get_white_balance()?;
+                    self.set_wb_ratio_sel(WhiteBalanceChan::Red)?;
+                    let red = self.get_wb_ratio()?;
+                    self.set_wb_ratio_sel(WhiteBalanceChan::Blue)?;
+                    let blue = self.get_wb_ratio()?;
+                    Ok(WhiteBalance { mode, red, blue })
                 }
             }
         }
@@ -550,6 +560,8 @@ pub mod settings {
         (auto_exposure: bool,              get_auto_exposure, set_auto_exposure, "AcquisitionControl", "ExposureAuto",                 |b: bool| b as i64, |i: i64| i == 1)
         (auto_gain:     bool,              get_auto_gain,     set_auto_gain,     "AnalogControl",      "GainAuto",                     |b: bool| b as i64, |i: i64| i == 1)
         (white_balance: WhiteBalanceMode,  get_white_balance, set_white_balance, "AnalogControl",      "BalanceWhiteAuto",             WhiteBalanceMode  as i64           )
+        (wb_ratio:      f64,               get_wb_ratio,      set_wb_ratio,      "AnalogControl",      "BalanceRatio",                 f64                                )
+        (wb_ratio_sel:  WhiteBalanceChan,  get_wb_ratio_sel,  set_wb_ratio_sel,  "AnalogControl",      "BalanceRatioSelector",         WhiteBalanceChan as i64            )
         (average_grey:  i64,               get_average_grey,  set_average_grey,  "AcquisitionControl", "mvExposureAutoAverageGrey",    i64                                )
     }
 
@@ -624,6 +636,22 @@ pub mod settings {
             Once       = 1,
             Continuous = 2,
         }
+    }
+
+    macro_attr! {
+        #[repr(C)]
+        #[derive(Copy, Clone, Debug, TryFrom!(i64), Serialize, Deserialize)]
+        pub enum WhiteBalanceChan {
+            Red  = 0,
+            Blue = 1,
+        }
+    }
+
+    #[derive(Copy, Clone, Debug)]
+    pub struct WhiteBalance {
+        pub mode: WhiteBalanceMode,
+        pub red: f64,
+        pub blue: f64,
     }
 }
 
