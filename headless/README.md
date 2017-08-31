@@ -15,6 +15,7 @@ This directory contains some symlinks and copies of files that are part of the p
 - `supervisor.sh` [symlink from parent dir]: script run automatically by systemd
 - `nri.service` [symlink from `/etc/systemd/system`]: unit file for running `supervisor.sh`
 - `ping.php`: goes on the external server, should be accessible at the URL specified by `$SERVER` in `supervisor.sh`
+- `ping.sh` [symlink from `/etc/NetworkManager/dispatchers.d`]: updates ping.php whenever the IP changes (must be owned by root and unwritable by anyone else)
 - `net.sh` [symlink from parent dir]: script for switching networks
 - `nopasswd_net_reboot` [symlink from `/etc/sudoers.d`]: allows commands in `net.sh` (and the shutdown/reboot buttons in the web interface) to be run with no password
 
