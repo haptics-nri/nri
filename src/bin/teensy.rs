@@ -6,7 +6,6 @@ extern crate nri;
 
 use spawner::Spawner;
 use std::cell::Cell;
-use std::sync::Arc;
 use std::{fmt, env};
 use std::path::Path;
 
@@ -98,39 +97,43 @@ impl fmt::Debug for Packet {
 fn main() {
     let inname = nri::parse_in_arg(&mut env::args().skip(1));
 
-    let bars = Arc::new(nri::MultiProgress::new());
-    bars.set_move_cursor(true);
     let mut spawner = Spawner::new();
+    let bars = nri::MultiProgress::new();
+    bars.set_move_cursor(true);
 
-    spawner.spawn_collected(clone_army!([bars, inname] move || {
+    let ftbar = bars.add(nri::make_bar(0));
+    spawner.spawn_collected(clone_army!([inname] move || {
         OUTPUT_MODE.with(|om| om.set(FT));
         let mut header = String::from("Timestamp, Teensy dt, Packet number");
         for i in 0..30 {
             header.push_str(&format!(", FT{}", i));
         }
-        nri::do_binary::<Packet>(&header, nri::Bar::Multi("FT", bars),
+        nri::do_binary::<Packet>(&header, nri::Bar::Multi("FT", ftbar),
                                  (inname.clone(), Some(Path::new(&inname).with_extension("ft.csv").to_str().unwrap().to_string())));
     }));
 
-    spawner.spawn_collected(clone_army!([bars, inname] move || {
+    let accbar = bars.add(nri::make_bar(0));
+    spawner.spawn_collected(clone_army!([inname] move || {
         OUTPUT_MODE.with(|om| om.set(ACC));
-        nri::do_binary::<Packet>("Timestamp, FIFO position, Acc X, Acc Y, Acc Z", nri::Bar::Multi("Acc", bars),
+        nri::do_binary::<Packet>("Timestamp, FIFO position, Acc X, Acc Y, Acc Z", nri::Bar::Multi("Acc", accbar),
                                  (inname.clone(), Some(Path::new(&inname).with_extension("acc.csv").to_str().unwrap().to_string())));
     }));
 
-    spawner.spawn_collected(clone_army!([bars, inname] move || {
+    let gyrobar = bars.add(nri::make_bar(0));
+    spawner.spawn_collected(clone_army!([inname] move || {
         OUTPUT_MODE.with(|om| om.set(GYRO));
-        nri::do_binary::<Packet>("Timestamp, FIFO position, Gyro X, Gyro Y, Gyro Z", nri::Bar::Multi("Gyro", bars),
+        nri::do_binary::<Packet>("Timestamp, FIFO position, Gyro X, Gyro Y, Gyro Z", nri::Bar::Multi("Gyro", gyrobar),
                                  (inname.clone(), Some(Path::new(&inname).with_extension("gyro.csv").to_str().unwrap().to_string())));
     }));
 
-    spawner.spawn_collected(clone_army!([bars, inname] move || {
+    let magbar = bars.add(nri::make_bar(0));
+    spawner.spawn_collected(clone_army!([inname] move || {
         OUTPUT_MODE.with(|om| om.set(MAG));
-        nri::do_binary::<Packet>("Timestamp, Mag X, Mag Y, Mag Z", nri::Bar::Multi("Mag", bars),
+        nri::do_binary::<Packet>("Timestamp, Mag X, Mag Y, Mag Z", nri::Bar::Multi("Mag", magbar),
                                  (inname.clone(), Some(Path::new(&inname).with_extension("mag.csv").to_str().unwrap().to_string())));
     }));
 
-    drop(spawner); // join all threads
     bars.join_and_clear().unwrap();
+    drop(spawner); // join all threads
 }
 

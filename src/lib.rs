@@ -20,7 +20,7 @@ pub use indicatif::{ProgressBar, ProgressStyle, MultiProgress};
 
 /// Single, multiple or no progress bar(s)
 pub enum Bar {
-    Multi(&'static str, Arc<MultiProgress>),
+    Multi(&'static str, ProgressBar),
     Single,
     None
 }
@@ -181,28 +181,32 @@ pub fn do_binary<Data: Debug>(header: &str, bars: Bar, (inname, outname): (Strin
     indentln!("file size = {} ({} packets)", vec.len(), vec.len() as f64 / mem::size_of::<Data>() as f64);
 
     let chunks = vec.chunks(mem::size_of::<Data>());
-    let bar = make_bar(chunks.len() as u64);
-    let bar = match bars {
-        Bar::Multi(label, ref bars) => { let bar = bars.add(bar); bar.set_message(label); Some(bar) },
-        Bar::Single => Some(bar),
-        Bar::None => None
+    let (bar, clear) = match bars {
+        Bar::Multi(label, bar) => {
+            bar.set_length(chunks.len() as u64);
+            bar.set_message(label);
+            (Some(bar), false)
+        },
+        Bar::Single => (Some(make_bar(chunks.len() as u64)), true),
+        Bar::None => (None, false)
     };
-    let mut i = 0;
-    let datums = chunks.map(|chunk: &[u8]| {
-        i += 1;
+    let mut datums = Vec::with_capacity(chunks.len());
+    for (i, chunk) in chunks.enumerate() {
         if let Some(ref bar) = bar { if i % 100 == 0 { bar.inc(100); } }
         let mut data: Data = unsafe { mem::uninitialized() };
         unsafe {
             ptr::copy(chunk.as_ptr(), &mut data as *mut _ as *mut _, mem::size_of_val(&data));
         }
         outfile.as_mut().map(|ref mut f| attempt!(writeln!(f, "{:?}", data)));
-        data
-    }).collect::<Vec<_>>();
+        datums.push(data);
+    }
 
-    match bars {
-        Bar::Multi(..) => bar.unwrap().finish(),
-        Bar::Single => bar.unwrap().finish_and_clear(),
-        Bar::None => {}
+    if let Some(bar) = bar {
+        if clear {
+            bar.finish_and_clear();
+        } else {
+            bar.finish();
+        }
     }
     indentln!("translated {} packets", datums.len());
     datums
