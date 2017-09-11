@@ -3,6 +3,7 @@ target-beta
 target-nightly
 *.so
 *.sw*
+*.bak
 Session.vim
 *.dat
 *.png
