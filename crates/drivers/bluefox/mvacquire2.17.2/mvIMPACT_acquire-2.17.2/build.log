@@ -1,0 +1,146 @@
+make x86_64
+make[1]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2'
+apps
+make in :apps
+make[2]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps'
+Callback
+make in :Callback
+make[3]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/Callback'
+make[4]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/Callback/x86_64'
+make[4]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/Callback/x86_64'
+make[3]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/Callback'
+Callback_C
+make in :Callback_C
+make[3]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/Callback_C'
+make[4]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/Callback_C/x86_64'
+make[4]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/Callback_C/x86_64'
+make[3]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/Callback_C'
+CaptureToUserMemory
+make in :CaptureToUserMemory
+make[3]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/CaptureToUserMemory'
+make[4]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/CaptureToUserMemory/x86_64'
+make[4]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/CaptureToUserMemory/x86_64'
+make[3]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/CaptureToUserMemory'
+CaptureToUserMemory_C
+make in :CaptureToUserMemory_C
+make[3]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/CaptureToUserMemory_C'
+make[4]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/CaptureToUserMemory_C/x86_64'
+make[4]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/CaptureToUserMemory_C/x86_64'
+make[3]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/CaptureToUserMemory_C'
+Common
+ContinuousCaptureAllDevices
+make in :ContinuousCaptureAllDevices
+make[3]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/ContinuousCaptureAllDevices'
+make[4]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/ContinuousCaptureAllDevices/x86_64'
+make[4]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/ContinuousCaptureAllDevices/x86_64'
+make[3]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/ContinuousCaptureAllDevices'
+ContinuousCapture_C
+make in :ContinuousCapture_C
+make[3]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/ContinuousCapture_C'
+make[4]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/ContinuousCapture_C/x86_64'
+make[4]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/ContinuousCapture_C/x86_64'
+make[3]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/ContinuousCapture_C'
+ContinuousCaptureGenICam_C
+make in :ContinuousCaptureGenICam_C
+make[3]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/ContinuousCaptureGenICam_C'
+make[4]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/ContinuousCaptureGenICam_C/x86_64'
+make[4]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/ContinuousCaptureGenICam_C/x86_64'
+make[3]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/ContinuousCaptureGenICam_C'
+DigitalIOs
+make in :DigitalIOs
+make[3]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/DigitalIOs'
+make[4]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/DigitalIOs/x86_64'
+make[4]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/DigitalIOs/x86_64'
+make[3]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/DigitalIOs'
+FirmwareUpgrade
+make in :FirmwareUpgrade
+make[3]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/FirmwareUpgrade'
+make[4]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/FirmwareUpgrade/x86_64'
+make[4]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/FirmwareUpgrade/x86_64'
+make[3]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/FirmwareUpgrade'
+GenericInterfaceLayout
+make in :GenericInterfaceLayout
+make[3]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/GenericInterfaceLayout'
+make[4]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/GenericInterfaceLayout/x86_64'
+make[4]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/GenericInterfaceLayout/x86_64'
+make[3]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/GenericInterfaceLayout'
+GenICamInterfaceLayout
+make in :GenICamInterfaceLayout
+make[3]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/GenICamInterfaceLayout'
+make[4]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/GenICamInterfaceLayout/x86_64'
+make[4]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/GenICamInterfaceLayout/x86_64'
+make[3]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/GenICamInterfaceLayout'
+GenICamSequencerUsage
+make in :GenICamSequencerUsage
+make[3]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/GenICamSequencerUsage'
+make[4]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/GenICamSequencerUsage/x86_64'
+make[4]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/GenICamSequencerUsage/x86_64'
+make[3]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/GenICamSequencerUsage'
+LiveSnap
+make in :LiveSnap
+make[3]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/LiveSnap'
+make[4]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/LiveSnap/x86_64'
+make[4]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/LiveSnap/x86_64'
+make[3]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/LiveSnap'
+LiveSnapFLTK
+make in :LiveSnapFLTK
+make[3]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/LiveSnapFLTK'
+make[4]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/LiveSnapFLTK/x86_64'
+make[4]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/LiveSnapFLTK/x86_64'
+make[3]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/LiveSnapFLTK'
+Makefile
+Makefile.samp.inc
+mknewappl.sh
+mvDebugFlags.mvd
+mvDeviceConfigure
+make in :mvDeviceConfigure
+make[3]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/mvDeviceConfigure'
+make[4]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/mvDeviceConfigure/x86_64'
+make[4]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/mvDeviceConfigure/x86_64'
+make[3]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/mvDeviceConfigure'
+mvIPConfigure
+make in :mvIPConfigure
+make[3]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/mvIPConfigure'
+make[4]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/mvIPConfigure/x86_64'
+make[4]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/mvIPConfigure/x86_64'
+make[3]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/mvIPConfigure'
+mvPropView
+make in :mvPropView
+make[3]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/mvPropView'
+make[4]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/mvPropView/x86_64'
+/opt/mvIMPACT_acquire/apps/Makefile.samp.inc:202: recipe for target 'PropViewFrame' failed
+make[4]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/mvPropView/x86_64'
+Makefile:40: recipe for target 'x86_64' failed
+make[3]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/mvPropView'
+SingleCapture
+make in :SingleCapture
+make[3]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/SingleCapture'
+make[4]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/SingleCapture/x86_64'
+make[4]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/SingleCapture/x86_64'
+make[3]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/SingleCapture'
+SingleCaptureStorage
+make in :SingleCaptureStorage
+make[3]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/SingleCaptureStorage'
+make[4]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/SingleCaptureStorage/x86_64'
+make[4]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/SingleCaptureStorage/x86_64'
+make[3]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/SingleCaptureStorage'
+SingleSnap
+make in :SingleSnap
+make[3]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/SingleSnap'
+make[4]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/SingleSnap/x86_64'
+make[4]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/SingleSnap/x86_64'
+make[3]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/SingleSnap'
+SynchronousCaptureMultipleInputsFLTK
+make in :SynchronousCaptureMultipleInputsFLTK
+make[3]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/SynchronousCaptureMultipleInputsFLTK'
+make[4]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/SynchronousCaptureMultipleInputsFLTK/x86_64'
+make[4]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/SynchronousCaptureMultipleInputsFLTK/x86_64'
+make[3]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/SynchronousCaptureMultipleInputsFLTK'
+testserial
+make in :testserial
+make[3]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/testserial'
+make[4]: Entering directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/testserial/x86_64'
+make[4]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/testserial/x86_64'
+make[3]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps/testserial'
+make[2]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2/apps'
+make[1]: Leaving directory '/home/nri/software/nri/crates/drivers/bluefox/mvacquire2.17.2/mvIMPACT_acquire-2.17.2'
