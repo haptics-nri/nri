@@ -5,8 +5,8 @@ extern crate libc;
 extern crate errno;
 
 use errno::errno;
-use time::Duration;
-use std::{env, mem, slice, thread, ptr};
+pub use time::Duration;
+use std::{env, fmt, mem, ptr, slice, thread};
 use std::io::{self, Read};
 use std::ffi::CString;
 use std::fs::{self, File};
@@ -63,19 +63,19 @@ pub fn circular_push<T>(vec: &mut Vec<T>, item: T) {
 }
 
 /// Retry some action on failure
-pub fn retry<R, F: FnMut() -> Option<R>, G: FnOnce() -> R>(label: Option<&str>, times: usize, delay: Duration, mut action: F, fallback: G) -> R {
+pub fn retry<T, E: fmt::Debug, F: FnMut() -> Result<T, E>>(label: Option<&str>, times: usize, delay: Duration, mut action: F) -> Result<T, E> {
     for i in 0..times {
         match action() {
-            Some(ret) => return ret,
-            None =>
+            Ok(t) => return Ok(t),
+            Err(e) =>
                 if i == times-1 {
                     if let Some(label) = label {
                         println!("ERROR: {} failed {} times :(", label, times);
                     }
-                    return fallback()
+                    return Err(e)
                 } else {
                     if let Some(label) = label {
-                        println!("\tRetrying (#{}/{}) {}", i+1, times, label);
+                        println!("\tRetrying (#{}/{}) {} ({:?})", i+1, times, label, e);
                     }
                     delay.sleep();
                 }

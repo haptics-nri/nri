@@ -300,24 +300,26 @@ fn local_du<P: AsRef<Path>>(path: P) -> Result<Bytes> {
 // TODO combine walkdir + ssh2
 fn remote_du(SshInfo { user, pass, host, dir }: SshInfo) -> Result<Bytes> {
     fn subdir(sftp: &Sftp, host: &str, path: &Path) -> Result<Bytes> {
-        Ok(sftp.readdir(path)?
-               .into_iter()
-               .map(|(path, stat)| {
-                   if stat.is_dir() {
-                       subdir(sftp, host, &path).unwrap_or_else(|e| {
-                           println!("warning: could not list directory {}:{} (skipping): {}",
-                                    host, path.display(), e);
-                           Bytes(0)
-                       })
-                   } else {
-                       Bytes(stat.size.unwrap_or_else(|| {
-                           println!("warning: could not read file size of {}:{} (skipping)",
-                                    host, path.display());
-                           0
-                       }))
-                   }
-               })
-               .fold(Bytes(0), |Bytes(a), Bytes(b)| Bytes(a+b)))
+        Ok(utils::retry(
+                None, 3, utils::Duration::zero(),
+                || sftp.readdir(path))?
+            .into_iter()
+            .map(|(path, stat)| {
+                if stat.is_dir() {
+                    subdir(sftp, host, &path).unwrap_or_else(|e| {
+                        println!("warning: could not list directory {}:{} (skipping): {}",
+                        host, path.display(), e);
+                        Bytes(0)
+                    })
+                } else {
+                    Bytes(stat.size.unwrap_or_else(|| {
+                        println!("warning: could not read file size of {}:{} (skipping)",
+                        host, path.display());
+                        0
+                    }))
+                }
+            })
+            .fold(Bytes(0), |Bytes(a), Bytes(b)| Bytes(a+b)))
     }
 
     let (_tcp, sess) = ssh(&user, &pass, &host)?;

@@ -134,17 +134,15 @@ group_attr!{
                 let mut port = serialport();
                 let mut buf = [0u8; 1];
 
-                let read = utils::retry(Some("[teensy] reading ParkState"), 3, Duration::milliseconds(50),
-                    || {
-                        port.write_all(&['4' as u8]).unwrap();
-                        port.read_exact(&mut buf).ok().map(Some)
-                    },
-                    || {
-                        None
-                    });
+                let read = utils::retry(Some("[teensy] reading ParkState"), 3, Duration::milliseconds(50), || {
+                    Ok(())
+                        .and_then(|_| port.write_all(&['4' as u8]))
+                        .and_then(|_| port.read_exact(&mut buf))
+                });
+
                 match read {
-                    Some(()) => buf[0],
-                    None => return None
+                    Ok(()) => buf[0],
+                    Err(_) => return None
                 }
             };
 

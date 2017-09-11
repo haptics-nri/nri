@@ -279,21 +279,18 @@ fn flow(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
                       let data = json!({
                           "flows": get_flows()
                       });
-                      utils::retry(Some("[web] send flow info to client"), 10, Duration::milliseconds(500),
-                          || {
-                                 Ok(())
-                                     .and_then(|_| comms.send(format!("flow {}", render("flows", data.clone()))))
-                                     .and_then(|_| comms.send(format!("diskfree {}", disk_free())))
-                                     .ok()
-                          },
-                          || {
-                                 // if the WebSocket communications fail, back out and abort the flow
-                                 let mut locked_flows = FLOWS.write().unwrap();
-                                 if let Some(found) = locked_flows.get_mut(&*flow) {
-                                     found.abort(&*mtx.lock().unwrap(), comms.clone()).unwrap();
-                                     resp = Response::with((status::Ok, format!("Aborting \"{}\" flow", flow)));
-                                 }
-                          });
+                      utils::retry(Some("[web] send flow info to client"), 10, Duration::milliseconds(500), || {
+                          Ok(())
+                              .and_then(|_| comms.send(format!("flow {}", render("flows", data.clone()))))
+                              .and_then(|_| comms.send(format!("diskfree {}", disk_free())))
+                      }).unwrap_or_else(|_| {
+                          // if the WebSocket communications fail, back out and abort the flow
+                          let mut locked_flows = FLOWS.write().unwrap();
+                          if let Some(found) = locked_flows.get_mut(&*flow) {
+                              found.abort(&*mtx.lock().unwrap(), comms.clone()).unwrap();
+                              resp = Response::with((status::Ok, format!("Aborting \"{}\" flow", flow)));
+                          }
+                      });
 
                       Ok(resp)
                   })
