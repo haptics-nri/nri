@@ -1,9 +1,6 @@
 [submodule "openni2"]
 	path = crates/drivers/structure/openni2
 	url = https://github.com/occipital/openni2
-[submodule "filetime"]
-	path = overrides/filetime
-	url = git@github.com:alexcrichton/filetime
 [submodule "staticfile"]
 	path = overrides/staticfile
 	url = git@github.com:iron/staticfile
