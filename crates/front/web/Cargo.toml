@@ -22,7 +22,7 @@ serde_derive         = "1"
 # iron deps
 iron                 = "0.5"
 handlebars-iron      = "0.25"
-handlebars           = "0.28"
+handlebars           = "0.29"
 staticfile           = { version = "0.4", default-features = false }
 mount                = "0.3"
 hyper                = "0.10"
