@@ -1,10 +1,9 @@
 //! Service to read data from the Teensy and attached sensors
 
 #[macro_use] extern crate utils;
-#[macro_use] extern crate comms;
+#[cfg_attr(not(feature = "hardware"), macro_use)] extern crate comms;
 
 #[macro_use] extern crate guilt_by_association;
-#[macro_use] extern crate unborrow;
 #[macro_use] extern crate macro_attr;
 #[macro_use] extern crate conv;
 #[macro_use] extern crate serde_derive;
@@ -57,13 +56,11 @@ group_attr!{
     extern crate time;
     extern crate rustc_serialize as serialize;
     extern crate serde_json;
-    extern crate gnuplot;
 
     use comms::{Controllable, CmdFrom, Block, RestartableThread};
     use scribe::{Writer, Writable};
     use std::io::{self, Read, Write};
     use std::fs::File;
-    use std::{cmp, thread};
     use std::sync::mpsc::Sender;
     use std::{u8, ptr, mem};
     use std::fmt::{self, Display, Debug, Formatter};
@@ -72,8 +69,6 @@ group_attr!{
     use std::sync::atomic::{AtomicUsize, AtomicBool, ATOMIC_USIZE_INIT, ATOMIC_BOOL_INIT, Ordering};
     use serial::prelude::*;
     use conv::TryFrom;
-    use serialize::base64::{self, ToBase64};
-    use gnuplot::{Figure, PlotOption, Coordinate, AxesCommon};
 
     trait Coffee: Read + Write {
         fn coffee<W: Write>(self, w: W) -> CoffeeImpl<Self, W> where Self: Sized {
@@ -466,36 +461,6 @@ group_attr!{
                                 });
                             }
                         }
-
-                        /*
-                        // write out plot to file
-                        let fname = format!("/tmp/teensy{}.png", idx);
-                        fig.clear_axes();
-                        fig.set_terminal("png", &fname);
-                        fig.axes2d()
-                           .lines(&t as &[_], &fx as &[_], &[PlotOption::Color("red"),    PlotOption::Caption("FX")])
-                           .lines(&t as &[_], &fy as &[_], &[PlotOption::Color("green"),  PlotOption::Caption("FY")])
-                           .lines(&t as &[_], &fz as &[_], &[PlotOption::Color("blue"),   PlotOption::Caption("FZ")])
-                           .lines(&t as &[_], &tx as &[_], &[PlotOption::Color("orange"), PlotOption::Caption("TX")])
-                           .lines(&t as &[_], &ty as &[_], &[PlotOption::Color("pink"),   PlotOption::Caption("TY")])
-                           .lines(&t as &[_], &tz as &[_], &[PlotOption::Color("plum"),   PlotOption::Caption("TZ")])
-                           .lines(&t as &[_], &a  as &[_], &[PlotOption::Color("brown"),  PlotOption::Caption("A" )])
-                           .set_x_label("Time (s)", &[])
-                           .set_y_label("Force (N) and Torque (Nm) and Acc (m/s^2)", &[])
-                           .set_legend(Coordinate::Graph(0.9), Coordinate::Graph(0.8), &[], &[])
-                           ;
-                        fig.show();
-
-                        thread::sleep(Duration::from_millis(100)); // HACK
-
-                        // read plot back in from file
-                        let mut file = File::open(&fname).unwrap();
-                        data.clear();
-                        file.read_to_end(&mut data).unwrap();
-
-                        // send to browser
-                        sender.send(CmdFrom::Data(format!("send kick teensy {} data:image/png;base64,{}", idx, data.to_base64(base64::STANDARD)))).unwrap();
-                        */
 
                         #[derive(Serialize)] struct Data<'a> { t: &'a [i32], fx: &'a [i32], fy: &'a [i32], fz: &'a [i32], a: &'a [i32] }
                         let id_str = if let Some(id) = id { format!(" {}", id) } else { String::new() };

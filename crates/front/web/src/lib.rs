@@ -3,7 +3,7 @@
 //! Uses the Iron web framework, Handlebars templates, and Twitter Boostrap.
 
 #[macro_use] extern crate comms;
-#[macro_use] extern crate utils;
+extern crate utils;
 extern crate teensy;
 
 #[macro_use] extern crate log;

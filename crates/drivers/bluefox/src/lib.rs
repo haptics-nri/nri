@@ -22,8 +22,6 @@ group_attr!{
     use image::png::PNGEncoder;
     use serialize::base64;
     use serialize::base64::ToBase64;
-    use std::fs::File;
-    use std::io::Read;
     use std::path::Path;
     use std::sync::{Mutex, RwLock};
     use std::sync::mpsc::Sender;

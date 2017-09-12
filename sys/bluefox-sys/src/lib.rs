@@ -50,12 +50,6 @@ macro_rules! prop_status2result {
     }
 }
 
-macro_rules! c_str {
-    ($s:expr) => {
-        CString::new($s).unwrap().as_ptr()
-    }
-}
-
 macro_rules! newtype {
     ($name:ident = $target:path) => {
         #[repr(C)]

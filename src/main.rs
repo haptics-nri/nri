@@ -124,7 +124,6 @@ extern crate optoforce;
 extern crate structure;
 extern crate bluefox;
 extern crate biotac;
-extern crate vicon;
 
 use std::{fs, panic, thread};
 use std::process::{self, Command};
@@ -133,7 +132,6 @@ use std::sync::mpsc::{channel, Sender};
 use std::collections::HashMap;
 use std::time::Duration;
 use comms::{Controllable, CmdTo, CmdFrom, Power};
-use utils::prelude::*;
 use cli::CLI;
 use web::Web;
 use teensy::Teensy;
@@ -141,7 +139,6 @@ use optoforce::Optoforce;
 use structure::Structure;
 use bluefox::Bluefox;
 use biotac::Biotac;
-use vicon::Vicon;
 
 #[macro_use] extern crate log;
 extern crate env_logger;
