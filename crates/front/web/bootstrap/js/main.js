@@ -317,6 +317,7 @@ function stop_demo() {
 
 window.onload = function() {
     $('#start_teensy').attr('formaction', $('#start_teensy').attr('formaction') + '?cmd=metermaid');
+    $('#kick_bluefox').after('\n<button type="submit" class="btn btn-primary" onclick="bluefox_auto();">Auto</button>');
     $('#kick_bluefox').after('\n<button type="submit" class="btn btn-primary" onclick="show_bluefox_settings();">Settings</button>');
 
     $("#alert").on("hidden.bs.modal", next);
@@ -370,6 +371,11 @@ function average(arr, start, end) {
 
 function show_bluefox_settings() {
     $('#bluefox-settings').modal({ show: true, backdrop: 'static' });
+}
+
+function bluefox_auto() {
+    console.log("bluefox auto adjust start");
+    send("to bluefox auto");
 }
 
 function set_bluefox_settings() {
