@@ -18,7 +18,7 @@ group_attr!{
     extern crate scribe;
     extern crate bluefox_sys as ll;
 
-    use image::{imageops, ImageBuffer, ColorType, FilterType};
+    use image::{imageops, ImageBuffer, ColorType, FilterType, Pixel};
     use image::png::PNGEncoder;
     use serialize::base64;
     use serialize::base64::ToBase64;
@@ -131,7 +131,13 @@ group_attr!{
                                                                                          h as u32,
                                                                                          unencoded)
                                               .unwrap());
-                        let (ww, hh) = (200, 150);
+
+                        let brightness = to_resize.pixels()
+                                                  .fold(0.0, |acc, rgb| acc + rgb.to_luma()[0] as f64);
+                        println!("brightness={}", brightness);
+
+                        //let (ww, hh) = (200, 150);
+                        let (ww, hh) = (w as u32, h as u32);
                         let resized = prof!("resize", 
                                             if (w as u32, h as u32) == (ww, hh) {
                                                 to_resize
