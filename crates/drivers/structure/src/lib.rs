@@ -15,7 +15,6 @@ group_attr!{
     extern crate libc;
     extern crate image;
     extern crate rustc_serialize as serialize;
-    use std::mem;
     use std::process::Command;
     use std::sync::{Arc, Mutex, Condvar};
     use std::sync::mpsc::Sender;

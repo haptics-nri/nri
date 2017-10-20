@@ -43,6 +43,6 @@ elif [ "$1" == "all" ]; then
 else
     DEV=$1
     shift
-    rlwrap cargo run --release $FEAT --bin read$DEV -- "$@"
+    rlwrap cargo run --release $FEAT --bin $DEV -- "$@"
 fi
 

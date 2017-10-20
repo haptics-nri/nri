@@ -124,7 +124,6 @@ extern crate optoforce;
 extern crate structure;
 extern crate bluefox;
 extern crate biotac;
-extern crate vicon;
 
 use std::{fs, panic, thread};
 use std::process::{self, Command};
@@ -133,7 +132,6 @@ use std::sync::mpsc::{channel, Sender};
 use std::collections::HashMap;
 use std::time::Duration;
 use comms::{Controllable, CmdTo, CmdFrom, Power};
-use utils::prelude::*;
 use cli::CLI;
 use web::Web;
 use teensy::Teensy;
@@ -141,14 +139,13 @@ use optoforce::Optoforce;
 use structure::Structure;
 use bluefox::Bluefox;
 use biotac::Biotac;
-use vicon::Vicon;
 
 #[macro_use] extern crate log;
 extern crate env_logger;
 extern crate hprof;
 extern crate chrono;
 
-use chrono::UTC;
+use chrono::Utc;
 
 error_chain! {
 }
@@ -357,14 +354,14 @@ fn try_main() -> Result<()> {
                     CmdFrom::Timeout { thread: who, .. }  => {
                         // TODO actually time the service and do something if it times out
                         if find(&services, who.to_owned()).is_some() {
-                            timers.insert(who, UTC::now());
+                            timers.insert(who, Utc::now());
                         } else {
                             bail!("Nonexistent service asked for timeout");
                         }
                     },
                     CmdFrom::Timein { thread: who }    => {
                         if let Some(then) = timers.remove(who) {
-                            println!("Service {} took {} ms", who, UTC::now().signed_duration_since(then));
+                            println!("Service {} took {} ms", who, Utc::now().signed_duration_since(then));
                         } else {
                             bail!("Timein with no matching timeout");
                         }
@@ -379,6 +376,7 @@ fn try_main() -> Result<()> {
                                 (Some("DATADIR"), Some(dir)) => {
                                     println!("Setting DATADIR = {:?}", dir);
                                     *flow::DATADIR.write().unwrap() = dir.into();
+                                    send_to(&services, "web".to_owned(), CmdTo::Data(format!("diskfree {}", web::disk_free())))?;
                                 },
                                 (Some(d), None)              => { errorln!("No value provided to set variable {}", d); },
                                 (Some(d), _)                 => { errorln!("Unknown variable {}", d); },

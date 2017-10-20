@@ -18,12 +18,10 @@ group_attr!{
     extern crate scribe;
     extern crate bluefox_sys as ll;
 
-    use image::{imageops, ImageBuffer, ColorType, FilterType};
+    use image::{imageops, ImageBuffer, ColorType, FilterType, Pixel};
     use image::png::PNGEncoder;
     use serialize::base64;
     use serialize::base64::ToBase64;
-    use std::fs::File;
-    use std::io::Read;
     use std::path::Path;
     use std::sync::{Mutex, RwLock};
     use std::sync::mpsc::Sender;
@@ -48,6 +46,7 @@ group_attr!{
         /// Number of frames captured since setup() was last called (used for calculating frame rates)
         i: usize,
         writing: bool,
+        balanced: Option<usize>,
 
         /// PNG writer rebootable thread
         png: RestartableThread<PngStuff>,
@@ -108,17 +107,20 @@ group_attr!{
                     acq_fr: Some(fps),
                     cam_format: Some(format.0),
                     dest_format: Some(format.1),
+                    white_balance: Some(WhiteBalanceMode::Once),
                     ..default_settings
                 };
 
                 let mut device = Device::new().unwrap();
                 device.request_reset().unwrap();
+                device.set(&settings).unwrap();
 
                 let mtx = Mutex::new(tx);
                 Bluefox {
                     device: device,
                     i: 0,
                     writing: false,
+                    balanced: Some(0),
                     start: time::now(),
 
                     png: RestartableThread::new("Bluefox PNG thread",
@@ -129,7 +131,13 @@ group_attr!{
                                                                                          h as u32,
                                                                                          unencoded)
                                               .unwrap());
-                        let (ww, hh) = (200, 150);
+
+                        let brightness = to_resize.pixels()
+                                                  .fold(0.0, |acc, rgb| acc + rgb.to_luma()[0] as f64);
+                        println!("brightness={}", brightness);
+
+                        //let (ww, hh) = (200, 150);
+                        let (ww, hh) = (w as u32, h as u32);
                         let resized = prof!("resize", 
                                             if (w as u32, h as u32) == (ww, hh) {
                                                 to_resize
@@ -175,17 +183,68 @@ group_attr!{
                         println!("Stopped Bluefox recording.");
                         self.writing = false;
                     },
+                    /*
+                    Some("auto") => {
+                        println!("bluefox auto brightness");
+                        let mut set = self.device.get();
+                        let greys = [60, 65, 70, 75, 80, 85, 90, 95, 100];
+                        let mut brightness = [0.0; 9];
+                        for i in 0..greys.len() {
+                            let grey = greys[i];
+                            println!("\ttrying {}...", grey);
+                            set.average_grey = grey;
+                            self.device.request_reset().unwrap();
+                            self.device.set(&set).unwrap();
+                            thread::sleep_ms(1000);
+                            let image = self.device.request().unwrap();
+                            let (h, w) = image.size();
+                            let image = prof!("imagebuffer",
+                                              ImageBuffer::<image::Rgb<u8>, _>::from_raw(w as u32,
+                                                                                         h as u32,
+                                                                                         image.data().into())
+                                              .unwrap());
+                            brightness[i] = image.pixels()
+                                .fold(0.0, |acc, rgb| acc + rgb.to_luma()[0] as f64);
+                        }
+                        let grey = greys[brightness.iter().map(|b| (b - 245000000.0).abs()).enumerate().min_by_key(|&(_, d)| d).0.unwrap()];
+                        println!("\tbest brightness at grey={}", grey);
+                        set.average_grey = grey;
+                        self.device.request_reset().unwrap();
+                        self.device.set(&set).unwrap();
+                    },
+                    */
                     Some(s) if s.starts_with("settings") => {
                         if self.writing {
                             println!("BLUEFOX: currently writing, ignoring new settings");
+                        } else if self.balanced.is_some() {
+                            println!("BLUEFOX: not white balanced yet, ignoring new setings");
                         } else {
                             println!("BLUEFOX: applying new settings");
                             let set: Settings = serde_json::from_str(&s[9..]).unwrap();
                             self.device.request_reset().unwrap();
                             self.device.set(&set).unwrap();
+                            self.balanced = Some(self.i);
                         }
                     },
                     Some(_) | None => ()
+                }
+
+                if let Some(from) = self.balanced {
+                    if self.i - from == 30 /* 2 seconds */ {
+                        // turn off auto crap
+                        self.device.set(&Settings {
+                            auto_gain: Some(false),
+                            auto_exposure: Some(false),
+                            white_balance: Some(WhiteBalanceMode::Off),
+                            ..Default::default() }).unwrap();
+
+                        let wb = self.device.get_all_wb().unwrap();
+                        println!("BLUEFOX: finished white balance: {:?} (r={}, b={}, gain={}, exp={})",
+                                 wb.mode, wb.red, wb.blue,
+                                 self.device.get_gain().unwrap(), self.device.get_exposure_time().unwrap());
+
+                        self.balanced = None;
+                    }
                 }
 
                 let image = self.device.request().unwrap();

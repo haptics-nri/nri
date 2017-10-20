@@ -7,7 +7,7 @@ authors = ["Haptics NUC <hapticsnuc@alexburka.com>"]
 libc         = "0.2"
 macro-attr   = "0.2"
 conv         = "0.3"
-serde        = "0.9"
-serde_json   = "0.9"
-serde_derive = "0.9"
+serde        = "1"
+serde_json   = "1"
+serde_derive = "1"
 

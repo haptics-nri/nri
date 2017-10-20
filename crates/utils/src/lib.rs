@@ -1,13 +1,18 @@
 #[macro_use] extern crate lazy_static;
 extern crate time;
 extern crate notify;
+extern crate libc;
+extern crate errno;
 
-use time::Duration;
-use std::{env, mem, slice, thread, ptr};
+use errno::errno;
+pub use time::Duration;
+use std::{env, fmt, mem, ptr, slice, thread};
 use std::io::{self, Read};
+use std::ffi::CString;
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::ops::{self, Deref, Add};
+use std::os::unix::ffi::OsStrExt;
 use std::sync::{mpsc, RwLock, Mutex};
 
 pub mod prelude {
@@ -58,19 +63,19 @@ pub fn circular_push<T>(vec: &mut Vec<T>, item: T) {
 }
 
 /// Retry some action on failure
-pub fn retry<R, F: FnMut() -> Option<R>, G: FnOnce() -> R>(label: Option<&str>, times: usize, delay: Duration, mut action: F, fallback: G) -> R {
+pub fn retry<T, E: fmt::Debug, F: FnMut() -> Result<T, E>>(label: Option<&str>, times: usize, delay: Duration, mut action: F) -> Result<T, E> {
     for i in 0..times {
         match action() {
-            Some(ret) => return ret,
-            None =>
+            Ok(t) => return Ok(t),
+            Err(e) =>
                 if i == times-1 {
                     if let Some(label) = label {
                         println!("ERROR: {} failed {} times :(", label, times);
                     }
-                    return fallback()
+                    return Err(e)
                 } else {
                     if let Some(label) = label {
-                        println!("\tRetrying (#{}/{}) {}", i+1, times, label);
+                        println!("\tRetrying (#{}/{}) {} ({:?})", i+1, times, label, e);
                     }
                     delay.sleep();
                 }
@@ -395,5 +400,17 @@ macro_rules! foreach {
         }
         $(__foreach!($val);)*
     }}
+}
+
+/// Check free space on the volume containing a local path
+pub fn df(path: &Path) -> io::Result<u64> {
+    unsafe {
+        let mut stat: libc::statfs = mem::zeroed();
+        if libc::statfs(CString::new(path.as_os_str().as_bytes()).unwrap().as_ptr(), &mut stat) == 0 {
+            Ok(stat.f_bavail * stat.f_bsize as u64)
+        } else {
+            Err(io::Error::from_raw_os_error(errno().0))
+        }
+    }
 }
 

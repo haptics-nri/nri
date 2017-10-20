@@ -20,7 +20,7 @@ pub use indicatif::{ProgressBar, ProgressStyle, MultiProgress};
 
 /// Single, multiple or no progress bar(s)
 pub enum Bar {
-    Multi(&'static str, Arc<MultiProgress>),
+    Multi(&'static str, ProgressBar),
     Single,
     None
 }
@@ -181,29 +181,32 @@ pub fn do_binary<Data: Debug>(header: &str, bars: Bar, (inname, outname): (Strin
     indentln!("file size = {} ({} packets)", vec.len(), vec.len() as f64 / mem::size_of::<Data>() as f64);
 
     let chunks = vec.chunks(mem::size_of::<Data>());
-    let bar = ProgressBar::new(chunks.len() as u64);
-    bar.set_style(ProgressStyle::default_bar().template("[{elapsed_precise}] {bar:80.cyan/blue} {pos:>7}/{len:7} {msg}").progress_chars("##-"));
-    let bar = match bars {
-        Bar::Multi(label, ref bars) => { let bar = bars.add(bar); bar.set_message(label); Some(bar) },
-        Bar::Single => Some(bar),
-        Bar::None => None
+    let (bar, clear) = match bars {
+        Bar::Multi(label, bar) => {
+            bar.set_length(chunks.len() as u64);
+            bar.set_message(label);
+            (Some(bar), false)
+        },
+        Bar::Single => (Some(make_bar(chunks.len() as u64)), true),
+        Bar::None => (None, false)
     };
-    let mut i = 0;
-    let datums = chunks.map(|chunk: &[u8]| {
-        i += 1;
+    let mut datums = Vec::with_capacity(chunks.len());
+    for (i, chunk) in chunks.enumerate() {
         if let Some(ref bar) = bar { if i % 100 == 0 { bar.inc(100); } }
         let mut data: Data = unsafe { mem::uninitialized() };
         unsafe {
             ptr::copy(chunk.as_ptr(), &mut data as *mut _ as *mut _, mem::size_of_val(&data));
         }
         outfile.as_mut().map(|ref mut f| attempt!(writeln!(f, "{:?}", data)));
-        data
-    }).collect::<Vec<_>>();
+        datums.push(data);
+    }
 
-    match bars {
-        Bar::Multi(..) => bar.unwrap().finish(),
-        Bar::Single => bar.unwrap().finish_and_clear(),
-        Bar::None => {}
+    if let Some(bar) = bar {
+        if clear {
+            bar.finish_and_clear();
+        } else {
+            bar.finish();
+        }
     }
     indentln!("translated {} packets", datums.len());
     datums
@@ -216,6 +219,18 @@ pub fn read_binary<Data: Debug>(header: &str) -> Vec<Data> {
 
 pub trait Pixels<T> {
     fn pixel(&self, i: usize) -> T;
+}
+
+pub fn make_bar(len: u64) -> ProgressBar {
+    let bar = ProgressBar::new(len);
+    bar.set_style(ProgressStyle::default_bar().template("[{elapsed_precise}/{eta_precise}] {bar:80.cyan/blue} {pos:>7}/{len:7} {msg}").progress_chars("##-"));
+    bar
+}
+
+pub fn make_bar_bytes(len: u64) -> ProgressBar {
+    let bar = ProgressBar::new(len);
+    bar.set_style(ProgressStyle::default_bar().template("[{elapsed_precise}/{eta_precise}] {bar:80.cyan/blue} {bytes:>7}/{total_bytes:7} {msg}").progress_chars("##-"));
+    bar
 }
 
 pub fn do_camera<T: Copy, Data: Debug + Pixels<T>, F: for<'a> Fn(String, C, &'a Profiler) + Send + Sync + 'static, C: Clone + Send + 'static>(name: &str, func: F, param: C, width: usize, height: usize, channels: usize, color: ColorType, depth: libc::c_uint) -> String {
@@ -233,8 +248,7 @@ pub fn do_camera<T: Copy, Data: Debug + Pixels<T>, F: for<'a> Fn(String, C, &'a 
     let num_threads = num_cpus::get();
     print!("Creating {} threads...", num_threads);
     let mut threads = vec![];
-    let bar = Arc::new(ProgressBar::new(records.len() as u64));
-    bar.set_style(ProgressStyle::default_bar().template("[{elapsed_precise}] {bar:80.cyan/blue} {pos:>7}/{len:7} {msg}").progress_chars("##-"));
+    let bar = Arc::new(make_bar(records.len() as u64));
     for i in 0..num_threads {
         print!("{}...", i);
         let (tx, rx) = mpsc::channel::<PathBuf>();

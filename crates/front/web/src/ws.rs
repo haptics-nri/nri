@@ -5,10 +5,9 @@ use std::sync::{mpsc, Mutex};
 use std::{thread, str};
 use comms::CmdFrom;
 use super::{config, flow};
-pub use websocket::Message;
-use websocket::message::Type as MsgType;
-use websocket::client::{self, ClientBuilder};
-use websocket::server::Server;
+pub use websocket::{Message, OwnedMessage};
+use websocket::sync::client::{self, ClientBuilder};
+use websocket::sync::server::Server;
 use uuid::Uuid;
 
 use super::{utils, Result, Error};
@@ -140,14 +139,13 @@ pub fn spawn(ctx: mpsc::Sender<CmdFrom>, wsrx: mpsc::Receiver<(Message<'static>,
                         let message = message.unwrap();
 
                         match message {
-                            Message { opcode: MsgType::Close, .. } => {
+                            OwnedMessage::Close(..) => {
                                 println!("Websocket client {} disconnected", ip);
                                 return;
                             },
-                            Message { opcode: MsgType::Text, payload: text, .. } => {
-                                println!("Received WS text {:?}", str::from_utf8(&text).unwrap_or(&*format!("{:?}", text)));
-                                if text.starts_with(b"RPC") {
-                                    let text = str::from_utf8(&text).unwrap();
+                            OwnedMessage::Text(text) => {
+                                println!("Received WS text {:?}", text);
+                                if text.starts_with("RPC") {
                                     let space = text.find(' ').unwrap();
                                     let mut id_parts = text[3..space].split('_');
                                     let srvid = id_parts.next().unwrap().parse::<Uuid>().unwrap();
@@ -165,11 +163,11 @@ pub fn spawn(ctx: mpsc::Sender<CmdFrom>, wsrx: mpsc::Receiver<(Message<'static>,
                                                 rpc.send(Some(msg)).unwrap();
                                             }
                                         } else {
-                                            locked_senders[wsid].send_message(&Message::text("RPC ERROR: nobody listening".to_owned())).unwrap();
+                                            locked_senders[wsid].send_message(&Message::text("RPC ERROR: nobody listening")).unwrap();
                                         }
                                     }
                                 } else {
-                                    cctx.send(CmdFrom::Data(str::from_utf8(&text).unwrap().to_owned())).unwrap();
+                                    cctx.send(CmdFrom::Data(text)).unwrap();
                                 }
                             },
                             _ => ()

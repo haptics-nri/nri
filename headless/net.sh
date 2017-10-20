@@ -10,6 +10,7 @@ case "$arg" in
     "wifi" )
         sudo /bin/systemctl disable create_ap
         sudo /bin/systemctl enable network-manager
+        sudo create_ap --fix-unmanaged
         ;;
     "" )
         if sudo /bin/systemctl is-enabled -q create_ap; then

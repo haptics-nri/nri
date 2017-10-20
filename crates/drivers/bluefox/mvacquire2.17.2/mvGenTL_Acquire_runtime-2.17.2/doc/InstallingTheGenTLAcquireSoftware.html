@@ -1,0 +1,233 @@
+<html>
+<head>
+<title>MATRIX VISION GmbH - Installing the mvGenTL-Acquire Driver </title>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-15" />
+<link href="tabs.css" rel="stylesheet" type="text/css"> 
+<link href="doxygen.css" rel="stylesheet" type="text/css"> 
+</head>
+<body>
+<div class="contents">
+<h1><a name="Installing_the_mvGenTL_Acquire_Remo"> Installing the mvGenTL-Acquire Driver </a></h1>
+<p>
+</p><h2><a name="Introduction"> Introduction </a></h2>
+<p>
+To use a GenICam/GenTL compliant camera (grab images from it and change its
+settings), a driver is needed, consisting of a few libraries and a
+dozen or so configuration files. These files are <em>run time</em> required.
+</p><p>
+To develop applications that can use a GenICam/GenTL compliant camera, a source
+tree is needed, containing header files, makefiles, samples, and a few
+libraries. These files are <em>compile time</em> required.
+</p><p>
+Both file collections are distributed in a single package : <code>mvGenTL_Acquire-x86-n.n.n.n.tgz</code>.
+</p><p>
+To install this package, a shell script must be run : <code>install_mvGenTL_Acquire.sh</code>.<br>
+You may need to enable the execute flag with <code>chmod a+x install_mvGenTL_Acquire.sh</code>.<br>
+</p><p>
+This document describes what this script does and how it should be invoked.<br>
+</p><p>
+</p><h2><a name="Invoking_the_Installation_Script"> Invoking the Installation Script </a></h2>
+<p>
+The installation script (<code>install_mvGenTL_Acquire.sh</code>) and the archive (<code>mvGenTL_Acquire-x86-n.n.n.n.tgz</code>) <em>must</em> reside in the same directory.<br>
+Nothing is written to this directory during script execution, so no
+write access to the directory is needed in order to execute the script.
+It could even be executed from a partition that was mounted read-only
+(e.g. from a CD-ROM).
+</p><p>
+You should run the script as a <em>normal user</em>, and will be asked for the <em>superuser</em> password when needed (unless you did a <code>sudo</code> shortly before invoking the script).
+</p><p>
+The script takes two arguments, both of which are optional:
+</p><p>
+</p><ol>
+<li> target directory name
+</li>
+<li> version
+</li>
+</ol>
+<p>
+The arguments must be specified in this order.<br>
+Invoke with argument <code>-h</code> to see a help message.
+</p><p>
+</p><h3><a name="Target_Directory_Name"> Target Directory Name </a></h3>
+<p>
+The target directory name specifies where to place the driver.<br>
+If the directory does not yet exist, it will be created.<br>
+The path can be either absolute or relative; i.e. the name may but need not start with <code><b>/</b></code>.<br>
+Write access to this directory, or the directory above, is not needed, as the archive will be unpacked using <code>sudo</code>.<br>
+It is therefore ok to specify e.g. <code><b>/usr/local</b></code>.
+</p><p>
+</p><div style="border: 1px dashed rgb(0, 82, 136); padding: 5px;"> This directory is only used for the files that are <em>run time</em> required.</div>
+<p>
+The files required at <em>compile time</em> are always installed in <code><b>$HOME/mvimpact-acquire-x86-n.n.n.n</b></code>.<br>
+The script also creates a convenient softlink to this directory:
+</p><div class="fragment"><pre class="fragment">    mvimpact-acquire -&gt; mvimpact_acquire-x86-1.10.30.108
+</pre></div>
+Use <code><b>$HOME/mvimpact-acquire</b></code> in all your scripts and makefiles, and nothing needs to be changed after an update.
+<p>
+If this argument is not specified, or is <code><b>.</b></code>, the driver will be placed in the current working directory.
+</p><p>
+</p><h3><a name="Version"> Version </a></h3>
+<p>
+The version argument is entirely optional.<br>
+If no version is specified, the most recent <code>mvGenTL_Acquire-n.n.n.n.tgz</code> found in the current directory will be installed.<br>
+Often there will be only one <code>mvGenTL_Acquire-n.n.n.n.tgz</code> file in that directory. It is then pointless to specify a version.
+</p><p>
+A note on terminology. Suppose the archive file is called <code>mvGenTL_Acquire-1.10.30.108.tgz</code>. The driver in this archive will have <em>major version</em> number <code><b>1</b></code>, <em>minor version</em> number <code><b>10</b></code>, <em>build</em> number <code><b>30</b></code> and <em>release</em> number <code><b>108</b></code>.
+</p><p>
+Now suppose that <code>install_mvGenTL_Acquire.sh</code> resides in <code><b>/tmp</b></code> (as will often be the case), and that <code><b>/tmp</b></code> also contains <code>mvGenTL_Acquire-1.10.30.108.tgz</code> and <code>mvGenTL_Acquire-1.10.28.102.tgz</code>. Then both
+</p><div class="fragment"><pre class="fragment">    ./install_mvGenTL_Acquire.sh  $HOME/mvGTLA  1.10.30.108
+</pre></div>
+and
+<div class="fragment"><pre class="fragment">    ./install_mvGenTL_Acquire.sh  $HOME/mvGTLA
+</pre></div>
+will install version <code>1.10.30.108</code> in directory <code>$HOME/mvGTLA</code>, as that is the most recent version.<br>
+To install version <code>1.10.28.102</code>, you must be explicit:
+<div class="fragment"><pre class="fragment">    ./install_mvGenTL_Acquire.sh  $HOME/mvGTLA  1.10.28.102
+</pre></div>
+<p>
+</p><h2><a name="What_the_Script_Does"> What the Script Does </a></h2>
+<p>The script not only copies files to their respective target
+directories, but also patches a few config files.
+</p><p>
+</p><h3><a name="Prerequisites"> Prerequisites </a></h3>
+<p>
+The mvGenTL-Acquire driver implements the GenICam&#8482; standard.<br>
+As such, it rests on a handful of GenICam&#8482; libraries, which the
+installer will also install.
+</p><p>
+Not automatically installed is the <a href="http://www.wxwidgets.org/"
+target="_top" class="el">wxWidgets</a> development package.<br>
+Its manual installation <b>prior to running the install script</b>, though not strictly required, is strongly
+recommended, as without it, <code>wxPropView</code> cannot be built.<br>
+On SuSE, the package is called <code>wxGTK-devel</code>, on Ubuntu <code>libwxgtk3.0-dev</code>.
+</p><h3><a name="Dynamic_Linking"> Dynamic Linking </a></h3>
+<p>
+The driver consists of a number of shared libraries.<br>
+Where on the hard disk these libraries will end up depends on the first argument passed to the install script.<br>
+Suppose the script was called like so:
+</p><div class="fragment"><pre class="fragment">    ./install_mvGenTL_Acquire.sh  /usr/local
+</pre></div>
+The libraries will then be installed in
+<div class="fragment"><pre class="fragment">    /usr/local/lib
+    /usr/local/lib/genapi/generic
+    $HOME/mvimpact-acquire/lib/x86
+</pre></div>
+This is relevant to <code>ld</code> at <em>compile time</em>, and to <code>ld.so</code> at <em>run time</em>.
+<p>
+So that <code>ld</code> can find <code>libmvDeviceManager.so</code> at compile time, add a line like this to your makefile:
+</p><div class="fragment"><pre class="fragment">    LDFLAGS+=-L$(HOME)/mvimpact-acquire/lib/x86 -lmvDeviceManager
+</pre></div>
+<p>
+So that <code>ld.so</code> can find all the required libs at run time, the script writes
+</p><div class="fragment"><pre class="fragment">    $GENICAM_ROOT/lib
+    $GENICAM_ROOT/lib/genapi/generic
+    $HOME/mvimpact-acquire/lib/x86
+</pre></div>
+to either <code>/etc/ld.so.conf.d/genicam.conf</code> and <code>/etc/ld.so.conf.d/acquire.conf</code> or <code>/etc/ld.so.conf</code>, expanding the environment variables in the process.<br>
+On systems where <code>/etc/ld.so.conf</code> sources all files found in directory <code>/etc/ld.so.conf.d/</code> (like Ubuntu and SuSE), the pathes are written to <code>/etc/ld.so.conf.d/genicam.conf</code> and <code>/etc/ld.so.conf.d/acquire.conf</code>.<br>
+Else, they are written to <code>/etc/ld.so.conf</code>.<br>
+The script then adds the libraries to the <code>ld.so</code> cache by calling <code>ldconfig</code>.<br>Obviously
+all of this is done as superuser, but that will go by unnoticed, as the
+superuser password was already requested earlier in the script, when
+installing the prerequisites.
+<p>
+</p><div style="border: 1px dashed rgb(0, 82, 136); padding: 5px;"> If you ever need to edit <code>/etc/ld.so.conf.d/genicam.conf</code> by hand, you must write out the pathes in full, and not include any environment variables. So you should write e.g.
+<div class="fragment"><pre class="fragment">    /usr/local/lib
+    /usr/local/lib/genapi/generic
+    /home/john/mvimpact-acquire/lib/x86
+</pre></div>
+rather than
+<div class="fragment"><pre class="fragment">    $GENICAM_ROOT/lib
+    $GENICAM_ROOT/lib/genapi/generic
+    $HOME/mvimpact-acquire/lib/x86
+</pre></div>
+(where <code>/usr/local</code> and <code>/home/john</code> are obviously just examples).
+<p>
+This is so because <code>ldconfig</code> does not expand environment variables when reading the configuration files.
+</p></div><p>
+</p><h3><a name="Environment_Variables"> Environment Variables </a></h3>
+<p>
+The GenICam&#8482; libraries expect to find three environment variables.<br>
+The install script will write the corresponding <code>export</code> commands
+to either <code>/etc/profile.d/genicam.sh</code> or <code>/etc/profile</code>.<br>
+On systems where <code>/etc/profile</code> sources all files found in directory <code>/etc/profile.d/*.sh</code> (like Ubuntu and SuSE), the <code>export</code> commands are written to <code>/etc/profile.d/genicam.sh</code>.<br>
+Else, they are written to <code>/etc/profile</code>.
+</p><p>
+In addition, an <code>export</code> line is written to either <code>/etc/profile.d/acquire.sh</code> or <code>/etc/profile</code>.
+</p><p>
+Note that these environment variables will not be set after completion of the install script.
+</p><p>The shell level of a script is always one deeper than the level
+of the shell from where the script is called.
+Any environment variable set at this deeper level is lost as soon as
+the script terminates, i.e. as soon as control returns to the higher
+level.
+It is therefore impossible to set environment variables from within a
+script (or the script must be sourced, which is not foreseen for <code>install_mvGenTL_Acquire.sh</code>).
+</p><p>
+The solution is to source <code>/etc/profile</code> by hand after the script is done:
+</p><div class="fragment"><pre class="fragment">    ./install_mvGenTL_Acquire.sh  /usr/local
+    . /etc/profile
+</pre></div>
+<p>
+</p><div style="border: 1px dashed rgb(0, 82, 136); padding: 5px;"> There is space between <code>.</code> and <code>/</code> in the last command.</div>
+<p>
+The same effect as sourcing <code>/etc/profile</code> can be achieved by logging out and then logging in again, e.g. by restarting X11 (Ctrl-Alt-Delete).
+</p><p>
+As of the next boot, the environment variables will always be set properly and you can forget about them.
+</p><p>
+</p><h3><a name="Building_the_Tools_and_Samples"> Building the Tools and Samples </a></h3>
+<p>
+When it has written all settings to their respective config files, the
+script asks the user whether the tools and samples should be built.<br>
+If the answer is anything other than <code>n</code>, all tools and samples will be built.<br>
+If the answer is <code>n</code> (<em>no</em>), the script will exit without building the tools and samples.<br>
+The user can build them at some later point like so:</p>
+<div class="fragment"><pre class="fragment">
+    cd $HOME/mvimpact-acquire
+    make x86
+    sudo ldconfig
+</pre></div>
+The <code>sudo ldconfig</code> must only be run once, after the first make.<br>
+It ensures that the applications built in directory <code>$HOME/mvimpact-acquire/apps</code> can find three shared libraries built in <code>$HOME/mvimpact-acquire/lib/x86</code>:
+<div class="fragment"><pre class="fragment">
+    libmvDeviceManager.so
+    libmvPropHandling.so
+</pre></div>
+
+<h3><a name="Optimizing_the_ethernet_connecti"> Optimizing the ethernet connection </a></h3>
+
+<p />
+Be sure to set the MTU for the used ethernet port to as high a value as
+possible.
+<p />
+<div class="fragment"><pre class="fragment">
+    sudo /sbin/ifconfig eth0 mtu 9200
+</pre></div>
+<p />
+If this returns
+<p />
+<div class="fragment"><pre class="fragment">
+    SIOCSIFMTU: Invalid argument
+</pre></div>
+<p />
+the port (here <code>eth0</code>) does not support packets this large
+(here <code>9200</code>), and you must try
+some lower value. In this case, try a smaller value until no error is
+returned.<br>
+
+To see the current MTU for a given port (let's say <code>eth0</code>), type
+<p />
+<div class="fragment"><pre class="fragment">
+    /sbin/ifconfig eth0
+</pre></div>
+<p />
+Note that the connection is only as fast as the slowest link in the chain,
+meaning that in many cases you cannot get anything higher than
+<code>1500</code>. In such cases, the network is a limiting factor, and the
+camera cannot deliver its optimal performance.<br>
+If you cannot use <code>ifconfig</code> with any value higher than
+<code>1500</code>, try to rearrange your connection, perhaps by taking out a
+slow switch or so.<br>
+In addition, be sure to use CAT5E cables.
+</div>
+</body></html>

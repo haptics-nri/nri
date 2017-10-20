@@ -3,7 +3,7 @@
 //! Uses the Iron web framework, Handlebars templates, and Twitter Boostrap.
 
 #[macro_use] extern crate comms;
-#[macro_use] extern crate utils;
+extern crate utils;
 extern crate teensy;
 
 #[macro_use] extern crate log;
@@ -31,7 +31,6 @@ use std::path::Path;
 use std::sync::{Mutex, RwLock, mpsc};
 use std::thread::JoinHandle;
 use std::str;
-use std::process::Command;
 use std::sync::PoisonError;
 use std::sync::mpsc::RecvError;
 use time::Duration;
@@ -280,21 +279,18 @@ fn flow(tx: mpsc::Sender<CmdFrom>) -> Box<Handler> {
                       let data = json!({
                           "flows": get_flows()
                       });
-                      utils::retry(Some("[web] send flow info to client"), 10, Duration::milliseconds(500),
-                          || {
-                                 Ok(())
-                                     .and_then(|_| comms.send(format!("flow {}", render("flows", data.clone()))))
-                                     .and_then(|_| comms.send(format!("diskfree {}", disk_free())))
-                                     .ok()
-                          },
-                          || {
-                                 // if the WebSocket communications fail, back out and abort the flow
-                                 let mut locked_flows = FLOWS.write().unwrap();
-                                 if let Some(found) = locked_flows.get_mut(&*flow) {
-                                     found.abort(&*mtx.lock().unwrap(), comms.clone()).unwrap();
-                                     resp = Response::with((status::Ok, format!("Aborting \"{}\" flow", flow)));
-                                 }
-                          });
+                      utils::retry(Some("[web] send flow info to client"), 10, Duration::milliseconds(500), || {
+                          Ok(())
+                              .and_then(|_| comms.send(format!("flow {}", render("flows", data.clone()))))
+                              .and_then(|_| comms.send(format!("diskfree {}", disk_free())))
+                      }).unwrap_or_else(|_| {
+                          // if the WebSocket communications fail, back out and abort the flow
+                          let mut locked_flows = FLOWS.write().unwrap();
+                          if let Some(found) = locked_flows.get_mut(&*flow) {
+                              found.abort(&*mtx.lock().unwrap(), comms.clone()).unwrap();
+                              resp = Response::with((status::Ok, format!("Aborting \"{}\" flow", flow)));
+                          }
+                      });
 
                       Ok(resp)
                   })
@@ -311,22 +307,14 @@ impl RegexSplit for str {
 }
 
 /// Measure free disk space in gigabytes
-fn disk_free() -> String {
-    let re = Regex::new(r" +").unwrap();
-
+pub fn disk_free() -> String {
     let datadir = &*flow::DATADIR.read().unwrap();
-
     format!("{} {}", datadir,
-            str::from_utf8(
-                &Command::new("df") // measure disk free space
-                    .arg("-h")     // human-readable units
-                    .arg(datadir) // device corresponding to DATADIR
-                    .output().unwrap().stdout).unwrap() // read all output
-                .split("\n") // split lines
-                .skip(1) // skip first line
-                .next().unwrap() // use second line
-                .split_re(&re) // split on whitespace
-                .nth(3).unwrap()) // fourth column is available space
+            if let Ok(bytes) = utils::df(Path::new(datadir)) {
+                format!("{}G", bytes/1024/1024/1024)
+            } else {
+                "DNE!".into()
+            })
 }
 
 /// Controllable struct for the web server

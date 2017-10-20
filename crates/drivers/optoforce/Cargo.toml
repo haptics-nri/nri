@@ -14,8 +14,7 @@ guilt-by-association = "0.4"
 time                 = "0.1"
 libc                 = "0.2"
 rustc-serialize      = "0.3" # TODO migrate to serde
-serde                = "0.9"
-serde_derive         = "0.9"
-serde_json           = "0.9"
-gnuplot              = "0.0.21"
+serde                = "1"
+serde_derive         = "1"
+serde_json           = "1"
 

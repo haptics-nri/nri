@@ -1,6 +1,6 @@
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate error_chain;
-#[macro_use] extern crate utils;
+extern crate utils;
 #[macro_use] extern crate comms;
 extern crate teensy;
 extern crate chrono;
