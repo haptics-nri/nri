@@ -131,7 +131,7 @@ pub struct Flow {
     pub name: String, pub shortname: String,
     pub endeffs: Vec<ParkState>,
     /// States in the flow
-    states: Vec<FlowState>,
+    pub states: Vec<FlowState>,
     /// Is this the active flow?
     active: bool,
     /// All states done but one?
@@ -167,11 +167,11 @@ impl Clone for Flow {
 #[derive(Clone, Serialize)]
 pub struct FlowState {
     /// Name of the flow state
-    name: String,
+    pub name: String,
     /// State of parking lot that allows this state (if applicable)
     park: Option<ParkState>,
     /// Commands to run for this state
-    script: Vec<(FlowCmd, Option<DateTime<Local>>)>,
+    pub script: Vec<(FlowCmd, Option<DateTime<Local>>)>,
     /// Has this state been completed?
     done: bool,
     stamp: Option<DateTime<Local>>,
@@ -397,22 +397,39 @@ impl Flow {
                     script.push((FlowCmd::Message(line[1..line.len()-1].to_owned()), None));
                 } else if line.starts_with('>') {
                     let q1 = line.find('"').ok_or(ParseFlow(i, "expected quoted string"))?;
-                    let q2 = line.rfind('"').ok_or(ParseFlow(i, "unterminated string"))?;
+                    let q2 = q1+1 + line[q1+1 ..].find('"').ok_or(ParseFlow(i, "unterminated string"))?;
                     let s = line[q1+1 .. q2].trim();
-                    let range = line[q2+1 ..].trim();
+                    let range_start = line[q2+1 ..].find('(').map(|i| q2+1 + i);
                     
-                    if !range.is_empty() {
-                        if !range.starts_with('(') || !range.ends_with(')') {
-                            Err(ParseFlow(i, "range not in parentheses"))?;
+                    let mut cmd;
+                    if let Some(range_start) = range_start {
+                        let range_end = range_start+1 + line[range_start+1 ..].find(')').ok_or(ParseFlow(i, "unterminated range"))?;
+                        let range = line[range_start .. range_end+1].trim();
+                        if let Some(dots) = range.find("..") {
+                            let low = range[1..dots].parse().chain_err(|| ParseFlow(i, "bad start of range"))?;
+                            let high = range[dots+2..range.len()-1].parse().chain_err(|| ParseFlow(i, "bad end of range"))?;
+                            
+                            cmd = FlowCmd::int(s.to_owned(), (low, high));
+                        } else {
+                            cmd = FlowCmd::str(s.to_owned());
                         }
-                        let dots = range.find("..").ok_or(ParseFlow(i, "not enough dots in range"))?;
-                        let low = range[1..dots].parse().chain_err(|| ParseFlow(i, "bad start of range"))?;
-                        let high = range[dots+2..range.len()-1].parse().chain_err(|| ParseFlow(i, "bad end of range"))?;
-                        
-                        script.push((FlowCmd::int(s.to_owned(), (low, high)), None));
                     } else {
-                        script.push((FlowCmd::str(s.to_owned()), None));
+                        cmd = FlowCmd::str(s.to_owned());
                     }
+
+                    // look for answer
+                    let answer_start = line[q2+1 ..].find('[').map(|i| q2+1 + i);
+                    if let Some(answer_start) = answer_start {
+                        let answer_end = answer_start+1 + line[answer_start+1 ..].find(']').ok_or(ParseFlow(i, "unterminated answer"))?;
+                        let answer = line[answer_start+1 .. answer_end].trim();
+                        match cmd {
+                            FlowCmd::Int { ref mut data, .. } => *data = Some(answer.parse().map_err(|_| ParseFlow(i, "range answer not an integer"))?),
+                            FlowCmd::Str { ref mut data, .. } => *data = Some(answer.to_owned()),
+                            _ => unreachable!()
+                        }
+                    }
+
+                    script.push((cmd, None));
                 } else {
                     let mut words = line.split(' ').map(str::trim);
                     match words.next() {
