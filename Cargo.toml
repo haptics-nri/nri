@@ -76,6 +76,7 @@ tempdir      = "0.3"
 rayon        = "0.8"
 nalgebra     = "0.13"
 line_drawing = "0.5"
+cast         = "0.2"
 
 [build-dependencies]
 foreman     = "0.3"
