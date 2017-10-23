@@ -7,7 +7,7 @@ exclude = ["src/web/templates/*", "src/web/bootstrap/*", "src/web/flows/*", "dat
 
 [profile.release]
 #debug = true
-lto = true
+#lto = true
 
 [features]
 default = ["hardware"]
@@ -55,6 +55,7 @@ time         = "0.1"
 libc         = "0.2"
 csv          = "0.15"
 lodepng      = "1.1" # TODO migrate to image
+image        = "0.15"
 num_cpus     = "1"
 serde        = "1"
 serde_json   = "1"
@@ -71,6 +72,10 @@ fallible-iterator = "0.1"
 walkdir      = "1"
 ssh2         = "0.3"
 libssh2-sys  = "0.2"
+tempdir      = "0.3"
+rayon        = "0.8"
+nalgebra     = "0.13"
+line_drawing = "0.5"
 
 [build-dependencies]
 foreman     = "0.3"
