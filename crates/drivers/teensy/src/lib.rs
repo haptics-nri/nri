@@ -59,6 +59,7 @@ group_attr!{
 
     use comms::{Controllable, CmdFrom, Block, RestartableThread};
     use scribe::{Writer, Writable};
+    use utils::prelude::*;
     use std::io::{self, Read, Write};
     use std::fs::File;
     use std::sync::mpsc::Sender;
@@ -538,7 +539,7 @@ group_attr!{
                             _ => {}
                         }
 
-                        utils::circular_push(&mut self.buf, packet.clone());
+                        self.buf.circular_push(packet.clone());
                         self.file.write(packet);
                     },
                     Err(e)  => errorln!("Error reading packet from Teensy: {:?}", e)
