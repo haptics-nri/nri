@@ -42,12 +42,16 @@ quick_main!(|| -> Result<i32> {
         (author: crate_authors!("\n"))
         (about: "Helper for tabulating data locations")
 
-        (@arg SURFACES: +required "Surfaces CSV file")
-        (@arg DATADIR: +required +multiple "Dataset directory (can be a directory or a Nickname=directory pair")
+        (@arg AFTER:    -a --after [AFTER] {|s| s.parse::<i32>()}
+                             "Date when real data collection began (YYYYMMDD)")
+        (@arg SURFACES: *    "Surfaces CSV file")
+        (@arg DATADIR:  *... "Dataset directory (can be a directory or a Nickname=directory pair")
     }.get_matches();
 
     // step 1: catalog the YYYYMMDD dirs in each datadir
     
+    let after = matches.value_of("AFTER")
+                       .map(|a| a.parse().unwrap());
     let args = matches.values_of("DATADIR").unwrap();
     let mut datalocs = BTreeMap::<u32, _>::new();
     let mut nicknames = BTreeMap::new();
@@ -61,9 +65,11 @@ quick_main!(|| -> Result<i32> {
         // scan the datadir
         for_each_subdir(datadir, |date| {
             if let Ok(date) = date.file_name().to_string_lossy().parse() {
-                datalocs.entry(date)
-                    .or_insert(vec![])
-                    .push(nickname);
+                if after.map(|a| date >= a).unwrap_or(true) {
+                    datalocs.entry(date)
+                        .or_insert(vec![])
+                        .push(nickname);
+                }
             }
             Ok(())
         })?;
@@ -148,42 +154,31 @@ quick_main!(|| -> Result<i32> {
     let mut episodes = BTreeMap::new();
     for (i, (name, stick, opto, bio, loc1, loc2)) in surfaces.into_iter().enumerate() {
         let i = i+2; // google sheets is 1-based and has a header row
-        let mut locs = vec![];
+        let locs = [&loc1, &loc2];
 
-        if loc1.is_empty() && loc2.is_empty() {
-            println!("Row {} ({}) has no locations at all.", i, name);
-        } else {
-            if loc1.is_empty() {
-                println!("Row {} ({}) has no Location 1", i, name);
-            } else {
-                locs.push(loc1);
-            }
+        let mut any_data = false;
 
-            if loc2.is_empty() {
-                println!("Row {} ({}) has no Location 2", i, name);
-            } else {
-                locs.push(loc2);
-            }
+        // check that the episode for each present end-effector exists on each specified datadir
+        for (endeff, &(ref date, ref num)) in vec![("stick", &stick), ("opto", &opto), ("bio", &bio)] {
+            if !date.is_empty() {
+                if num.is_empty() {
+                    println!("Row {} ({}) has a {} date but no episode number", i, name, endeff);
+                } else {
+                    any_data = true;
+                    episodes.entry((endeff, date.clone(), num.clone()))
+                            .and_modify(|dupes: &mut Vec<_>| {
+                                let dupes_desc = dupes.iter()
+                                                      .map(|&(i, ref name)|
+                                                           format!("row {} ({})", i, name))
+                                                      .collect::<Vec<_>>().join(", ");
+                                println!("Row {} ({}) refers to {}/{}cam/{} which was already used in {}",
+                                         i, name, date, endeff, num, dupes_desc);
+                                dupes.push((i, name.clone()));
+                            })
+                            .or_insert_with(|| vec![(i, name.clone())]);
 
-            // check that the episode for each present end-effector exists on each specified datadir
-            for (endeff, &(ref date, ref num)) in vec![("stick", &stick), ("opto", &opto), ("bio", &bio)] {
-                if !date.is_empty() {
-                    if num.is_empty() {
-                        println!("Row {} ({}) has a {} date but no episode number", i, name, endeff);
-                    } else {
-                        episodes.entry((endeff, date.clone(), num.clone()))
-                                .and_modify(|dupes: &mut Vec<_>| {
-                                    let dupes_desc = dupes.iter()
-                                                          .map(|&(i, ref name)|
-                                                               format!("row {} ({})", i, name))
-                                                          .collect::<Vec<_>>().join(", ");
-                                    println!("Row {} ({}) refers to {}/{}cam/{} which was already used in {}",
-                                             i, name, date, endeff, num, dupes_desc);
-                                    dupes.push((i, name.clone()));
-                                })
-                                .or_insert_with(|| vec![(i, name.clone())]);
-
-                        for loc in &locs {
+                    for loc in &locs {
+                        if !loc.is_empty() {
                             if let Some(dir) = nicknames.get(&loc[..]) {
                                 if !Path::new(dir).join(date)
                                                   .join(format!("{}cam", &endeff))
@@ -197,6 +192,15 @@ quick_main!(|| -> Result<i32> {
                             }
                         }
                     }
+                }
+            }
+
+            if any_data {
+                match (loc1.is_empty(), loc2.is_empty()) {
+                    (true , true ) => println!("Row {} ({}) has no locations at all", i, name),
+                    (true , false) => println!("Row {} ({}) has no Location 1", i, name),
+                    (false, true ) => println!("Row {} ({}) has no Location 2", i, name),
+                    _ => {}
                 }
             }
         }
