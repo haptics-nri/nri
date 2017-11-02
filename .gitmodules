@@ -12,7 +12,7 @@
 	url = git@github.com:haptics-nri/remake
 [submodule "hprof"]
 	path = overrides/hprof
-	url = git@github.com:cmr/hprof
+	url = git@github.com:durka/hprof
 [submodule "overrides/urlencoded"]
 	path = overrides/urlencoded
 	url = git@github.com:haptics-nri/urlencoded
