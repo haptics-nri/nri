@@ -18,8 +18,8 @@ error_chain! {
 }
 use ErrorKind::*;
 
-use std::collections::BTreeMap;
-use std::fs::DirEntry;
+use std::collections::{BTreeMap, HashSet};
+use std::fs::{self, DirEntry};
 use std::path::{Path, PathBuf};
 
 use utils::prelude::*;
@@ -36,23 +36,73 @@ fn for_each_subdir<P: AsRef<Path>, F: FnMut(DirEntry) -> Result<()>>(path: P, mu
     Ok(())
 }
 
+/// Run a callback for each file inside another directory
+fn for_each_file<P: AsRef<Path>, F: FnMut(DirEntry) -> Result<()>>(path: P, mut func: F) -> Result<()> {
+    let path = path.as_ref();
+    for entry in path.read_dir().chain_err(|| Io("list", path.into()))? {
+        let entry = entry.chain_err(|| Io("read entry of", path.into()))?;
+        if !entry.metadata().chain_err(|| Io("inspect", entry.path()))?.is_dir() {
+            func(entry)?;
+        }
+    }
+    Ok(())
+}
+
 quick_main!(|| -> Result<i32> {
     let matches = clap_app! { nri_render =>
         (version: crate_version!())
         (author: crate_authors!("\n"))
         (about: "Helper for tabulating data locations")
 
-        (@arg AFTER:    -a --after [AFTER] {|s| s.parse::<i32>()}
-                             "Date when real data collection began (YYYYMMDD)")
         (@arg SURFACES: *    "Surfaces CSV file")
         (@arg DATADIR:  *... "Dataset directory (can be a directory or a Nickname=directory pair")
+
+        (@arg AFTER:     -a --after [AFTER] {|s| s.parse::<i32>()}
+                              "Date when real data collection began (YYYYMMDD)")
+        (@arg CHECKDATA: -d --data "Check that data is present & processed")
+        (@arg CROPDIR:   -c --cropdir [CROPDIR] {|p| if Path::new(&p).is_dir() { Ok(()) } else { Err(format!("{} is not a directory", p)) }}
+                              "Directory which should contain crops and CSV (will be cleared!)")
     }.get_matches();
+
+    let after = matches.value_of("AFTER")
+                       .map_or(0, |a| a.parse().unwrap());
+    let check_data = matches.is_present("CHECKDATA");
+    let cropdir = matches.value_of("CROPDIR").map(|p| Path::new(p));
+    let args = matches.values_of("DATADIR").unwrap();
+
+    let mut cropcsv = if let Some(cropdir) = cropdir {
+        let mut all_crops = true;
+        for_each_file(cropdir,
+                      |ent| {
+                          if !ent.path()
+                                 .file_name().unwrap()
+                                 .to_string_lossy()
+                                 .starts_with("crop") {
+                              all_crops = false;
+                          }
+                          Ok(())
+                      })?;
+        for_each_subdir(cropdir,
+                        |_| {
+                            all_crops = false;
+                            Ok(())
+                        })?;
+        if !all_crops {
+            bail!("Crop dir contains other stuff!");
+        }
+
+        fs::remove_dir_all(cropdir).chain_err(|| Io("delete", cropdir.into()))?;
+        fs::create_dir(cropdir).chain_err(|| Io("create", cropdir.into()))?;
+
+        let mut csv = csv::Writer::from_file(cropdir.join("crops.csv"))?;
+        csv.encode(("Cropped image", "Date", "End-effector", "Episode number", "Data location"))?;
+        Some(csv)
+    } else {
+        None
+    };
 
     // step 1: catalog the YYYYMMDD dirs in each datadir
     
-    let after = matches.value_of("AFTER")
-                       .map(|a| a.parse().unwrap());
-    let args = matches.values_of("DATADIR").unwrap();
     let mut datalocs = BTreeMap::<u32, _>::new();
     let mut nicknames = BTreeMap::new();
     for arg in args {
@@ -65,7 +115,7 @@ quick_main!(|| -> Result<i32> {
         // scan the datadir
         for_each_subdir(datadir, |date| {
             if let Ok(date) = date.file_name().to_string_lossy().parse() {
-                if after.map(|a| date >= a).unwrap_or(true) {
+                if date >= after {
                     datalocs.entry(date)
                         .or_insert(vec![])
                         .push(nickname);
@@ -152,17 +202,25 @@ quick_main!(|| -> Result<i32> {
 
     println!("\nEXCEPTIONS:");
     let mut episodes = BTreeMap::new();
+    let mut cropdescs = HashSet::new();
     for (i, (name, stick, opto, bio, loc1, loc2)) in surfaces.into_iter().enumerate() {
         let i = i+2; // google sheets is 1-based and has a header row
         let locs = [&loc1, &loc2];
 
+        macro_rules! complain {
+            ($msg:expr $(, $var:expr)*) => {
+                println!(concat!("Row {} ({}) ", $msg), i, name $(, $var)*);
+            }
+        }
+
         let mut any_data = false;
+        let mut crops = 0;
 
         // check that the episode for each present end-effector exists on each specified datadir
         for (endeff, &(ref date, ref num)) in vec![("stick", &stick), ("opto", &opto), ("bio", &bio)] {
-            if !date.is_empty() {
+            if !date.is_empty() && date.parse::<u32>().ok().map_or(false, |date| date >= after) {
                 if num.is_empty() {
-                    println!("Row {} ({}) has a {} date but no episode number", i, name, endeff);
+                    complain!("has a {} date ({}) but no episode number", endeff, date);
                 } else {
                     any_data = true;
                     episodes.entry((endeff, date.clone(), num.clone()))
@@ -171,8 +229,8 @@ quick_main!(|| -> Result<i32> {
                                                       .map(|&(i, ref name)|
                                                            format!("row {} ({})", i, name))
                                                       .collect::<Vec<_>>().join(", ");
-                                println!("Row {} ({}) refers to {}/{}cam/{} which was already used in {}",
-                                         i, name, date, endeff, num, dupes_desc);
+                                complain!("refers to {}/{}cam/{} which was already used in {}",
+                                          date, endeff, num, dupes_desc);
                                 dupes.push((i, name.clone()));
                             })
                             .or_insert_with(|| vec![(i, name.clone())]);
@@ -180,27 +238,74 @@ quick_main!(|| -> Result<i32> {
                     for loc in &locs {
                         if !loc.is_empty() {
                             if let Some(dir) = nicknames.get(&loc[..]) {
-                                if !Path::new(dir).join(date)
-                                                  .join(format!("{}cam", &endeff))
-                                                  .join(num)
-                                                  .is_dir() {
-                                    println!("Row {} ({}) claims {}/{}cam/{} is on {} but it isn't",
-                                             i, name, date, endeff, num, loc);
+                                let path = Path::new(dir).join(date)
+                                                             .join(format!("{}cam", &endeff))
+                                                             .join(num);
+                                if path.is_dir() {
+                                    if let (Some(cropdir), Some(cropcsv)) = (cropdir.as_ref(), cropcsv.as_mut()) {
+                                        let crop_path = path.join("crops");
+                                        if crop_path.is_dir() {
+                                            for_each_file(crop_path,
+                                                          |ent| {
+                                                              let fname = ent.path()
+                                                                             .file_name().unwrap()
+                                                                             .to_string_lossy().to_string();
+                                                              if fname.contains("_crop") {
+                                                                  crops += 1;
+                                                                  let cropdesc = format!("{}{}{}{}",
+                                                                                         date, endeff, num,
+                                                                                         fname);
+                                                                  if !cropdescs.contains(&cropdesc) {
+                                                                       let newpath = cropdir.join(
+                                                                           format!("crop{}.png",
+                                                                                   cropdescs.len()));
+                                                                       fs::copy(ent.path(),
+                                                                                &newpath)
+                                                                           .chain_err(|| Io("copy", ent.path()))?;
+                                                                       cropcsv.encode((cropdescs.len(),
+                                                                                       date, endeff, num,
+                                                                                       loc))?;
+                                                                  }
+                                                                  cropdescs.insert(cropdesc);
+                                                              }
+                                                              Ok(())
+                                                          })?;
+                                        }
+                                    }
+                                    
+                                    if check_data {
+                                        match (path.join("teensy.dat").is_file(),
+                                               path.join("teensy.ft.csv").is_file()) {
+                                            (true , true ) => complain!("contains unnecessary raw {}cam data on {}", endeff, loc),
+                                            (true , false) => complain!("has unprocessed {}cam data on {}", endeff, loc),
+                                            (false, false) => complain!("is missing {}cam data on {}", endeff, loc),
+                                            _ => {}
+                                        }
+                                    }
+                                } else {
+                                    complain!("claims {}/{}cam/{} is on {} but it isn't",
+                                              date, endeff, num, loc);
                                 }
                             } else {
-                                println!("Row {} ({}) refers to unknown location {}", i, name, loc);
+                                complain!("refers to unknown location {}", loc);
                             }
                         }
                     }
                 }
             }
+        }
 
-            if any_data {
-                match (loc1.is_empty(), loc2.is_empty()) {
-                    (true , true ) => println!("Row {} ({}) has no locations at all", i, name),
-                    (true , false) => println!("Row {} ({}) has no Location 1", i, name),
-                    (false, true ) => println!("Row {} ({}) has no Location 2", i, name),
-                    _ => {}
+        if any_data {
+            match (loc1.is_empty(), loc2.is_empty()) {
+                (true , true ) => complain!("has no locations at all"),
+                (true , false) => complain!("has no Location 1"),
+                (false, true ) => complain!("has no Location 2"),
+                _ => {}
+            }
+
+            if let Some(_) = cropdir {
+                if crops == 0 {
+                    complain!("has no crops");
                 }
             }
         }

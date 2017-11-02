@@ -8,20 +8,24 @@ extern crate line_drawing;
 extern crate nalgebra as na;
 extern crate rayon;
 extern crate tempdir;
+extern crate thread_local_object;
 
 extern crate nri;
 
-use std::{cmp, str};
+use std::{cmp, f64, fs, io, ops, str};
+use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::{Arc, Mutex};
 
 use cast::{u8, u32, u64, i32, f64};
-use image::{Pixel, RgbaImage};
+use image::{GenericImage, Pixel, RgbaImage};
 use line_drawing::XiaolinWu as Line;
 use rayon::prelude::*;
 use tempdir::TempDir;
+use thread_local_object::ThreadLocal;
 
 error_chain! {
     errors {
@@ -38,6 +42,295 @@ error_chain! {
     }
 }
 use ErrorKind::*;
+use std::result::Result as StdResult;
+
+trait AllowErrExt<T, E> {
+    fn allow_err<F: FnOnce(&E) -> bool, G: FnOnce(E) -> T>(self, pred: F, gen: G) -> Self;
+}
+
+impl<T, E> AllowErrExt<T, E> for StdResult<T, E> {
+    fn allow_err<F: FnOnce(&E) -> bool, G: FnOnce(E) -> T>(self, pred: F, gen: G) -> Self {
+        match self {
+            Ok(t) => Ok(t),
+            Err(e) => if pred(&e) { Ok(gen(e)) } else { Err(e) },
+        }
+    }
+}
+
+trait ThruExt {
+    fn thru(self, end: Self) -> Box<Iterator<Item=Self>>;
+}
+
+// TODO bring in num and make this T: PartialOrd + Add + One
+impl ThruExt for i32 {
+    fn thru(self, end: Self) -> Box<Iterator<Item=Self>> {
+        if end > self {
+            Box::new(self .. end+1)
+        } else {
+            Box::new((end .. self+1).rev())
+        }
+    }
+}
+
+enum Mode {
+    Movie(Movie),
+    Crops(Crops),
+}
+
+#[derive(Default)]
+struct Movie {
+    framedir: Option<TempDir>,
+    output_filename: Option<PathBuf>,
+    nframes: Option<usize>,
+    first_frame: Option<u32>,
+}
+
+#[derive(Default)]
+struct Crops {
+    output_dir: Option<PathBuf>,
+    pts: Option<ThreadLocal<Vec<(f64, f64)>>>,
+    pcts: Option<Arc<Mutex<HashMap<u32, f64>>>>,
+}
+
+macro_rules! mode {
+    (@scan (, $($rest:tt)*) -> $output:tt $thru:tt) => {
+        mode!(@scan ($($rest)*) -> $output $thru)
+    };
+    (@scan (ref mut $field:ident $($rest:tt)*) -> ($($output:tt)*) $thru:tt) => {
+        mode!(@scan ($($rest)*) -> ($($output)* (ref mut $field)) $thru)
+    };
+    (@scan (ref $field:ident $($rest:tt)*) -> ($($output:tt)*) $thru:tt) => {
+        mode!(@scan ($($rest)*) -> ($($output)* ($field: Some(ref $field))) $thru)
+    };
+    (@scan ($field:ident $($rest:tt)*) -> ($($output:tt)*) $thru:tt) => {
+        mode!(@scan ($($rest)*) -> ($($output)* ($field: Some($field))) $thru)
+    };
+    (@scan () -> ($(($($field:tt)*))*) [$mode:ident]) => {
+        Mode::$mode($mode { $($($field)*,)* .. })
+    };
+    ($mode:ident { $($fields:tt)* }) => { mode!(@scan ($($fields)*) -> () [$mode]) };
+}
+
+impl Mode {
+    fn parse(s: &str) -> Result<Mode> {
+        match s {
+            "movie" => Ok(Mode::Movie(Default::default())),
+            "crops" => Ok(Mode::Crops(Default::default())),
+            _ => bail!("unknown mode {}", s)
+        }
+    }
+
+    fn prepare_to_process(&mut self, epdir: &str, frames: &[(u32, String, f64)]) -> Result<()> {
+        match *self {
+            mode!(Movie { ref mut output_filename, ref mut framedir, ref mut first_frame, ref mut nframes }) => {
+                *output_filename = Some(Path::new(epdir).join("movie.mp4"));
+
+                // store frames in a temporary directory before running FFMPEG
+                *framedir = Some(TempDir::new("nri").chain_err(|| Io("create", "temp dir".into()))?);
+
+                *first_frame = Some(frames.iter().map(|&(num, _, _)| num).min().ok_or("no frames")?);
+                *nframes = Some(frames.len());
+            }
+
+            mode!(Crops { ref mut output_dir, ref mut pts, ref mut pcts }) => {
+                // clear out crop dir
+                let cropdir = Path::new(epdir).join("crops");
+                fs::remove_dir_all(&cropdir).allow_err(|e| e.kind() == io::ErrorKind::NotFound, |_| ())
+                                            .chain_err(|| Io("remove", cropdir.clone()))?;
+                fs::create_dir(&cropdir).chain_err(|| Io("create", cropdir.clone()))?;
+
+                *output_dir = Some(cropdir);
+
+                *pts = Some(ThreadLocal::new());
+                *pcts = Some(Arc::new(Mutex::new(HashMap::new())));
+            }
+        }
+        Ok(())
+    }
+
+    fn process(&self, img: &mut RgbaImage, fa: u32, fb: u32, xform: na::MatrixMN<f64, na::U3, na::U3>) -> Result<()> {
+        match *self {
+            mode!(Movie {}) => {
+                // finally use the fitted transformation to get the end-effector location in the current frame
+                let pta = na::VectorN::<_, na::U3>::from_row_slice(&[778., 760., 1.]); // empirical end-effector location
+                let ptb = xform * pta;
+                if     ptb[0] >= 0. && u32(ptb[0])? < img.width()
+                    && ptb[1] >= 0. && u32(ptb[1])? < img.height() {
+                    // use a piecewise linear discount to draw the past few points
+                    // brightly, then dimming after that (but never dropping out)
+                    let discount = match (i32(fa)? - i32(fb)?).abs() {
+                            0 ...15 => 1.,
+                        d @ 15...75 => -0.0125*f64(d) + 1.1875, // smooth grade from 1.0 to 0.25
+                        _           => 0.25
+                    };
+
+                    thread_local! { static PREV: RefCell<Option<na::VectorN<f64, na::U3>>> = RefCell::new(None); }
+                    PREV.with(|prev| -> Result<_> {
+                        let mut prev = prev.borrow_mut();
+                        if let Some(ref prev) = *prev {
+                            // draw an anti-aliased line from the previous point to this one
+                            for ((lx, ly), val) in Line::<f64, i32>::new((prev[0], prev[1]), (ptb[0], ptb[1])) {
+                                blend(img, lx, ly, &[(0, 255)], val * discount, 2)?;
+                            }
+                        } else {
+                            // this is the first point, so there's no line to draw
+                            blend(img, i32(ptb[0])?, i32(ptb[1])?, &[(0, 255)], discount, 10)?;
+                        }
+                        if fa == fb {
+                            blend(img, i32(ptb[0])?, i32(ptb[1])?, &[(0, 255)], discount, 10)?;
+                            *prev = None; // clear out for next frame
+                        } else {
+                            *prev = Some(ptb); // save transformed point for line drawing in next iteration
+                        }
+                        Ok(())
+                    })?;
+                }
+            }
+
+            mode!(Crops { ref pts }) => {
+                let pta = na::VectorN::<_, na::U3>::from_row_slice(&[778., 760., 1.]); // empirical end-effector location
+                let ptb = xform * pta;
+
+                pts.entry(|pts| pts.or_insert(vec![])
+                                   .push((ptb[0], ptb[1])));
+            }
+
+            _ => unreachable!()
+        }
+        Ok(())
+    }
+
+    fn end_frame(&self, fa: u32, img: &mut RgbaImage, filename: &str) -> Result<()> {
+        match *self {
+            mode!(Movie { ref framedir }) => {
+                let mut to = framedir.path().to_owned();
+                to.push(filename);
+
+                // save frame in temp dir (will be processed by ffmpeg)
+                img.save(&to).chain_err(|| Io("save", to.clone()))?;
+            }
+
+            mode!(Crops { ref output_dir, ref pts, ref pcts }) => {
+                if let Some(pts) = pts.remove() {
+                    const L: usize = 0;
+                    const B: usize = 1;
+                    const R: usize = 2;
+                    const T: usize = 3;
+                    let rect = [655, 1200, 928, 704]; // empirical end-effector envelope
+                    //          L    B     R     T
+
+                    let bboxb = pts.into_iter()
+                                   .fold([f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY, f64::INFINITY],
+                                         |bb, (x, y)| {
+                                             [f64::min(bb[L], x),
+                                              f64::max(bb[B], y),
+                                              f64::max(bb[R], x),
+                                              f64::min(bb[T], y)]
+                                         });
+                    let bboxb = [cmp::max(i32(bboxb[L] - 25.)?, 1),
+                                 cmp::min(i32(bboxb[B] + 25.)?, i32(img.height())?),
+                                 cmp::min(i32(bboxb[R] + 25.)?, i32(img.width())?),
+                                 cmp::max(i32(bboxb[T] - 25.)?, 1)];
+
+                    if bboxb[B] > bboxb[T] && bboxb[R] > bboxb[L] {
+                        // calculate intersection percentage of rect vs bboxb
+                        let bboxb_area = (bboxb[R] - bboxb[L]) * (bboxb[B] - bboxb[T]);
+                        let overlap_area = cmp::max(0, cmp::min(rect[R], bboxb[R]) - cmp::max(rect[L], bboxb[L])) *
+                                           cmp::max(0, cmp::min(rect[B], bboxb[B]) - cmp::max(rect[T], bboxb[T]));
+                        let pct = f64(overlap_area) / f64(bboxb_area);
+
+                        if pct < 0.25 {
+                            let cropped = output_dir.join(format!("{}_crop.png", fa));
+                            img.sub_image(u32(bboxb[L])?, u32(bboxb[T])?, u32(bboxb[R] - bboxb[L])?, u32(bboxb[B] - bboxb[T])?)
+                               .to_image()
+                               .save(&cropped).chain_err(|| Io("save", cropped.clone()))?;
+
+                            let boxed = output_dir.join(format!("{}_frame.png", fa));
+                            for line in [(L, T), (R, T), (R, B), (L, B), (L, T)].windows(2) {
+                                for lx in bboxb[line[0].0].thru(bboxb[line[1].0]) {
+                                    for ly in bboxb[line[0].1].thru(bboxb[line[1].1]) {
+                                        blend(img, lx, ly, &[(0, 255)], 1., 2)?;
+                                    }
+                                }
+                            }
+                            img.save(&boxed).chain_err(|| Io("save", boxed.clone()))?;
+
+                            pcts.lock().unwrap().insert(fa, pct);
+                        }
+                    }
+                }
+            }
+
+            _ => unreachable!()
+        }
+        Ok(())
+    }
+
+    fn finish(&mut self) -> Result<()> {
+        match *self {
+            mode!(Movie { ref framedir, nframes, first_frame, ref output_filename }) => {
+                // step 3: use ffmpeg to assemble frame images into video
+                
+                println!("\tRunning ffmpeg");
+                let bar = nri::make_bar(u64(nframes));
+                bar.set_message("Encode");
+                let mut child = Command::new("ffmpeg")
+                    .narg("-r", 15)                                    // frame rate = 15 FPS
+                    .narg("-start_number", i32(first_frame)?)          // start at first frame number
+                    .parg("-i", framedir.path().join("bluefox%d.png")) // filename pattern
+                    .parg("-pix_fmt", "yuv420p")                       // make an MP4
+                    .arg("-y")                                         // don't ask to overwrite
+                    .arg(output_filename)                              // output filename
+                    .stdout(Stdio::null())                             // ignore stdout
+                    .stderr(Stdio::piped())                            // capture stderr to draw progress bar
+                    .spawn().chain_err(|| Io("run", "ffmpeg".into()))?;
+                for line in BufReader::new(child.stderr.as_mut().unwrap()).split('\r' as u8) {
+                    // parse stderr "frame=###" to draw progress bar
+                    let line = line.chain_err(|| Io("read output of", "ffmpeg".into()))?;
+                    let line = str::from_utf8(&line).chain_err(|| "non-UTF8 output from ffmpeg")?;
+                    if line.starts_with("frame=") {
+                        let f = line["frame=".len() .. line.find("fps").unwrap()].trim().parse().unwrap();
+                        bar.set_position(f);
+                    }
+                }
+                bar.finish();
+                let code = child.wait().chain_err(|| Io("wait for", "ffmpeg".into()))?;
+                if !code.success() {
+                    bail!("ffmpeg returned {}", code);
+                }
+            }
+
+            mode!(Crops { ref output_dir, ref mut pcts }) => {
+                let pcts = Arc::try_unwrap(pcts.take().unwrap()).unwrap().into_inner().unwrap(); // such unwrap
+                let mut sorted = pcts.iter().collect::<Vec<_>>();
+                sorted.sort_by(|&(_, pct1), &(_, pct2)| pct1.partial_cmp(&pct2).expect("NaN"));
+                for &(fa, _) in &sorted[5..] {
+                    let frame_file = output_dir.join(format!("{}_frame.png", fa));
+                    let crop_file = output_dir.join(format!("{}_crop.png", fa));
+                    fs::remove_file(&frame_file).chain_err(|| Io("delete", frame_file.clone()))?;
+                    fs::remove_file(&crop_file).chain_err(|| Io("delete", crop_file.clone()))?;
+                }
+            }
+
+            _ => unreachable!()
+        }
+        Ok(())
+    }
+}
+
+
+/// Blends a pixel in the given channels using a weighted average
+fn blend(img: &mut RgbaImage, x: i32, y: i32, blends: &[(usize, u8)], weight: f64, margin: i32) -> Result<()> {
+    for xx in cmp::max(0, x - margin) .. cmp::min(i32(img.width())?, x + margin) {
+        for yy in cmp::max(0, y - margin) .. cmp::min(i32(img.height())?, y + margin) {
+            let px = img.get_pixel_mut(u32(xx)?, u32(yy)?).channels_mut();
+            for &(ch, val) in blends {
+                px[ch] = u8(f64::min(255., (f64(val) * weight) + (f64(px[ch]) * (1. - weight))))?;
+            }
+        }
+    }
+    Ok(())
+}
 
 quick_main!(|| -> Result<i32> {
     let matches = clap_app! { nri_render =>
@@ -45,9 +338,13 @@ quick_main!(|| -> Result<i32> {
         (author: crate_authors!("\n"))
         (about: "Helper for rendering stuff onto images/movies")
 
-        (@arg EPDIR: +required +multiple "Episode directory")
-        (@arg DEST: +required "Destination (path)")
+        (@arg EPDIR: *... "Episode directory")
+        (@arg MODE: -m --mode <MODE>... {|s| Mode::parse(&s)} "Render mode")
     }.get_matches();
+
+    let mut modes = matches.values_of("MODE").unwrap()
+                           .map(|s| Mode::parse(s).unwrap())
+                           .collect::<Vec<_>>();
 
     for epdir in matches.values_of("EPDIR").unwrap() {
         println!("Processing {}...", epdir);
@@ -82,24 +379,20 @@ quick_main!(|| -> Result<i32> {
                           // the BTreeMap keeps the frames in order for later iteration
         
 
-        // step 2: overlay the path-so-far on each frame
+        // step 2: do mode-specific stuff
         
-        let first_frame = frames.iter().map(|&(num, _, _)| num).min().ok_or("no frames")?;
         let bar = nri::make_bar(u64(frames.len()));
         bar.set_message("Process");
 
-        // store frames in a temporary directory before running FFMPEG
-        let framedir = TempDir::new("nri").chain_err(|| Io("create", "temp dir".into()))?;
         // process frames using all available CPUs
-        let units = frames.into_par_iter()
+        for mode in &mut modes { mode.prepare_to_process(&epdir, &frames)?; }
+        frames.into_par_iter()
             .map(|(fa, filename, _stamp)| {
                 // step 2a: load camera frame from file
                 
                 let mut from = Path::new(epdir).to_owned();
                 from.push("bluefox");
                 from.push(&filename);
-                let mut to = framedir.path().to_owned();
-                to.push(&filename);
 
                 let mut img = image::open(from)?.to_rgba();
 
@@ -108,8 +401,6 @@ quick_main!(|| -> Result<i32> {
                 // everything labeled "a" is the frame we're drawing on, while "b" is the frame being transformed from
                 let apra = &aprils[&fa];
                 let ida = apra.keys().collect::<HashSet<_>>(); // tag IDs visible in the current frame
-                let pta = na::VectorN::<_, na::U3>::from_row_slice(&[778., 760., 1.]); // empirical end-effector location
-                let mut prev: Option<na::VectorN<f64, na::U3>> = None;
                 for (&fb, aprb) in &aprils {
                     if fb > fa { break } // only frames up to the current one
 
@@ -165,48 +456,12 @@ quick_main!(|| -> Result<i32> {
                                   x[2], x[3], x[5],
                                   0.,   0.,   1.  ]);
 
-                            // finally use the fitted transformation to get the end-effector location in the current frame
-                            let ptb = xform * pta;
-                            if     ptb[0] >= 0. && u32(ptb[0])? < img.width()
-                                && ptb[1] >= 0. && u32(ptb[1])? < img.height() {
-                                    // use a piecewise linear discount to draw the past few points
-                                    // brightly, then dimming after that (but never dropping out)
-                                    let discount = match (i32(fa)? - i32(fb)?).abs() {
-                                            0 ...15 => 1.,
-                                        d @ 15...75 => -0.0125*f64(d) + 1.1875, // smooth grade from 1.0 to 0.25
-                                        _           => 0.25
-                                    };
-
-                                    /// Blends a pixel in the given channels using a weighted average
-                                    fn blend(img: &mut RgbaImage, x: i32, y: i32, blends: &[(usize, u8)], weight: f64, margin: i32) -> Result<()> {
-                                        for xx in cmp::max(0, x - margin) .. cmp::min(i32(img.width())?, x + margin) {
-                                            for yy in cmp::max(0, y - margin) .. cmp::min(i32(img.height())?, y + margin) {
-                                                let px = img.get_pixel_mut(u32(xx)?, u32(yy)?).channels_mut();
-                                                for &(ch, val) in blends {
-                                                    px[ch] = u8(f64::min(255., (f64(val) * weight) + (f64(px[ch]) * (1. - weight))))?;
-                                                }
-                                            }
-                                        }
-                                        Ok(())
-                                    }
-
-                                    if let Some(prev) = prev {
-                                        // draw an anti-aliased line from the previous point to this one
-                                        for ((lx, ly), val) in Line::<f64, i32>::new((prev[0], prev[1]), (ptb[0], ptb[1])) {
-                                            blend(&mut img, lx, ly, &[(0, 255)], val * discount, 2)?;
-                                        }
-                                    } else {
-                                        // this is the first point, so there's no line to draw
-                                        blend(&mut img, i32(ptb[0])?, i32(ptb[1])?, &[(0, 255)], discount, 2)?;
-                                    }
-                                    prev = Some(ptb); // save transformed point for line drawing in next iteration
-                                }
+                            for mode in &modes { mode.process(&mut img, fa, fb, xform)?; }
                         }
                     }
                 }
 
-                // save frame in temp dir (will be processed by ffmpeg)
-                img.save(&to).chain_err(|| Io("save", to.clone()))?;
+                for mode in &modes { mode.end_frame(fa, &mut img, &filename)?; }
 
                 bar.inc(1);
                 Ok(())
@@ -214,35 +469,7 @@ quick_main!(|| -> Result<i32> {
             .collect::<Result<Vec<()>>>()?;
         bar.finish();
 
-        // step 3: use ffmpeg to assemble frame images into video
-        
-        println!("\tRunning ffmpeg");
-        let bar = nri::make_bar(u64(units.len()));
-        bar.set_message("Encode");
-        let mut child = Command::new("ffmpeg")
-            .narg("-r", 15)                                    // frame rate = 15 FPS
-            .narg("-start_number", i32(first_frame)?)          // start at first frame number
-            .parg("-i", framedir.path().join("bluefox%d.png")) // filename pattern
-            .parg("-pix_fmt", "yuv420p")                       // make an MP4
-            .arg("-y")                                         // don't ask to overwrite
-            .arg(matches.value_of("DEST").unwrap())            // output filename
-            .stdout(Stdio::null())                             // ignore stdout
-            .stderr(Stdio::piped())                            // capture stderr to draw progress bar
-            .spawn().chain_err(|| Io("run", "ffmpeg".into()))?;
-        for line in BufReader::new(child.stderr.as_mut().unwrap()).split('\r' as u8) {
-            // parse stderr "frame=###" to draw progress bar
-            let line = line.chain_err(|| Io("read output of", "ffmpeg".into()))?;
-            let line = str::from_utf8(&line).chain_err(|| "non-UTF8 output from ffmpeg")?;
-            if line.starts_with("frame=") {
-                let f = line["frame=".len() .. line.find("fps").unwrap()].trim().parse().unwrap();
-                bar.set_position(f);
-            }
-        }
-        bar.finish();
-        let code = child.wait().chain_err(|| Io("wait for", "ffmpeg".into()))?;
-        if !code.success() {
-            bail!("ffmpeg returned {}", code);
-        }
+        for mode in &mut modes { mode.finish()?; }
     }
 
     Ok(0)
