@@ -16,6 +16,7 @@ group_attr! {
 
     use comms::{Controllable, CmdFrom, Block, RestartableThread};
     use scribe::{Writer, Writable};
+    use utils::prelude::*;
     use std::sync::mpsc::Sender;
     use std::default::Default;
     use std::{mem, str};
@@ -214,7 +215,7 @@ group_attr! {
                     packet
                 };
 
-                utils::circular_push(&mut self.buf, packet.clone());
+                self.buf.circular_push(packet.clone());
 
                 match cmd.as_ref() {
                     Some(s) if s.starts_with("kick") => {
