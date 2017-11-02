@@ -105,7 +105,7 @@ group_attr!{
                     Duration::milliseconds(1000).sleep();
                 }
 
-                utils::in_original_dir(|| wrapper::initialize().unwrap()).unwrap();
+                utils::in_original_dir("structure init", || wrapper::initialize().unwrap()).unwrap();
                 let device = wrapper::Device::new(None).unwrap();
 
                 let depth = wrapper::VideoStream::new(&device, wrapper::OniSensorType::Depth).unwrap();

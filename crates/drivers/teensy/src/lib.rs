@@ -68,6 +68,7 @@ group_attr!{
     use time::Duration;
     use std::num::Wrapping;
     use std::sync::atomic::{AtomicUsize, AtomicBool, ATOMIC_USIZE_INIT, ATOMIC_BOOL_INIT, Ordering};
+    use std::panic::{catch_unwind, resume_unwind};
     use serial::prelude::*;
     use conv::TryFrom;
 
@@ -294,6 +295,11 @@ group_attr!{
             if pkt.dt.0 > 1000 {
                 println!("Delayed packet from Teensy! Packet follows:");
                 println!("{:#?}", pkt);
+
+                static DELAYS: AtomicUsize = ATOMIC_USIZE_INIT;
+                if DELAYS.fetch_add(1, Ordering::SeqCst) > 100 {
+                    panic!("too many delayed packets");
+                }
             }
 
             Ok(pkt)
@@ -512,12 +518,17 @@ group_attr!{
                 let mut buf = vec![0u8; packet_size];
                 match self.port.read_exact(&mut buf[..]) {
                     Ok(()) => {
-                        let packet = match unsafe { Packet::new(&buf) } {
-                            Ok(p) => p,
-                            Err(s) => {
+                        let packet = match catch_unwind(|| unsafe { Packet::new(&buf) }) {
+                            Ok(Ok(p)) => p,
+                            Ok(Err(s)) => {
                                 errorln!("{}", s);
                                 return;
                             },
+                            Err(e) => {
+                                errorln!("teensy panicked -- stopping");
+                                self.port.write_all(&['2' as u8]).unwrap();
+                                resume_unwind(e)
+                            }
                         };
 
                         match cmd.as_ref().map(|s| s as &str) {
@@ -535,6 +546,11 @@ group_attr!{
                             Some("ref ext") => {
                                 println!("Switching accelerometers to external reference.");
                                 self.port.write_all(&['6' as u8]).unwrap();
+                            }
+                            Some(s) if s.starts_with("burst") => {
+                                let bursts: u8 = s.split(' ').skip(1).next().unwrap().parse().unwrap();
+                                println!("Setting teensy burst mode to N={}.", bursts);
+                                self.port.write_all(&['7' as u8, bursts]).unwrap();
                             }
                             _ => {}
                         }
