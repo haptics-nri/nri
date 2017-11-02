@@ -128,7 +128,7 @@ pub fn spawn(ctx: mpsc::Sender<CmdFrom>, wsrx: mpsc::Receiver<(Message<'static>,
                                                            json!({
                                                                "wsid": format!("{}_{}", *SERVER_ID, wsid),
                                                                "diskfree": super::disk_free(),
-                                                               "bluefox": utils::in_original_dir(|| utils::slurp(config::BLUEFOX_SETTINGS).unwrap()).unwrap().parse::<::serde_json::Value>().unwrap()
+                                                               "bluefox": utils::in_original_dir("read bluefox settings", || utils::slurp(config::BLUEFOX_SETTINGS).unwrap()).unwrap().parse::<::serde_json::Value>().unwrap()
                                                            })))).unwrap();
 
                 let (mut receiver, sender) = client.split().unwrap();

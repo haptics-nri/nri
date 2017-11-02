@@ -29,7 +29,7 @@ pub mod prelude {
 
 pub mod config;
 
-pub fn in_original_dir<F: FnOnce() -> R, R>(f: F) -> io::Result<R> {
+pub fn in_original_dir<F: FnOnce() -> R, R>(action: &str, f: F) -> io::Result<R> {
     lazy_static! {
         static ref ORIGINAL_DIR: PathBuf = env::current_dir().unwrap();
         static ref CRITICAL_SECTION: Mutex<()> = Mutex::new(());
@@ -39,6 +39,7 @@ pub fn in_original_dir<F: FnOnce() -> R, R>(f: F) -> io::Result<R> {
     let _guard = CRITICAL_SECTION.lock().unwrap();
 
     let before = env::current_dir()?;
+    println!("Executing {} in {} (currently in {})", action, ORIGINAL_DIR.display(), before.display());
     env::set_current_dir(&*ORIGINAL_DIR)?;
     let ret = f();
     env::set_current_dir(before)?;
@@ -122,7 +123,7 @@ macro_rules! errorln {
 
 pub fn watch<T, U, F>(mut thing: T,
                   global: &'static U,
-                  root: &'static Path,
+                  root: &Path,
                   ext: &'static str,
                   mut f: F) -> RwLock<T>
     where F: FnMut(&mut T, PathBuf) + Send + 'static,
@@ -135,7 +136,7 @@ pub fn watch<T, U, F>(mut thing: T,
 
     let update = |thingref: &mut T,
                   f: &mut F,
-                  root: &'static Path,
+                  root: &Path,
                   ext: &'static str| {
         fs::read_dir(root).expect(&format!("could not read directory {:?}", root))
             .filter_map(Result::ok)
@@ -145,12 +146,13 @@ pub fn watch<T, U, F>(mut thing: T,
             .count();
     };
 
-    update(&mut thing, &mut f, root, ext);
+    update(&mut thing, &mut f, &root, ext);
 
+    let root = root.to_path_buf();
     thread::spawn(move || {
         let (tx, rx) = mpsc::channel();
         let mut w = watcher(tx, Duration::from_millis(100)).expect("failed to crate watcher");
-        w.watch(root, Recursive).expect("watcher refused to watch");
+        w.watch(&root, Recursive).expect("watcher refused to watch");
 
         for evt in rx {
             match evt {
@@ -159,7 +161,7 @@ pub fn watch<T, U, F>(mut thing: T,
                         if x == ext {
                             print!("Updating... ({:?})", evt);
                             let mut thing = global.write().expect("couldn't get a write lock");
-                            update(&mut *thing, &mut f, root, ext);
+                            update(&mut *thing, &mut f, &root, ext);
                             println!(" done.");
                         }
                     }
