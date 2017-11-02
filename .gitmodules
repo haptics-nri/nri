@@ -1,5 +1,5 @@
 [submodule "openni2"]
-	path = crates/drivers/structure/openni2
+	path = crates/drivers/structure/OpenNI2
 	url = https://github.com/occipital/openni2
 [submodule "staticfile"]
 	path = overrides/staticfile
