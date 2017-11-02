@@ -47,7 +47,7 @@ pub fn df(path: &Path) -> io::Result<u64> {
 
 pub fn watch<T, U, F>(mut thing: T,
                   global: &'static U,
-                  root: &'static Path,
+                  root: &Path,
                   ext: &'static str,
                   mut f: F) -> RwLock<T>
     where F: FnMut(&mut T, PathBuf) + Send + 'static,
@@ -60,7 +60,7 @@ pub fn watch<T, U, F>(mut thing: T,
 
     let update = |thingref: &mut T,
                   f: &mut F,
-                  root: &'static Path,
+                  root: &Path,
                   ext: &'static str| {
         fs::read_dir(root).expect(&format!("could not read directory {:?}", root))
             .filter_map(Result::ok)
@@ -72,10 +72,11 @@ pub fn watch<T, U, F>(mut thing: T,
 
     update(&mut thing, &mut f, root, ext);
 
+    let root = root.to_owned();
     thread::spawn(move || {
         let (tx, rx) = mpsc::channel();
         let mut w = watcher(tx, Duration::from_millis(100)).expect("failed to crate watcher");
-        w.watch(root, Recursive).expect("watcher refused to watch");
+        w.watch(&root, Recursive).expect("watcher refused to watch");
 
         for evt in rx {
             match evt {
@@ -84,7 +85,7 @@ pub fn watch<T, U, F>(mut thing: T,
                         if x == ext {
                             print!("Updating... ({:?})", evt);
                             let mut thing = global.write().expect("couldn't get a write lock");
-                            update(&mut *thing, &mut f, root, ext);
+                            update(&mut *thing, &mut f, &root, ext);
                             println!(" done.");
                         }
                     }
