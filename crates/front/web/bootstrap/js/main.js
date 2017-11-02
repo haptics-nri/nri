@@ -95,11 +95,11 @@ var dead_man_timer = null;
 
 function dead_man_switch() {
     clearTimeout(dead_man_timer);
-    dead_man_timer = setTimeout(dead_man_alarm, 1000);
+    dead_man_timer = setTimeout(dead_man_alarm, 2000);
 }
 
 function dead_man_alarm() {
-    if (document.response.document.body.innerText =="") {
+    if (document.response.document.body.innerText == "") {
         alert("Server not responding!");
     }
 }
