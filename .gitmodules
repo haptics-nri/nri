@@ -16,3 +16,6 @@
 [submodule "overrides/urlencoded"]
 	path = overrides/urlencoded
 	url = git@github.com:haptics-nri/urlencoded
+[submodule "overrides/clap"]
+	path = overrides/clap
+	url = git@github.com:durka/clap-rs
