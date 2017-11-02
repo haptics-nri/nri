@@ -303,12 +303,14 @@ impl Mode {
             mode!(Crops { ref output_dir, ref mut pcts }) => {
                 let pcts = Arc::try_unwrap(pcts.take().unwrap()).unwrap().into_inner().unwrap(); // such unwrap
                 let mut sorted = pcts.iter().collect::<Vec<_>>();
-                sorted.sort_by(|&(_, pct1), &(_, pct2)| pct1.partial_cmp(&pct2).expect("NaN"));
-                for &(fa, _) in &sorted[5..] {
-                    let frame_file = output_dir.join(format!("{}_frame.png", fa));
-                    let crop_file = output_dir.join(format!("{}_crop.png", fa));
-                    fs::remove_file(&frame_file).chain_err(|| Io("delete", frame_file.clone()))?;
-                    fs::remove_file(&crop_file).chain_err(|| Io("delete", crop_file.clone()))?;
+                if sorted.len() > 5 {
+                    sorted.sort_by(|&(_, pct1), &(_, pct2)| pct1.partial_cmp(&pct2).expect("NaN"));
+                    for &(fa, _) in &sorted[5..] {
+                        let frame_file = output_dir.join(format!("{}_frame.png", fa));
+                        let crop_file = output_dir.join(format!("{}_crop.png", fa));
+                        fs::remove_file(&frame_file).chain_err(|| Io("delete", frame_file.clone()))?;
+                        fs::remove_file(&crop_file).chain_err(|| Io("delete", crop_file.clone()))?;
+                    }
                 }
             }
 
