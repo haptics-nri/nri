@@ -10,7 +10,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Mutex, RwLock};
 
-pub fn in_original_dir<F: FnOnce() -> R, R>(f: F) -> io::Result<R> {
+pub fn in_original_dir<F: FnOnce() -> R, R>(action: &str, f: F) -> io::Result<R> {
     lazy_static! {
         static ref ORIGINAL_DIR: PathBuf = env::current_dir().unwrap();
         static ref CRITICAL_SECTION: Mutex<()> = Mutex::new(());
@@ -20,6 +20,7 @@ pub fn in_original_dir<F: FnOnce() -> R, R>(f: F) -> io::Result<R> {
     let _guard = CRITICAL_SECTION.lock().unwrap();
 
     let before = env::current_dir()?;
+    println!("Executing {} in {} (currently in {})", action, ORIGINAL_DIR.display(), before.display());
     env::set_current_dir(&*ORIGINAL_DIR)?;
     let ret = f();
     env::set_current_dir(before)?;
