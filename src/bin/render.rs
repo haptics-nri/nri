@@ -313,9 +313,7 @@ impl Mode {
 
                     // delete everything within 1 second
                     let cur = *keepers[i];
-                    println!("[before {}={}] keepers = {:?}...", i, cur, &keepers[..5]);
                     keepers.retain(|&&fa| fa == cur || fa.absdiff(cur) > 15);
-                    println!("[after  {}={}] keepers = {:?}...", i, cur, &keepers[..5]);
                 }
                 keepers.truncate(5);
 
