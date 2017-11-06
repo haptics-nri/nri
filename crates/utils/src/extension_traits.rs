@@ -160,3 +160,17 @@ impl<'a, K: cmp::Ord, V> AndModifyExt<V> for btree_map::Entry<'a, K, V> {
     }
 }
 
+pub trait UnsignedExt {
+    fn absdiff(self, rhs: Self) -> Self;
+}
+
+impl UnsignedExt for u32 {
+    fn absdiff(self, rhs: u32) -> u32 {
+        if self > rhs {
+            self - rhs
+        } else {
+            rhs - self
+        }
+    }
+}
+
