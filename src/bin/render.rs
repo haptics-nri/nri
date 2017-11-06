@@ -417,9 +417,11 @@ quick_main!(|| -> Result<i32> {
 
                 // everything labeled "a" is the frame we're drawing on, while "b" is the frame being transformed from
                 let apra = &aprils[&fa];
+                if apra.len() <= 20 { return Ok(()) } // skip frame w/ not enough tags (FIXME for movie)
+
                 let ida = apra.keys().collect::<HashSet<_>>(); // tag IDs visible in the current frame
                 for (&fb, aprb) in &aprils {
-                    if fb > fa { break } // only frames up to the current one
+                    //if fb > fa { break } // only frames up to the current one (FIXME for movie)
 
                     if aprb.len() > 20 { // bail if there aren't enough tags
                         let idb = aprb.keys().collect::<HashSet<_>>();
