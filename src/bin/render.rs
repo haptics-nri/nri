@@ -155,6 +155,9 @@ impl Mode {
         match *self {
             mode!(Movie {}) => {
                 // finally use the fitted transformation to get the end-effector location in the current frame
+                
+                if fb > fa { return Ok(()) } // only frames up to the current one
+
                 let pta = na::VectorN::<_, na::U3>::from_row_slice(&[778., 760., 1.]); // empirical end-effector location
                 let ptb = xform * pta;
                 if     ptb[0] >= 0. && u32(ptb[0])? < img.width()
@@ -415,69 +418,66 @@ quick_main!(|| -> Result<i32> {
 
                 // everything labeled "a" is the frame we're drawing on, while "b" is the frame being transformed from
                 let apra = &aprils[&fa];
-                if apra.len() <= 20 { return Ok(()) } // skip frame w/ not enough tags (FIXME for movie)
+                if apra.len() > 20 { // skip frame w/ not enough tags
+                    let ida = apra.keys().collect::<HashSet<_>>(); // tag IDs visible in the current frame
+                    for (&fb, aprb) in &aprils {
+                        if aprb.len() > 20 { // bail if there aren't enough tags
+                            let idb = aprb.keys().collect::<HashSet<_>>();
+                            let inter = ida.intersection(&idb).collect::<Vec<_>>();
+                            if inter.len() >= 4 { // bail if there aren't enough tags in common
+                                // extract centers of tags visible in both frames
+                                let ctra = inter.iter().map(|id| apra[id]).collect::<Vec<_>>();
+                                let ctrb = inter.iter().map(|id| aprb[id]).collect::<Vec<_>>();
 
-                let ida = apra.keys().collect::<HashSet<_>>(); // tag IDs visible in the current frame
-                for (&fb, aprb) in &aprils {
-                    //if fb > fa { break } // only frames up to the current one (FIXME for movie)
+                                // fit affine transformation to tag centers
+                                // the equation here is Ax=b, where:
+                                // A = [ x1b, y1b,   0,   0, 1, 0 ]
+                                //     [   0,   0, x1b, y1b, 0, 1 ]
+                                //     [ ...       ...       ...  ]
+                                // x = [ m1 ]
+                                //     [ m2 ]
+                                //     [ m3 ]
+                                //     [ m4 ]
+                                //     [ m5 ]
+                                //     [ m6 ]
+                                // b = [ x1a ]
+                                //     [ y1a ]
+                                //     [ ... ]
+                                //
+                                // given that M [ xib yib ]' = [ xia yia ]' where:
+                                // M = [ m1, m2, m5 ]
+                                //     [ m3, m4, m6 ]
+                                // (so m1..4 are the rotation/scaling/skew components and m5..6 are the translation)
+                                #[allow(non_snake_case)]
+                                let A = na::MatrixMN::<_, na::Dynamic, na::U6>::from_fn(
+                                    inter.len() * 2,
+                                    |i, j| {
+                                        match j {
+                                            0 => if i % 2 == 0 { ctrb[i/2].0 } else { 0.              },
+                                            1 => if i % 2 == 0 { ctrb[i/2].1 } else { 0.              },
+                                            2 => if i % 2 == 0 { 0.          } else { ctrb[(i-1)/2].0 },
+                                            3 => if i % 2 == 0 { 0.          } else { ctrb[(i-1)/2].1 },
+                                            4 => if i % 2 == 0 { 1.          } else { 0.              },
+                                            5 => if i % 2 == 0 { 0.          } else { 1.              },
+                                            _ => unreachable!()
+                                        }
+                                    });
+                                let b = na::DVector::from_fn(
+                                    inter.len() * 2,
+                                    |i, _| {
+                                        if i % 2 == 0 { ctra[i/2].0 } else { ctra[(i-1)/2].1 }
+                                    });
+                                let x = A.pseudo_inverse(1e-7) * b;
+                                let xform = na::MatrixMN::<_, na::U3, na::U3>::from_row_slice(
+                                    &[x[0], x[1], x[4],
+                                      x[2], x[3], x[5],
+                                      0.,   0.,   1.  ]);
 
-                    if aprb.len() > 20 { // bail if there aren't enough tags
-                        let idb = aprb.keys().collect::<HashSet<_>>();
-                        let inter = ida.intersection(&idb).collect::<Vec<_>>();
-                        if inter.len() >= 4 { // bail if there aren't enough tags in common
-                            // extract centers of tags visible in both frames
-                            let ctra = inter.iter().map(|id| apra[id]).collect::<Vec<_>>();
-                            let ctrb = inter.iter().map(|id| aprb[id]).collect::<Vec<_>>();
-
-                            // fit affine transformation to tag centers
-                            // the equation here is Ax=b, where:
-                            // A = [ x1b, y1b,   0,   0, 1, 0 ]
-                            //     [   0,   0, x1b, y1b, 0, 1 ]
-                            //     [ ...       ...       ...  ]
-                            // x = [ m1 ]
-                            //     [ m2 ]
-                            //     [ m3 ]
-                            //     [ m4 ]
-                            //     [ m5 ]
-                            //     [ m6 ]
-                            // b = [ x1a ]
-                            //     [ y1a ]
-                            //     [ ... ]
-                            //
-                            // given that M [ xib yib ]' = [ xia yia ]' where:
-                            // M = [ m1, m2, m5 ]
-                            //     [ m3, m4, m6 ]
-                            // (so m1..4 are the rotation/scaling/skew components and m5..6 are the translation)
-                            #[allow(non_snake_case)]
-                            let A = na::MatrixMN::<_, na::Dynamic, na::U6>::from_fn(
-                                inter.len() * 2,
-                                |i, j| {
-                                    match j {
-                                        0 => if i % 2 == 0 { ctrb[i/2].0 } else { 0.              },
-                                        1 => if i % 2 == 0 { ctrb[i/2].1 } else { 0.              },
-                                        2 => if i % 2 == 0 { 0.          } else { ctrb[(i-1)/2].0 },
-                                        3 => if i % 2 == 0 { 0.          } else { ctrb[(i-1)/2].1 },
-                                        4 => if i % 2 == 0 { 1.          } else { 0.              },
-                                        5 => if i % 2 == 0 { 0.          } else { 1.              },
-                                        _ => unreachable!()
-                                    }
-                                });
-                            let b = na::DVector::from_fn(
-                                inter.len() * 2,
-                                |i, _| {
-                                    if i % 2 == 0 { ctra[i/2].0 } else { ctra[(i-1)/2].1 }
-                                });
-                            let x = A.pseudo_inverse(1e-7) * b;
-                            let xform = na::MatrixMN::<_, na::U3, na::U3>::from_row_slice(
-                                &[x[0], x[1], x[4],
-                                  x[2], x[3], x[5],
-                                  0.,   0.,   1.  ]);
-
-                            for mode in &modes { mode.process(&mut img, fa, fb, xform)?; }
+                                for mode in &modes { mode.process(&mut img, fa, fb, xform)?; }
+                            }
                         }
                     }
                 }
-
                 for mode in &modes { mode.end_frame(fa, &mut img, &filename)?; }
 
                 bar.inc(1);
