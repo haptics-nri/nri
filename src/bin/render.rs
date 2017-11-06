@@ -11,6 +11,9 @@ extern crate tempdir;
 extern crate thread_local_object;
 
 extern crate nri;
+extern crate utils;
+
+use utils::prelude::*;
 
 use std::{cmp, f64, fs, io, ops, str};
 use std::cell::RefCell;
@@ -20,7 +23,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 
-use cast::{u8, u32, u64, i32, f64};
+use cast::{u8, u32, u64, i32, usize, f64};
 use image::{GenericImage, Pixel, RgbaImage};
 use line_drawing::XiaolinWu as Line;
 use rayon::prelude::*;
@@ -303,9 +306,21 @@ impl Mode {
             mode!(Crops { ref output_dir, ref mut pcts }) => {
                 let pcts = Arc::try_unwrap(pcts.take().unwrap()).unwrap().into_inner().unwrap(); // such unwrap
                 let mut sorted = pcts.iter().collect::<Vec<_>>();
-                if sorted.len() > 5 {
-                    sorted.sort_by(|&(_, pct1), &(_, pct2)| pct1.partial_cmp(&pct2).expect("NaN"));
-                    for &(fa, _) in &sorted[5..] {
+                sorted.sort_by(|&(_, pct1), &(_, pct2)| pct1.partial_cmp(&pct2).expect("NaN"));
+                let mut keepers = sorted.iter().map(|&(fa, _)| fa).collect::<Vec<_>>();
+                for i in 0..5 {
+                    if i >= keepers.len() { break }
+
+                    // delete everything within 1 second
+                    let cur = *keepers[i];
+                    println!("[before {}={}] keepers = {:?}...", i, cur, &keepers[..5]);
+                    keepers.retain(|&&fa| fa == cur || fa.absdiff(cur) > 15);
+                    println!("[after  {}={}] keepers = {:?}...", i, cur, &keepers[..5]);
+                }
+                keepers.truncate(5);
+
+                for (fa, _) in sorted {
+                    if !keepers.contains(&fa) {
                         let frame_file = output_dir.join(format!("{}_frame.png", fa));
                         let crop_file = output_dir.join(format!("{}_crop.png", fa));
                         fs::remove_file(&frame_file).chain_err(|| Io("delete", frame_file.clone()))?;
