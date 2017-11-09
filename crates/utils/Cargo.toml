@@ -10,4 +10,5 @@ notify = "4.0"
 time = "0.1"
 libc = "0.2"
 errno = "0.2"
+extension-trait = "0.1"
 
