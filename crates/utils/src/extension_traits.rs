@@ -2,13 +2,11 @@ use std::collections::{btree_map, hash_map};
 use std::{cmp, mem, ptr, slice, thread};
 use time::Duration;
 
-pub trait DurationExt {
-    fn sleep(&self);
-}
-
-impl DurationExt for Duration {
-    fn sleep(&self) {
-        thread::sleep(self.to_std().unwrap());
+extension_trait! {
+    pub DurationExt for Duration {
+        fn sleep(&self) {
+            thread::sleep(self.to_std().unwrap());
+        }
     }
 }
 
@@ -60,18 +58,16 @@ fn check_container_compatibility<T: Pod, U: Pod>(ptr: *const T, len: usize, cap:
     }
 }
 
-pub trait AsVecOf {
-    fn as_vec_of<U: Pod>(self) -> Result<Vec<U>, AsContainerOfError>;
-}
-
-impl<T: Pod> AsVecOf for Vec<T> {
-    fn as_vec_of<U: Pod>(self) -> Result<Vec<U>, AsContainerOfError> {
-        let (ptr, len, cap) = (self.as_ptr(), self.len(), self.capacity());
-        check_container_compatibility::<T, U>(ptr, len, cap)
-            .map(|(new_len, new_cap)| unsafe {
-                mem::forget(self);
-                Vec::from_raw_parts(ptr as *mut U, new_len, new_cap)
-            })
+extension_trait! {
+    <T: Pod> pub AsVecOf for Vec<T> {
+        fn as_vec_of<U: Pod>(self) -> Result<Vec<U>, AsContainerOfError> {
+            let (ptr, len, cap) = (self.as_ptr(), self.len(), self.capacity());
+            check_container_compatibility::<T, U>(ptr, len, cap)
+                .map(|(new_len, new_cap)| unsafe {
+                    mem::forget(self);
+                    Vec::from_raw_parts(ptr as *mut U, new_len, new_cap)
+                })
+        }
     }
 }
 
@@ -83,93 +79,83 @@ const_and_mut! {
         $from_raw:ident => from_raw_parts/from_raw_parts_mut,
     ]
 
-    /// Extension trait for Vec
-    pub trait $trait_name {
-        /// View a Vec as a slice of some other type (if compatible)
-        fn $fn_name<U: Pod>(self: cm!(&Self)) -> Result<cm!(&[U]), AsContainerOfError>;
-    }
-
-    impl<T: Pod> $trait_name for Vec<T> {
-        fn $fn_name<U: Pod>(self: cm!(&Self)) -> Result<cm!(&[U]), AsContainerOfError> {
-            let (ptr, len) = (self.$as_ptr(), self.len());
-            check_container_compatibility::<T, U>(ptr, len, len)
-                .map(|(new_len, _)| unsafe {
-                    slice::$from_raw(ptr as cm!(*U), new_len)
-                })
-        }
-    }
-}
-
-pub trait SliceExt<T> {
-    fn map_in_place<F: FnMut(T) -> T>(&mut self, f: F) where T: Copy;
-}
-
-impl<T> SliceExt<T> for [T] {
-    fn map_in_place<F: FnMut(T) -> T>(&mut self, mut f: F) where T: Copy {
-        for i in 0..self.len() {
-            self[i] = f(self[i]);
-        }
-    }
-}
-
-pub trait CircularPush<T> {
-    fn circular_push(&mut self, item: T);
-}
-
-impl<T> CircularPush<T> for Vec<T> {
-    fn circular_push(&mut self, item: T) {
-        if self.len() == self.capacity() {
-            let len = self.len() - 1;
-            unsafe {
-                ptr::copy(&self[1], &mut self[0], len);
+    extension_trait! {
+        <T: Pod> pub $trait_name for Vec<T> {
+            fn $fn_name<U: Pod>(self: cm!(&Self)) -> Result<cm!(&[U]), AsContainerOfError> {
+                let (ptr, len) = (self.$as_ptr(), self.len());
+                check_container_compatibility::<T, U>(ptr, len, len)
+                    .map(|(new_len, _)| unsafe {
+                        slice::$from_raw(ptr as cm!(*U), new_len)
+                    })
             }
-            self.truncate(len);
         }
-        self.push(item);
+    }
+}
+
+extension_trait! {
+    <T: Copy> pub SliceExt<T> for [T] {
+        fn map_in_place<F: FnMut(T) -> T>(&mut self, mut f: F) {
+            for i in 0..self.len() {
+                self[i] = f(self[i]);
+            }
+        }
+    }
+}
+
+extension_trait! {
+    <T> pub CircularPush<T> for Vec<T> {
+        fn circular_push(&mut self, item: T) {
+            if self.len() == self.capacity() {
+                let len = self.len() - 1;
+                unsafe {
+                    ptr::copy(&self[1], &mut self[0], len);
+                }
+                self.truncate(len);
+            }
+            self.push(item);
+        }
     }
 }
 
 // FIXME remove when and_modify stabilizes #44733
-pub trait AndModifyExt<V> {
-    fn and_modify<F>(self, f: F) -> Self where F: FnMut(&mut V);
-}
-
-impl<'a, K, V> AndModifyExt<V> for hash_map::Entry<'a, K, V> {
-    fn and_modify<F>(self, mut f: F) -> Self where F: FnMut(&mut V) {
-        use self::hash_map::Entry::*;
-        match self {
-            Occupied(mut entry) => {
-                f(entry.get_mut());
-                Occupied(entry)
-            },
-            Vacant(entry) => Vacant(entry),
+extension_trait! {
+    <'a, K, V> pub HashMapAndModifyExt<V> for hash_map::Entry<'a, K, V> {
+        fn and_modify<F>(self, mut f: F) -> Self where F: FnMut(&mut V) {
+            use self::hash_map::Entry::*;
+            match self {
+                Occupied(mut entry) => {
+                    f(entry.get_mut());
+                    Occupied(entry)
+                },
+                Vacant(entry) => Vacant(entry),
+            }
         }
     }
 }
 
-impl<'a, K: cmp::Ord, V> AndModifyExt<V> for btree_map::Entry<'a, K, V> {
-    fn and_modify<F>(self, mut f: F) -> Self where F: FnMut(&mut V) {
-        use self::btree_map::Entry::*;
-        match self {
-            Occupied(mut entry) => {
-                f(entry.get_mut());
-                Occupied(entry)
-            },
-            Vacant(entry) => Vacant(entry),
+extension_trait! {
+    <'a, K: cmp::Ord, V> pub BTreeMapAndModifyExt<V> for btree_map::Entry<'a, K, V> {
+        fn and_modify<F>(self, mut f: F) -> Self where F: FnMut(&mut V) {
+            use self::btree_map::Entry::*;
+            match self {
+                Occupied(mut entry) => {
+                    f(entry.get_mut());
+                    Occupied(entry)
+                },
+                Vacant(entry) => Vacant(entry),
+            }
         }
     }
 }
 
-pub trait UnsignedExt {
-    fn absdiff(self, rhs: Self) -> Self;
-}
-
-impl UnsignedExt for u32 {
-    fn absdiff(self, rhs: u32) -> u32 {
-        if self > rhs {
-            self - rhs
-        } else {
-            rhs - self
+extension_trait! {
+    pub UnsignedExt for u32 {
+        fn absdiff(self, rhs: u32) -> u32 {
+            if self > rhs {
+                self - rhs
+            } else {
+                rhs - self
+            }
         }
     }
 }
