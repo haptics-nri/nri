@@ -57,15 +57,19 @@ quick_main!(|| -> Result<i32> {
         (@arg SURFACES: *    "Surfaces CSV file")
         (@arg DATADIR:  *... "Dataset directory (can be a directory or a Nickname=directory pair")
 
-        (@arg AFTER:     -a --after [AFTER] {|s| s.parse::<i32>()}
+        (@arg AFTER:     -a --after [date] {|s| s.parse::<i32>()}
                               "Date when real data collection began (YYYYMMDD)")
-        (@arg CHECKDATA: -d --data "Check that data is present & processed")
-        (@arg CROPDIR:   -c --cropdir [CROPDIR] {|p| if Path::new(&p).is_dir() { Ok(()) } else { Err(format!("{} is not a directory", p)) }}
+        (@arg BEFORE:    -b --before [date] {|s| s.parse::<i32>()}
+                              "Date when real data collection ended (YYYYMMDD)")
+        (@arg CROPDIR:   -c --cropdir [dir] {|p| if Path::new(&p).is_dir() { Ok(()) } else { Err(format!("{} is not a directory", p)) }}
                               "Directory which should contain crops and CSV (will be cleared!)")
+        (@arg CHECKDATA: -d --data "Check that data is present & processed")
     }.get_matches();
 
     let after = matches.value_of("AFTER")
                        .map_or(0, |a| a.parse().unwrap());
+    let before = matches.value_of("BEFORE")
+                       .map_or(20180509, |a| a.parse().unwrap());
     let check_data = matches.is_present("CHECKDATA");
     let cropdir = matches.value_of("CROPDIR").map(|p| Path::new(p));
     let args = matches.values_of("DATADIR").unwrap();
@@ -115,7 +119,7 @@ quick_main!(|| -> Result<i32> {
         // scan the datadir
         for_each_subdir(datadir, |date| {
             if let Ok(date) = date.file_name().to_string_lossy().parse() {
-                if date >= after {
+                if date >= after && date <= before {
                     datalocs.entry(date)
                         .or_insert(vec![])
                         .push(nickname);
@@ -218,7 +222,7 @@ quick_main!(|| -> Result<i32> {
 
         // check that the episode for each present end-effector exists on each specified datadir
         for (endeff, &(ref date, ref num)) in vec![("stick", &stick), ("opto", &opto), ("bio", &bio)] {
-            if !date.is_empty() && date.parse::<u32>().ok().map_or(false, |date| date >= after) {
+            if !date.is_empty() && date.parse::<u32>().ok().map_or(false, |date| date >= after && date <= before) {
                 if num.is_empty() {
                     complain!("has a {} date ({}) but no episode number", endeff, date);
                 } else {
