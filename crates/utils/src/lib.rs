@@ -1,3 +1,4 @@
+#[macro_use] extern crate extension_trait;
 #[macro_use] extern crate lazy_static;
 extern crate time;
 extern crate notify;
