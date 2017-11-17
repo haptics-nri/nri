@@ -1,6 +1,7 @@
 #[macro_use] extern crate clap;
 #[macro_use] extern crate error_chain;
 extern crate csv;
+extern crate image;
 
 extern crate utils;
 
@@ -14,9 +15,12 @@ error_chain! {
 
     foreign_links {
         Csv(csv::Error);
+        Image(image::ImageError);
     }
 }
 use ErrorKind::*;
+
+use image::GenericImage;
 
 use std::collections::{BTreeMap, HashSet};
 use std::fs::{self, DirEntry};
@@ -61,8 +65,9 @@ quick_main!(|| -> Result<i32> {
                               "Date when real data collection began (YYYYMMDD)")
         (@arg BEFORE:    -b --before [date] {|s| s.parse::<i32>()}
                               "Date when real data collection ended (YYYYMMDD)")
-        (@arg CROPDIR:   -c --cropdir [dir] {|p| if Path::new(&p).is_dir() { Ok(()) } else { Err(format!("{} is not a directory", p)) }}
+        (@arg CROPDIR:   -c --cropdir [dir]
                               "Directory which should contain crops and CSV (will be cleared!)")
+        (@arg CROPURL:   -C --cropurl [url] requires[CROPDIR] "URL where cropdir will be accessible")
         (@arg CHECKDATA: -d --data "Check that data is present & processed")
     }.get_matches();
 
@@ -72,30 +77,34 @@ quick_main!(|| -> Result<i32> {
                        .map_or(20180509, |a| a.parse().unwrap());
     let check_data = matches.is_present("CHECKDATA");
     let cropdir = matches.value_of("CROPDIR").map(|p| Path::new(p));
+    let prefix = matches.value_of("CROPURL").unwrap_or("");
     let args = matches.values_of("DATADIR").unwrap();
 
     let mut cropcsv = if let Some(cropdir) = cropdir {
-        let mut all_crops = true;
-        for_each_file(cropdir,
-                      |ent| {
-                          if !ent.path()
-                                 .file_name().unwrap()
-                                 .to_string_lossy()
-                                 .starts_with("crop") {
-                              all_crops = false;
-                          }
-                          Ok(())
-                      })?;
-        for_each_subdir(cropdir,
-                        |_| {
-                            all_crops = false;
-                            Ok(())
-                        })?;
-        if !all_crops {
-            bail!("Crop dir contains other stuff!");
+        if cropdir.is_dir() {
+            let mut all_crops = true;
+            for_each_file(cropdir,
+                          |ent| {
+                              if !ent.path()
+                                     .file_name().unwrap()
+                                     .to_string_lossy()
+                                     .starts_with("crop") {
+                                  all_crops = false;
+                              }
+                              Ok(())
+                          })?;
+            for_each_subdir(cropdir,
+                            |_| {
+                                all_crops = false;
+                                Ok(())
+                            })?;
+            if !all_crops {
+                bail!("Crop dir contains other stuff!");
+            }
+
+            fs::remove_dir_all(cropdir).chain_err(|| Io("delete", cropdir.into()))?;
         }
 
-        fs::remove_dir_all(cropdir).chain_err(|| Io("delete", cropdir.into()))?;
         fs::create_dir(cropdir).chain_err(|| Io("create", cropdir.into()))?;
 
         let mut csv1 = csv::Writer::from_path(cropdir.join("crops.csv"))?;
@@ -248,7 +257,7 @@ quick_main!(|| -> Result<i32> {
                                                              .join(format!("{}cam", &endeff))
                                                              .join(num);
                                 if path.is_dir() {
-                                    if let (Some(cropdir), Some(cropcsv)) = (cropdir.as_ref(), cropcsv.as_mut()) {
+                                    if let (Some(cropdir), Some(&mut (ref mut csv1, ref mut csv2))) = (cropdir.as_ref(), cropcsv.as_mut()) {
                                         let crop_path = path.join("crops");
                                         if crop_path.is_dir() {
                                             for_each_file(crop_path,
