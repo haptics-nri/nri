@@ -1,7 +1,11 @@
 #[macro_use] extern crate clap;
 #[macro_use] extern crate error_chain;
+#[macro_use] extern crate serde_derive;
+#[macro_use] extern crate unborrow;
+extern crate boolinator;
 extern crate csv;
 extern crate image;
+extern crate tabwriter;
 
 extern crate utils;
 
@@ -10,6 +14,11 @@ error_chain! {
         Io(op: &'static str, path: PathBuf) {
             description("I/O operation failed")
             display("Could not {} {}", op, path.display())
+        }
+
+        Row(i: usize, file: PathBuf, msg: String) {
+            description("error while processing row")
+            display("error in row {} of {}: {}", i, file.display(), msg)
         }
     }
 
@@ -21,12 +30,61 @@ error_chain! {
 use ErrorKind::*;
 
 use image::GenericImage;
+use tabwriter::TabWriter;
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::{self, DirEntry};
+use std::io;
 use std::path::{Path, PathBuf};
 
 use utils::prelude::*;
+
+#[derive(Clone)]
+struct Amazon {
+    date: u32,
+    hit_id: String,
+    assignment_id: String,
+    worker_id: String,
+    work_time: u32,
+    crop_num: u32,
+    source: CropInfo,
+    img_width: u32,
+    img_height: u32,
+    answer_quality: String,
+    answer_shape: String,
+    answer_hard: u8,
+    answer_rough: u8,
+    answer_sticky: u8,
+    answer_warm: u8,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct AmazonRaw {
+    #[serde(rename = "HITId")] hit_id: String,
+    assignment_id: String,
+    worker_id: String,
+    #[serde(rename = "WorkTimeInSeconds")] work_time: u32,
+    #[serde(rename = "Input.image_url")] input_image_url: String,
+    #[serde(rename = "Input.image_width")] input_image_width: u32,
+    #[serde(rename = "Input.image_height")] input_image_height: u32,
+    #[serde(rename = "Answer.quality")] answer_quality: String,
+    #[serde(rename = "Answer.shape")] answer_shape: String,
+    #[serde(rename = "Answer.hard")] answer_hard: u8,
+    #[serde(rename = "Answer.rough")] answer_rough: u8,
+    #[serde(rename = "Answer.sticky")] answer_sticky: u8,
+    #[serde(rename = "Answer.warm")] answer_warm: u8,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct CropInfo {
+    #[serde(rename = "Cropped image")] cropped_image: u32,
+    date: u32,
+    #[serde(rename = "End-effector")] end_effector: String,
+    #[serde(rename = "Episode number")] episode_number: u32,
+    #[serde(rename = "Data location")] data_location: String,
+}
 
 /// Run a callback for each directory inside another directory
 fn for_each_subdir<P: AsRef<Path>, F: FnMut(DirEntry) -> Result<()>>(path: P, mut func: F) -> Result<()> {
@@ -69,6 +127,7 @@ quick_main!(|| -> Result<i32> {
                               "Directory which should contain crops and CSV (will be cleared!)")
         (@arg CROPURL:   -C --cropurl [url] requires[CROPDIR] "URL where cropdir will be accessible")
         (@arg CHECKDATA: -d --data "Check that data is present & processed")
+        (@arg AMAZON:    -A --amazon [dir] "Load and analyze Amazon study data")
     }.get_matches();
 
     let after = matches.value_of("AFTER")
@@ -78,6 +137,7 @@ quick_main!(|| -> Result<i32> {
     let check_data = matches.is_present("CHECKDATA");
     let cropdir = matches.value_of("CROPDIR").map(|p| Path::new(p));
     let prefix = matches.value_of("CROPURL").unwrap_or("");
+    let amazon = matches.value_of("AMAZON").map(|p| Path::new(p));
     let args = matches.values_of("DATADIR").unwrap();
 
     let mut cropcsv = if let Some(cropdir) = cropdir {
@@ -142,8 +202,8 @@ quick_main!(|| -> Result<i32> {
 
     // step 2: check status of each YYYYMMDD
 
-    let mut good = vec![]; // dates with at least two locations and no missing episodes in any location
-    let mut bad = vec![];
+    let mut good = BTreeMap::new(); // dates with at least two locations and no missing episodes in any location
+    let mut bad = BTreeMap::new();
     for (date, dirs) in datalocs {
         let mut ok = true; // will be falsified if we find an issue with this date
         let dir_desc = {
@@ -182,20 +242,13 @@ quick_main!(|| -> Result<i32> {
         };
 
         if ok && dirs.len() > 1 {
-            good.push((date, dir_desc));
+            good.insert(date, (dir_desc, None));
         } else {
-            bad.push((date, dir_desc));
+            bad.insert(date, (dir_desc, None));
         }
     }
 
-    // step 3: print naughty/nice list
-
-    println!("GOOD DATADIRS:");
-    for (date, dirs) in good { println!("{}\t{}", date, dirs); }
-    println!("\nBAD DATADIRS:");
-    for (date, dirs) in bad { println!("{}\t{}", date, dirs); }
-
-    // step 4: parse CSV
+    // step 3: parse CSV
 
     let surf_file = matches.value_of("SURFACES").unwrap();
     let surfaces = csv::Reader::from_path(surf_file)?
@@ -208,6 +261,92 @@ quick_main!(|| -> Result<i32> {
                                   row[10].to_owned(),                  // loc 1
                                   row[11].to_owned())))                // loc 2
         .collect::<Result<Vec<_>>>()?;
+    
+    let amazon_data = if let Some(amazon_path) = amazon {
+        let mut data = HashMap::<u32, Vec<Amazon>>::new();
+        for ent in amazon_path.read_dir().chain_err(|| Io("list", amazon_path.into()))? {
+            let ent = ent.chain_err(|| Io("read entry", amazon_path.into()))?;
+            let meta = ent.metadata().chain_err(|| Io("stat", ent.path()))?;
+            if meta.is_dir() {
+                let date = ent.path().file_name().unwrap().to_str().unwrap().parse().unwrap();
+                if let Ok(mut amz_rdr) = csv::ReaderBuilder::new()
+                                                            .flexible(true)
+                                                            .from_path(ent.path().join("amazon_output.csv")) {
+                    // fix up study results headers
+                    let headers = {
+                        let mut headers = amz_rdr.headers()?.clone();
+                        unborrow!(headers.truncate(headers.len() - 2));
+                        headers
+                    };
+                    amz_rdr.set_headers(headers);
+
+                    // read all crops for cross-referencing
+                    let mut crops_rdr = csv::Reader::from_path(ent.path().join("crops.csv"))?;
+                    let crops: Vec<CropInfo> = crops_rdr.deserialize()
+                        .map(|r| r.map_err(Into::into))
+                        .collect::<Result<_>>()?;
+
+                    let mut ratings = vec![];
+                    for (i, raw) in amz_rdr.deserialize().enumerate() {
+                        let raw: AmazonRaw = raw.chain_err(|| Row(i, ent.path(), "parse error".into()))?;
+
+                        let crop_num = Path::new(&raw.input_image_url)
+                            .file_stem().unwrap()
+                            .to_str().unwrap()[4..]
+                            .parse::<u32>().unwrap();
+
+                        let mut source = None;
+                        for crop in &crops {
+                            if crop.cropped_image == crop_num {
+                                source = Some(crop);
+                                break;
+                            }
+                        }
+                        let source = source.ok_or_else(|| Row(i, ent.path(), format!("no entry for crop #{}", crop_num)))?;
+
+                        let info = Amazon {
+                            date,
+                            crop_num,
+                            source: source.clone(),
+                            hit_id: raw.hit_id,
+                            assignment_id: raw.assignment_id,
+                            worker_id: raw.worker_id,
+                            work_time: raw.work_time,
+                            img_width: raw.input_image_width,
+                            img_height: raw.input_image_height,
+                            answer_quality: raw.answer_quality,
+                            answer_shape: raw.answer_shape,
+                            answer_hard: raw.answer_hard,
+                            answer_rough: raw.answer_rough,
+                            answer_sticky: raw.answer_sticky,
+                            answer_warm: raw.answer_warm,
+                        };
+                        ratings.push(info.clone());
+
+                        good.get_mut(&source.date)
+                            .or_else(|| bad.get_mut(&source.date))
+                            .ok_or_else(|| Error::from_kind(Row(i, ent.path(), format!("no such episode date {}", source.date))))?
+                            .1.get_or_insert(vec![])
+                              .push(info);
+                    }
+                    data.insert(date, ratings);
+                }
+            }
+        }
+        Some(data)
+    } else {
+        None
+    };
+
+    // step 4: print naughty/nice list
+
+    let out = &mut TabWriter::new(io::stdout());
+    println!("GOOD DATADIRS:");
+    for (date, (dirs, amz)) in good { writeln!(out, "{}\t{}\t{}", date, dirs, amz.map_or(0, |v| v.len())).unwrap(); }
+    out.flush().unwrap();
+    println!("\nBAD DATADIRS:");
+    for (date, (dirs, amz)) in bad { writeln!(out, "{}\t{}\t{}", date, dirs, amz.map_or(0, |v| v.len())).unwrap(); }
+    out.flush().unwrap();
 
     // step 5: look for and print various problems:
     //  - missing info about data location in the CSV (or reference to a datadir that wasn't passed
