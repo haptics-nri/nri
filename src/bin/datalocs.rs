@@ -98,9 +98,11 @@ quick_main!(|| -> Result<i32> {
         fs::remove_dir_all(cropdir).chain_err(|| Io("delete", cropdir.into()))?;
         fs::create_dir(cropdir).chain_err(|| Io("create", cropdir.into()))?;
 
-        let mut csv = csv::Writer::from_file(cropdir.join("crops.csv"))?;
-        csv.encode(("Cropped image", "Date", "End-effector", "Episode number", "Data location"))?;
-        Some(csv)
+        let mut csv1 = csv::Writer::from_path(cropdir.join("crops.csv"))?;
+        csv1.serialize(("Cropped image", "Date", "End-effector", "Episode number", "Data location"))?;
+        let mut csv2 = csv::Writer::from_path(cropdir.join("crop_amazon.csv"))?;
+        csv2.serialize(("image_url", "image_width", "image_height"))?;
+        Some((csv1, csv2))
     } else {
         None
     };
@@ -187,15 +189,15 @@ quick_main!(|| -> Result<i32> {
     // step 4: parse CSV
 
     let surf_file = matches.value_of("SURFACES").unwrap();
-    let surfaces = csv::Reader::from_file(surf_file)?
+    let surfaces = csv::Reader::from_path(surf_file)?
         .records()
         .map(|row| row.map_err(Into::into)
-                      .map(|row| (row[0].clone(),                   // surface name
-                                  (row[2].clone(), row[3].clone()), // stick
-                                  (row[4].clone(), row[5].clone()), // opto
-                                  (row[6].clone(), row[7].clone()), // bio
-                                  row[10].clone(),                  // loc 1
-                                  row[11].clone())))                // loc 2
+                      .map(|row| (row[0].to_owned(),                   // surface name
+                                  (row[2].to_owned(), row[3].to_owned()), // stick
+                                  (row[4].to_owned(), row[5].to_owned()), // opto
+                                  (row[6].to_owned(), row[7].to_owned()), // bio
+                                  row[10].to_owned(),                  // loc 1
+                                  row[11].to_owned())))                // loc 2
         .collect::<Result<Vec<_>>>()?;
 
     // step 5: look for and print various problems:
@@ -266,9 +268,14 @@ quick_main!(|| -> Result<i32> {
                                                                        fs::copy(ent.path(),
                                                                                 &newpath)
                                                                            .chain_err(|| Io("copy", ent.path()))?;
-                                                                       cropcsv.encode((cropdescs.len(),
-                                                                                       date, endeff, num,
-                                                                                       loc))?;
+                                                                       csv1.serialize((cropdescs.len(),
+                                                                                    date, endeff, num,
+                                                                                    loc))?;
+                                                                       let img = image::open(&newpath)?;
+                                                                       csv2.serialize((format!("{}crop{}.png",
+                                                                                            prefix,
+                                                                                            cropdescs.len()),
+                                                                                    img.width(), img.height()))?;
                                                                   }
                                                                   cropdescs.insert(cropdesc);
                                                               }

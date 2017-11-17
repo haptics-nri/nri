@@ -239,11 +239,13 @@ pub fn do_camera<T: Copy, Data: Debug + Pixels<T>, F: for<'a> Fn(String, C, &'a 
     attempt!(fs::create_dir_all(Path::new(&inname).parent().unwrap().join(name)));
 
     let csvfile = attempt!(File::open(&inname));
-    let mut csvrdr = csv::Reader::from_reader(csvfile).has_headers(false);
-    let mut csvwtr = csv::Writer::from_memory();
-    attempt!(csvwtr.encode(("Frame number", "Filename", "Unix timestamp")));
+    let mut csvrdr = csv::ReaderBuilder::new()
+                                        .has_headers(false)
+                                        .from_reader(csvfile);
+    let mut csvwtr = csv::Writer::from_writer(vec![]);
+    attempt!(csvwtr.serialize(("Frame number", "Filename", "Unix timestamp")));
 
-    let records = csvrdr.decode().collect::<Vec<_>>();
+    let records = csvrdr.deserialize().collect::<Vec<_>>();
 
     let num_threads = num_cpus::get();
     print!("Creating {} threads...", num_threads);
@@ -300,7 +302,7 @@ pub fn do_camera<T: Copy, Data: Debug + Pixels<T>, F: for<'a> Fn(String, C, &'a 
     let mut t = 0;
     for row in records {
         let (num, fname, stamp): (usize, String, f64) = row.expect(&format!("failed to parse row {} of {}", i, inname));
-        attempt!(csvwtr.encode((num, Path::new(&fname).with_extension("png").to_str().unwrap().to_string(), stamp)));
+        attempt!(csvwtr.serialize((num, Path::new(&fname).with_extension("png").to_str().unwrap().to_string(), stamp)));
         i += 1;
         let dat_path = Path::new(&inname).with_file_name(fname);
         attempt!(threads[t].as_ref().unwrap().1.send(dat_path));
@@ -314,7 +316,7 @@ pub fn do_camera<T: Copy, Data: Debug + Pixels<T>, F: for<'a> Fn(String, C, &'a 
     }
     bar.finish_and_clear();
 
-    attempt!(attempt!(File::create(Path::new(&inname).parent().unwrap().join(name).join(Path::new(&inname).file_name().unwrap()))).write_all(csvwtr.as_bytes()));
+    attempt!(attempt!(File::create(Path::new(&inname).parent().unwrap().join(name).join(Path::new(&inname).file_name().unwrap()))).write_all(&csvwtr.into_inner().unwrap()));
 
     inname
 }
