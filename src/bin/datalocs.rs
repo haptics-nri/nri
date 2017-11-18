@@ -5,6 +5,7 @@
 extern crate boolinator;
 extern crate csv;
 extern crate image;
+extern crate serde;
 extern crate tabwriter;
 
 extern crate utils;
@@ -28,18 +29,20 @@ error_chain! {
     }
 }
 use ErrorKind::*;
+use std::result::Result as StdResult;
 
 use image::GenericImage;
+use serde::Serializer;
 use tabwriter::TabWriter;
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::fs::{self, DirEntry};
 use std::io;
 use std::path::{Path, PathBuf};
 
 use utils::prelude::*;
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 struct Amazon {
     date: u32,
     hit_id: String,
@@ -47,7 +50,8 @@ struct Amazon {
     worker_id: String,
     work_time: u32,
     crop_num: u32,
-    source: CropInfo,
+    #[serde(serialize_with="serialize_cropinfo")] source: CropInfo,
+    surface: String,
     img_width: u32,
     img_height: u32,
     answer_quality: String,
@@ -56,6 +60,10 @@ struct Amazon {
     answer_rough: u8,
     answer_sticky: u8,
     answer_warm: u8,
+}
+
+fn serialize_cropinfo<S: Serializer>(ci: &CropInfo, ser: S) -> StdResult<S::Ok, S::Error> {
+    ser.serialize_str(&format!("{}-{}-{}", ci.date, ci.end_effector, ci.episode_number))
 }
 
 #[derive(Deserialize)]
@@ -262,8 +270,7 @@ quick_main!(|| -> Result<i32> {
                                   row[11].to_owned())))                // loc 2
         .collect::<Result<Vec<_>>>()?;
     
-    let amazon_data = if let Some(amazon_path) = amazon {
-        let mut data = HashMap::<u32, Vec<Amazon>>::new();
+    if let Some(amazon_path) = amazon {
         for ent in amazon_path.read_dir().chain_err(|| Io("list", amazon_path.into()))? {
             let ent = ent.chain_err(|| Io("read entry", amazon_path.into()))?;
             let meta = ent.metadata().chain_err(|| Io("stat", ent.path()))?;
@@ -271,7 +278,7 @@ quick_main!(|| -> Result<i32> {
                 let date = ent.path().file_name().unwrap().to_str().unwrap().parse().unwrap();
                 if let Ok(mut amz_rdr) = csv::ReaderBuilder::new()
                                                             .flexible(true)
-                                                            .from_path(ent.path().join("amazon_output.csv")) {
+                                                            .from_path(ent.path().join("amazon_output_raw.csv")) {
                     // fix up study results headers
                     let headers = {
                         let mut headers = amz_rdr.headers()?.clone();
@@ -285,6 +292,9 @@ quick_main!(|| -> Result<i32> {
                     let crops: Vec<CropInfo> = crops_rdr.deserialize()
                         .map(|r| r.map_err(Into::into))
                         .collect::<Result<_>>()?;
+
+                    // munge ratings
+                    // write new file and enter data in surfaces map
 
                     let mut ratings = vec![];
                     for (i, raw) in amz_rdr.deserialize().enumerate() {
@@ -304,9 +314,26 @@ quick_main!(|| -> Result<i32> {
                         }
                         let source = source.ok_or_else(|| Row(i, ent.path(), format!("no entry for crop #{}", crop_num)))?;
 
+                        let mut surface = None;
+                        for &(ref name, ref stick, ref opto, ref bio, ..) in &surfaces {
+                            let spec = match &source.end_effector[..] {
+                                "stick" => stick,
+                                "opto" => opto,
+                                "bio" => bio,
+                                _ => unreachable!()
+                            };
+
+                            if spec == &(source.date.to_string(), source.episode_number.to_string()) {
+                                surface = Some(name.clone());
+                                break;
+                            }
+                        }
+                        let surface = surface.ok_or_else(|| Row(i, ent.path(), format!("no surface matching {}-{}-{}", source.date, source.end_effector, source.episode_number)))?;
+
                         let info = Amazon {
                             date,
                             crop_num,
+                            surface,
                             source: source.clone(),
                             hit_id: raw.hit_id,
                             assignment_id: raw.assignment_id,
@@ -329,14 +356,15 @@ quick_main!(|| -> Result<i32> {
                             .1.get_or_insert(vec![])
                               .push(info);
                     }
-                    data.insert(date, ratings);
+
+                    let mut amz_wtr = csv::Writer::from_path(ent.path().join("amazon_output_cooked.csv"))?;
+                    for rating in ratings {
+                        amz_wtr.serialize(rating)?;
+                    }
                 }
             }
         }
-        Some(data)
-    } else {
-        None
-    };
+    }
 
     // step 4: print naughty/nice list
 
