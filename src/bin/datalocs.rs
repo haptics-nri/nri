@@ -3,12 +3,26 @@
 #[macro_use] extern crate serde_derive;
 #[macro_use] extern crate unborrow;
 extern crate boolinator;
+extern crate cast;
 extern crate csv;
 extern crate image;
 extern crate serde;
 extern crate tabwriter;
 
+extern crate flow;
 extern crate utils;
+
+macro_rules! cont {
+    ($head:expr) => {
+        match $head {
+            Ok(ok) => ok,
+            Err(e) => {
+                eprintln!("ERROR: {}", $crate::error_chain::ChainedError::display(&e));
+                continue
+            }
+        }
+    }
+}
 
 error_chain! {
     errors {
@@ -19,11 +33,16 @@ error_chain! {
 
         Row(i: usize, file: PathBuf, msg: String) {
             description("error while processing row")
-            display("error in row {} of {}: {}", i, file.display(), msg)
+            display("error in row {} of {}: {}", i+1, file.display(), msg)
         }
     }
 
+    links {
+        Flow(flow::Error, flow::ErrorKind);
+    }
+
     foreign_links {
+        Cast(cast::Error);
         Csv(csv::Error);
         Image(image::ImageError);
     }
@@ -31,15 +50,17 @@ error_chain! {
 use ErrorKind::*;
 use std::result::Result as StdResult;
 
+use cast::u8;
 use image::GenericImage;
 use serde::Serializer;
 use tabwriter::TabWriter;
 
 use std::collections::{BTreeMap, HashSet};
-use std::fs::{self, DirEntry};
-use std::io;
+use std::fs::{self, File, DirEntry};
+use std::io::{self, BufReader};
 use std::path::{Path, PathBuf};
 
+use flow::{Flow, FlowCmd};
 use utils::prelude::*;
 
 #[derive(Clone, Serialize)]
@@ -54,12 +75,18 @@ struct Amazon {
     surface: String,
     img_width: u32,
     img_height: u32,
-    answer_quality: String,
-    answer_shape: String,
-    answer_hard: u8,
-    answer_rough: u8,
-    answer_sticky: u8,
-    answer_warm: u8,
+    experimenter: Answers,
+    turkers: Answers,
+    turker_quality: String,
+    turker_shape: String,
+}
+
+#[derive(Clone, Default, Serialize)]
+struct Answers {
+    hard: Option<u8>,
+    rough: Option<u8>,
+    sticky: Option<u8>,
+    warm: Option<u8>,
 }
 
 fn serialize_cropinfo<S: Serializer>(ci: &CropInfo, ser: S) -> StdResult<S::Ok, S::Error> {
@@ -298,7 +325,7 @@ quick_main!(|| -> Result<i32> {
 
                     let mut ratings = vec![];
                     for (i, raw) in amz_rdr.deserialize().enumerate() {
-                        let raw: AmazonRaw = raw.chain_err(|| Row(i, ent.path(), "parse error".into()))?;
+                        let raw: AmazonRaw = cont!(raw.chain_err(|| Row(i, ent.path(), "parse error".into())));
 
                         let crop_num = Path::new(&raw.input_image_url)
                             .file_stem().unwrap()
@@ -314,8 +341,8 @@ quick_main!(|| -> Result<i32> {
                         }
                         let source = source.ok_or_else(|| Row(i, ent.path(), format!("no entry for crop #{}", crop_num)))?;
 
-                        let mut surface = None;
-                        for &(ref name, ref stick, ref opto, ref bio, ..) in &surfaces {
+                        let mut surface_data = None;
+                        for &(ref name, ref stick, ref opto, ref bio, ref loc1, ..) in &surfaces {
                             let spec = match &source.end_effector[..] {
                                 "stick" => stick,
                                 "opto" => opto,
@@ -324,16 +351,42 @@ quick_main!(|| -> Result<i32> {
                             };
 
                             if spec == &(source.date.to_string(), source.episode_number.to_string()) {
-                                surface = Some(name.clone());
+                                let flowpath = Path::new(&nicknames[&loc1[..]])
+                                                    .join(&spec.0)
+                                                    .join(format!("{}cam", source.end_effector))
+                                                    .join(&spec.1)
+                                                    .join(format!("{}cam.flow", source.end_effector));
+                                let flow = Flow::parse(
+                                    String::new(),
+                                    BufReader::new(
+                                        File::open(&flowpath)
+                                             .chain_err(|| Io("open", flowpath))?))?;
+                                let mut exp_answers = Answers::default();
+                                for state in &flow.states {
+                                    for &(ref cmd, _) in &state.script {
+                                        if let FlowCmd::Int { ref prompt, data: Some(answer), .. } = *cmd {
+                                            match &prompt[..] {
+                                                "soft/hard"       => exp_answers.hard   = Some(u8(answer)?),
+                                                "smooth/rough"    => exp_answers.rough  = Some(u8(answer)?),
+                                                "slippery/sticky" => exp_answers.sticky = Some(u8(answer)?),
+                                                "cool/warm"       => exp_answers.warm   = Some(u8(answer)?),
+                                                _ => {}
+                                            }
+                                        }
+                                    }
+                                }
+
+                                surface_data = Some((name.clone(), exp_answers));
                                 break;
                             }
                         }
-                        let surface = surface.ok_or_else(|| Row(i, ent.path(), format!("no surface matching {}-{}-{}", source.date, source.end_effector, source.episode_number)))?;
+                        let (surface, experimenter) = surface_data.ok_or_else(|| Row(i, ent.path(), format!("no surface matching {}-{}-{}", source.date, source.end_effector, source.episode_number)))?;
 
                         let info = Amazon {
                             date,
                             crop_num,
                             surface,
+                            experimenter,
                             source: source.clone(),
                             hit_id: raw.hit_id,
                             assignment_id: raw.assignment_id,
@@ -341,12 +394,14 @@ quick_main!(|| -> Result<i32> {
                             work_time: raw.work_time,
                             img_width: raw.input_image_width,
                             img_height: raw.input_image_height,
-                            answer_quality: raw.answer_quality,
-                            answer_shape: raw.answer_shape,
-                            answer_hard: raw.answer_hard,
-                            answer_rough: raw.answer_rough,
-                            answer_sticky: raw.answer_sticky,
-                            answer_warm: raw.answer_warm,
+                            turker_quality: raw.answer_quality,
+                            turker_shape: raw.answer_shape,
+                            turkers: Answers {
+                                hard: Some(raw.answer_hard),
+                                rough: Some(raw.answer_rough),
+                                sticky: Some(raw.answer_sticky),
+                                warm: Some(raw.answer_warm),
+                            },
                         };
                         ratings.push(info.clone());
 
@@ -357,7 +412,24 @@ quick_main!(|| -> Result<i32> {
                               .push(info);
                     }
 
-                    let mut amz_wtr = csv::Writer::from_path(ent.path().join("amazon_output_cooked.csv"))?;
+                    let mut amz_wtr = csv::WriterBuilder::new()
+                        .has_headers(false)
+                        .from_path(ent.path().join("amazon_output_cooked.csv"))?;
+                    amz_wtr.write_record(&[
+                            "date",
+                            "hit_id",
+                            "assignment_id",
+                            "worker_id",
+                            "work_time",
+                            "crop_num",
+                            "source",
+                            "surface",
+                            "img_width",
+                            "img_height",
+                            "exp_hard", "exp_rough", "exp_sticky", "exp_warm",
+                            "turk_hard", "turk_rough", "turk_sticky", "turk_warm",
+                            "turk_quality", "turk_shape",
+                            ])?;
                     for rating in ratings {
                         amz_wtr.serialize(rating)?;
                     }
