@@ -1,6 +1,7 @@
 target
 target-beta
 target-nightly
+crops
 *.so
 *.sw*
 *.bak
