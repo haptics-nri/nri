@@ -392,15 +392,15 @@ quick_main!(|| -> Result<i32> {
 
         // step 1: read bluefox data from CSV files
         
-        let mut bt = csv::Reader::from_file([epdir, "bluefox", "bluefox_times.csv"].iter().collect::<PathBuf>())?;
-        let mut april = csv::Reader::from_file([epdir, "bluefox", "april.csv"].iter().collect::<PathBuf>())?;
+        let mut bt = csv::Reader::from_path([epdir, "bluefox", "bluefox_times.csv"].iter().collect::<PathBuf>())?;
+        let mut april = csv::Reader::from_path([epdir, "bluefox", "april.csv"].iter().collect::<PathBuf>())?;
 
         // format of bluefox_times.csv is "Frame number (int), Filename (str), Unix Timestamp (float)"
-        let frames = bt.decode()
+        let frames = bt.deserialize()
                        .map(|r| r.map_err(Into::into))
                        .collect::<Result<Vec<(u32, String, f64)>>>()?;
         // format of april.csv is "Frame number (int), Tag IDs (ints, semicolon-sep), Tag centers (float comma-sep coord pairs, semicolon-sep), ..."
-        let aprils = april.decode()
+        let aprils = april.deserialize()
                           .map(|r| r.map_err(Into::into)
                                     .map(|(num, ids, centers, _p1s, _p2s, _p3s, _p4s): (u32, String, String, String, String, String, String)| {
                                         (num,
