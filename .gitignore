@@ -1,6 +1,6 @@
 target
-target-beta
-target-nightly
+target-
+target-*
 *.so
 *.sw*
 *.bak
