@@ -84,6 +84,8 @@ enum Mode {
 struct Movie {
     framedir: Option<TempDir>,
     output_filename: Option<PathBuf>,
+    px: Option<f64>,
+    py: Option<f64>,
     nframes: Option<usize>,
     first_frame: Option<u32>,
 }
@@ -123,6 +125,24 @@ impl Mode {
         }
     }
 
+    fn init(&mut self, matches: &clap::ArgMatches) -> Result<()> {
+        match *self {
+            mode!(Movie { ref mut px, ref mut py }) => {
+                if let Some(mut values) = matches.values_of("PT") {
+                    *px = values.next().unwrap().parse().ok();
+                    *py = values.next().unwrap().parse().ok();
+                } else {
+                    *px = Some(778.);
+                    *py = Some(760.);
+                }
+                println!("Tracking ({}, {})", px.unwrap(), py.unwrap());
+            }
+
+            mode!(Crops {}) => {}
+        }
+        Ok(())
+    }
+
     fn prepare_to_process(&mut self, epdir: &str, frames: &[(u32, String, f64)]) -> Result<()> {
         match *self {
             mode!(Movie { ref mut output_filename, ref mut framedir, ref mut first_frame, ref mut nframes }) => {
@@ -153,9 +173,12 @@ impl Mode {
 
     fn process(&self, img: &mut RgbaImage, fa: u32, fb: u32, xform: na::MatrixMN<f64, na::U3, na::U3>) -> Result<()> {
         match *self {
-            mode!(Movie {}) => {
+            mode!(Movie { ref px, ref py }) => {
                 // finally use the fitted transformation to get the end-effector location in the current frame
-                let pta = na::VectorN::<_, na::U3>::from_row_slice(&[778., 760., 1.]); // empirical end-effector location
+                
+                if fb > fa { return Ok(()) } // only frames up to the current one
+
+                let pta = na::VectorN::<_, na::U3>::from_row_slice(&[*px, *py, 1.]); // empirical end-effector location
                 let ptb = xform * pta;
                 if     ptb[0] >= 0. && u32(ptb[0])? < img.width()
                     && ptb[1] >= 0. && u32(ptb[1])? < img.height() {
@@ -355,26 +378,29 @@ quick_main!(|| -> Result<i32> {
 
         (@arg EPDIR: *... "Episode directory")
         (@arg MODE: -m --mode <MODE>... {|s| Mode::parse(&s)} "Render mode")
+        (@arg PT: -p [coords] #{2,2} {|s| s.parse::<f64>()} "Tracked point")
     }.get_matches();
 
     let mut modes = matches.values_of("MODE").unwrap()
                            .map(|s| Mode::parse(s).unwrap())
                            .collect::<Vec<_>>();
 
+    for mode in &mut modes { mode.init(&matches)?; }
+
     for epdir in matches.values_of("EPDIR").unwrap() {
         println!("Processing {}...", epdir);
 
         // step 1: read bluefox data from CSV files
         
-        let mut bt = csv::Reader::from_file([epdir, "bluefox", "bluefox_times.csv"].iter().collect::<PathBuf>())?;
-        let mut april = csv::Reader::from_file([epdir, "bluefox", "april.csv"].iter().collect::<PathBuf>())?;
+        let mut bt = csv::Reader::from_path([epdir, "bluefox", "bluefox_times.csv"].iter().collect::<PathBuf>())?;
+        let mut april = csv::Reader::from_path([epdir, "bluefox", "april.csv"].iter().collect::<PathBuf>())?;
 
         // format of bluefox_times.csv is "Frame number (int), Filename (str), Unix Timestamp (float)"
-        let frames = bt.decode()
+        let frames = bt.deserialize()
                        .map(|r| r.map_err(Into::into))
                        .collect::<Result<Vec<(u32, String, f64)>>>()?;
         // format of april.csv is "Frame number (int), Tag IDs (ints, semicolon-sep), Tag centers (float comma-sep coord pairs, semicolon-sep), ..."
-        let aprils = april.decode()
+        let aprils = april.deserialize()
                           .map(|r| r.map_err(Into::into)
                                     .map(|(num, ids, centers, _p1s, _p2s, _p3s, _p4s): (u32, String, String, String, String, String, String)| {
                                         (num,
