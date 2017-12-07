@@ -1,4 +1,4 @@
-use time::Duration;
+pub use time::Duration;
 
 use std::fmt;
 
