@@ -7,7 +7,7 @@ exclude = ["src/web/templates/*", "src/web/bootstrap/*", "src/web/flows/*", "dat
 
 [profile.release]
 #debug = true
-#lto = true
+lto = true
 
 [features]
 default = ["hardware"]
@@ -85,7 +85,8 @@ tabwriter    = "1"
 [build-dependencies]
 foreman     = "0.3"
 
-[replace]
-"hprof:0.1.3" = { path = "overrides/hprof" }
-"urlencoded:0.5.0" = { git = "git://github.com/haptics-nri/urlencoded.git", tag = "serde1" }
-"clap:2.27.1" = { path = "overrides/clap" }
+[patch.crates-io]
+hprof = { path = "overrides/hprof" }
+clap = { path = "overrides/clap" }
+staticfile = { git = "git://github.com/haptics-nri/staticfile", branch = "bump-0.6" }
+
