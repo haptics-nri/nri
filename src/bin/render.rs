@@ -320,9 +320,29 @@ impl Mode {
                     }
                 }
                 bar.finish();
-                let code = child.wait().chain_err(|| Io("wait for", "ffmpeg".into()))?;
+                let code = child.wait().chain_err(|| Io("wait for", "ffmpeg.1".into()))?;
                 if !code.success() {
-                    bail!("ffmpeg returned {}", code);
+                    bail!("ffmpeg.1 returned {}", code);
+                }
+
+                // add audio if exists
+                let audiopath = output_filename.with_file_name("acc.wav");
+                if audiopath.exists() {
+                    let moved_output = framedir.path().join("movie.mp4");
+                    fs::copy(output_filename, &moved_output).chain_err(|| Io("move", output_filename.into()))?;
+                    let mut child = Command::new("ffmpeg")
+                        .parg("-i", moved_output)    // input video
+                        .parg("-i", audiopath)       // input audio
+                        .parg("-c:v", "copy").parg("-c:a", "aac").narg("-strict", -2) // stream modes
+                        .arg("-y")                   // don't ask to overwrite
+                        .arg(output_filename)        // output filename
+                        .stdout(Stdio::null())       // ignore stdout
+                        .stderr(Stdio::null())       // ignore stderr
+                        .spawn().chain_err(|| Io("run", "ffmpeg".into()))?;
+                    let code = child.wait().chain_err(|| Io("wait for", "ffmpeg.2".into()))?;
+                    if !code.success() {
+                        bail!("ffmpeg.2 returned {}", code);
+                    }
                 }
             }
 
