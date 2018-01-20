@@ -5,6 +5,8 @@ FILE=keepalive
 echo "NRI SUPERVISOR"
 echo ""
 
+sudo rfkill unblock 0
+
 if systemctl is-enabled -q network-manager; then
     sudo create_ap --fix-unmanaged
     sudo nmcli c u id AirPennNet

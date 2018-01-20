@@ -8,4 +8,7 @@
 %nri ALL=NOPASSWD: /sbin/shutdown -hP now
 %nri ALL=NOPASSWD: /sbin/reboot
 %nri ALL=NOPASSWD: /home/nri/software/uhubctl/uhubctl [a-zA-Z0-9-]*
+%nri ALL=NOPASSWD: /usr/bin/create_ap --fix-unmanaged
+%nri ALL=NOPASSWD: /usr/bin/nmcli c u id AirPennNet
+%nri ALL=NOPASSWD: /usr/sbin/rfkill *
 

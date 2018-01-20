@@ -99,20 +99,20 @@ fn april(fname: String, prof: &Profiler) -> (u32, String, String, String, String
 fn main() {
     nri::VERBOSITY.store(0, Ordering::SeqCst);
 
-    let mut csvwtr = csv::Writer::from_memory();
-    attempt!(csvwtr.encode(("Frame number", "Tag IDs", "Tag Centers", "Tag P1s", "Tag P2s", "Tag P3s", "Tag P4s")));
+    let mut csvwtr = csv::Writer::from_writer(vec![]);
+    attempt!(csvwtr.serialize(("Frame number", "Tag IDs", "Tag Centers", "Tag P1s", "Tag P2s", "Tag P3s", "Tag P4s")));
     let csvwtr = Arc::new(Mutex::new(csvwtr));
 
     let inname = nri::do_camera::<[u8; 3], Row, _, _>("bluefox",
                                                          |png, csvwtr, prof| {
                                                              let _g = prof.enter("april");
-                                                             csvwtr.lock().unwrap().encode(april(png, prof)).unwrap()
+                                                             csvwtr.lock().unwrap().serialize(april(png, prof)).unwrap()
                                                          },
                                                          csvwtr.clone(),
                                                          1600, 1200, 3,
                                                          ColorType::LCT_RGB, 8);
 
-    let mut csvwtr = Arc::try_unwrap(csvwtr).ok().unwrap().into_inner().unwrap();
-    attempt!(attempt!(File::create(Path::new(&inname).parent().unwrap().join("bluefox").join("april.csv"))).write_all(csvwtr.as_bytes()));
+    let csvwtr = Arc::try_unwrap(csvwtr).ok().unwrap().into_inner().unwrap();
+    attempt!(attempt!(File::create(Path::new(&inname).parent().unwrap().join("bluefox").join("april.csv"))).write_all(&csvwtr.into_inner().unwrap()));
 }
 

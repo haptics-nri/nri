@@ -95,7 +95,7 @@ fn try_main() -> Result<()> {
         (@arg DEST: +required "Destination (path or SSH address)")
     }.get_matches();
 
-    for epdir in matches.values_of("EPDIR").unwrap() {
+    'args: for epdir in matches.values_of("EPDIR").unwrap() {
         println!("Processing {}...", epdir);
 
         let epdir = Path::new(epdir).to_owned();
@@ -144,16 +144,26 @@ fn try_main() -> Result<()> {
         let dats  = glob(&epdir, "*.dat")?;
         let flows = glob(&epdir, "*.flow")?;
         let pngs  = glob(&epdir, "*.png")?;
+        let crops = glob(&epdir, "crops/*.png")?;
         let csvs  = glob(&epdir, "*.csv")?;
+        let blcsvs = glob(&epdir, "bluefox_times.csv")?;
+        let stcsvs = glob(&epdir, "structure_times.csv")?;
         let bcsvs = glob(&epdir, "biotac.csv")?;
         let ocsvs = glob(&epdir, "optoforce.csv")?;
         println!("{} pngs, {} csvs, {} dats", pngs.len(), csvs.len(), dats.len());
-        if csvs.len() != 9*flows.len() + bcsvs.len() + ocsvs.len() {
-            bail!("Wrong number of CSV files!");
+        let expected_csv = 4*flows.len() + blcsvs.len()*3/2 + stcsvs.len() + bcsvs.len() + ocsvs.len();
+        let expected_png = dats.len() - bcsvs.len() - ocsvs.len() - 2*flows.len() + crops.len();
+        let mut ok = true;
+        if csvs.len() != expected_csv {
+            println!("Wrong number of CSV files! (4*{} + {}*3/2 + {} + {} + {} = {} != {})", flows.len(), blcsvs.len(), stcsvs.len(), bcsvs.len(), ocsvs.len(), expected_csv, csvs.len());
+            ok = false;
         }
-        if dats.len() > 0 && pngs.len() != dats.len() - bcsvs.len() - ocsvs.len() - 2*flows.len() {
-            bail!("Wrong number of PNG files!");
+        if dats.len() > 0 && pngs.len() != expected_png {
+            println!("Wrong number of PNG files! ({} - {} - {} - 2*{} + {} = {} != {})", dats.len(), bcsvs.len(), ocsvs.len(), flows.len(), crops.len(), expected_png, pngs.len());
+            ok = false;
         }
+
+        if !ok { bail!("Aborting due to previous error"); }
 
         /* find $epdir -name '*.dat' -exec rm {} \; */
         if dats.len() > 0 {
@@ -169,6 +179,11 @@ fn try_main() -> Result<()> {
         println!("{} required, {} free", size, free);
         if size.0 > free.0 {
             bail!("not enough space at destination");
+        }
+
+        if flows.len() + pngs.len() + csvs.len() == 0 {
+            eprintln!("no files to transfer");
+            continue 'args;
         }
 
         /* rsync -avh $epdir $dest (with progress bars!) */
@@ -281,9 +296,9 @@ fn check_scp(SshInfo { user, pass, host, dir }: SshInfo) -> Result<()> {
 
 /// find $dir -name $name
 fn glob<P: AsRef<Path>>(dir: P, name: &str) -> Result<Vec<PathBuf>> {
-    let pattern = Glob::new(name)?.compile_matcher();
+    let pattern = Glob::new(&format!("*/{}", name))?.compile_matcher();
     Ok(WalkDir::new(dir).into_iter().fallible()
-        .filter(|entry| pattern.is_match(entry.file_name()))
+        .filter(|entry| pattern.is_match(entry.path()))
         .map(|entry| entry.path().to_owned())
         .collect()?)
 }
