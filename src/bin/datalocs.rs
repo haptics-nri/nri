@@ -35,6 +35,11 @@ error_chain! {
             description("error while processing row")
             display("error in row {} of {}: {}", i+1, file.display(), msg)
         }
+
+        Csv(op: &'static str, file: PathBuf) {
+            description("Csv error")
+            display("error in CSV file {} during {}", file.display(), op)
+        }
     }
 
     links {
@@ -43,7 +48,6 @@ error_chain! {
 
     foreign_links {
         Cast(cast::Error);
-        Csv(csv::Error);
         Image(image::ImageError);
     }
 }
@@ -72,6 +76,7 @@ struct Amazon {
     work_time: u32,
     crop_num: u32,
     #[serde(serialize_with="serialize_cropinfo")] source: CropInfo,
+    datadir: String,
     surface: String,
     img_width: u32,
     img_height: u32,
@@ -202,10 +207,12 @@ quick_main!(|| -> Result<i32> {
 
         fs::create_dir(cropdir).chain_err(|| Io("create", cropdir.into()))?;
 
-        let mut csv1 = csv::Writer::from_path(cropdir.join("crops.csv"))?;
-        csv1.serialize(("Cropped image", "Date", "End-effector", "Episode number", "Data location"))?;
-        let mut csv2 = csv::Writer::from_path(cropdir.join("crop_amazon.csv"))?;
-        csv2.serialize(("image_url", "image_width", "image_height"))?;
+        let cropspath = cropdir.join("crops.csv");
+        let mut csv1 = csv::Writer::from_path(&cropspath).chain_err(|| Csv("open", cropspath.clone()))?;
+        csv1.serialize(("Cropped image", "Date", "End-effector", "Episode number", "Data location")).chain_err(|| Csv("write headers", cropspath.clone()))?;
+        let cropsamzpath = cropdir.join("crop_amazon.csv");
+        let mut csv2 = csv::Writer::from_path(&cropsamzpath).chain_err(|| Csv("open", cropsamzpath.clone()))?;
+        csv2.serialize(("image_url", "image_width", "image_height")).chain_err(|| Csv("write headers", cropsamzpath.clone()))?;
         Some((csv1, csv2))
     } else {
         None
@@ -286,15 +293,16 @@ quick_main!(|| -> Result<i32> {
     // step 3: parse CSV
 
     let surf_file = matches.value_of("SURFACES").unwrap();
-    let surfaces = csv::Reader::from_path(surf_file)?
+    let surfaces = csv::Reader::from_path(surf_file).chain_err(|| Csv("open", surf_file.into()))?
         .records()
-        .map(|row| row.map_err(Into::into)
-                      .map(|row| (row[0].to_owned(),                   // surface name
-                                  (row[2].to_owned(), row[3].to_owned()), // stick
-                                  (row[4].to_owned(), row[5].to_owned()), // opto
-                                  (row[6].to_owned(), row[7].to_owned()), // bio
-                                  row[10].to_owned(),                  // loc 1
-                                  row[11].to_owned())))                // loc 2
+        .enumerate()
+        .map(|(i, row)| row.chain_err(|| Row(i, surf_file.into(), "parse error".into()))
+                           .map(|row| (row[0].to_owned(),   // surface name
+                                      (row[2].to_owned(), row[3].to_owned()), // stick
+                                      (row[4].to_owned(), row[5].to_owned()), // opto
+                                      (row[6].to_owned(), row[7].to_owned()), // bio
+                                      row[10].to_owned(),   // loc 1
+                                      row[11].to_owned()))) // loc 2
         .collect::<Result<Vec<_>>>()?;
     
     if let Some(amazon_path) = amazon {
@@ -303,21 +311,25 @@ quick_main!(|| -> Result<i32> {
             let meta = ent.metadata().chain_err(|| Io("stat", ent.path()))?;
             if meta.is_dir() {
                 let date = ent.path().file_name().unwrap().to_str().unwrap().parse().unwrap();
+                let amzoutpath = ent.path().join("amazon_output_raw.csv");
                 if let Ok(mut amz_rdr) = csv::ReaderBuilder::new()
                                                             .flexible(true)
-                                                            .from_path(ent.path().join("amazon_output_raw.csv")) {
+                                                            .from_path(&amzoutpath) {
                     // fix up study results headers
                     let headers = {
-                        let mut headers = amz_rdr.headers()?.clone();
+                        let mut headers = amz_rdr.headers().chain_err(|| Csv("read headers", amzoutpath))?.clone();
                         unborrow!(headers.truncate(headers.len() - 2));
                         headers
                     };
                     amz_rdr.set_headers(headers);
 
                     // read all crops for cross-referencing
-                    let mut crops_rdr = csv::Reader::from_path(ent.path().join("crops.csv"))?;
+                    let cropspath = ent.path().join("crops.csv");
+                    let mut crops_rdr = csv::Reader::from_path(&cropspath).chain_err(|| Csv("open", cropspath.to_owned()))?;
                     let crops: Vec<CropInfo> = crops_rdr.deserialize()
-                        .map(|r| r.map_err(Into::into))
+                        .enumerate()
+                        .map(|(i, r)| r.chain_err(|| Row(i, cropspath.to_owned(), "deserialize".into()))
+                                       .map(|r| r))
                         .collect::<Result<_>>()?;
 
                     // munge ratings
@@ -376,16 +388,17 @@ quick_main!(|| -> Result<i32> {
                                     }
                                 }
 
-                                surface_data = Some((name.clone(), exp_answers));
+                                surface_data = Some((name.clone(), nicknames[&loc1[..]].to_owned(), exp_answers));
                                 break;
                             }
                         }
-                        let (surface, experimenter) = surface_data.ok_or_else(|| Row(i, ent.path(), format!("no surface matching {}-{}-{}", source.date, source.end_effector, source.episode_number)))?;
+                        let (surface, datadir, experimenter) = surface_data.ok_or_else(|| Row(i, ent.path(), format!("no surface matching {}-{}-{}", source.date, source.end_effector, source.episode_number)))?;
 
                         let info = Amazon {
                             date,
                             crop_num,
                             surface,
+                            datadir,
                             experimenter,
                             source: source.clone(),
                             hit_id: raw.hit_id,
@@ -412,9 +425,11 @@ quick_main!(|| -> Result<i32> {
                               .push(info);
                     }
 
+                    let amzoutpath = ent.path().join("amazon_output_cooked.csv");
                     let mut amz_wtr = csv::WriterBuilder::new()
                         .has_headers(false)
-                        .from_path(ent.path().join("amazon_output_cooked.csv"))?;
+                        .from_path(&amzoutpath)
+                        .chain_err(|| Csv("create", amzoutpath.clone()))?;
                     amz_wtr.write_record(&[
                             "date",
                             "hit_id",
@@ -423,15 +438,16 @@ quick_main!(|| -> Result<i32> {
                             "work_time",
                             "crop_num",
                             "source",
+                            "datadir",
                             "surface",
                             "img_width",
                             "img_height",
                             "exp_hard", "exp_rough", "exp_sticky", "exp_warm",
                             "turk_hard", "turk_rough", "turk_sticky", "turk_warm",
                             "turk_quality", "turk_shape",
-                            ])?;
+                            ]).chain_err(|| Csv("write headers", amzoutpath.clone()))?;
                     for rating in ratings {
-                        amz_wtr.serialize(rating)?;
+                        amz_wtr.serialize(rating).chain_err(|| Csv("serialize", amzoutpath.clone()))?;
                     }
                 }
             }
@@ -518,12 +534,14 @@ quick_main!(|| -> Result<i32> {
                                                                            .chain_err(|| Io("copy", ent.path()))?;
                                                                        csv1.serialize((cropdescs.len(),
                                                                                     date, endeff, num,
-                                                                                    loc))?;
+                                                                                    loc))
+                                                                           .chain_err(|| Csv("serialize", PathBuf::from("<csv1>")))?;
                                                                        let img = image::open(&newpath)?;
                                                                        csv2.serialize((format!("{}crop{}.png",
                                                                                             prefix,
                                                                                             cropdescs.len()),
-                                                                                    img.width(), img.height()))?;
+                                                                                    img.width(), img.height()))
+                                                                           .chain_err(|| Csv("serialize", PathBuf::from("<csv2>")))?;
                                                                   }
                                                                   cropdescs.insert(cropdesc);
                                                               }
