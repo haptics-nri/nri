@@ -15,16 +15,17 @@ extern crate utils;
 
 use utils::prelude::*;
 
-use std::{cmp, f64, fs, io, ops, str};
+use std::{cmp, f64, fs, io, str};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
 
-use cast::{u8, u32, u64, i32, usize, f64};
-use image::{GenericImage, Pixel, RgbaImage};
+use cast::{u8, u32, u64, i32, f64};
+use image::{imageops, FilterType, GenericImage, Pixel, RgbaImage};
 use line_drawing::XiaolinWu as Line;
 use rayon::prelude::*;
 use tempdir::TempDir;
@@ -74,6 +75,9 @@ impl ThruExt for i32 {
         }
     }
 }
+
+
+static VERBOSE: AtomicBool = ATOMIC_BOOL_INIT;
 
 enum Mode {
     Movie(Movie),
@@ -157,6 +161,9 @@ impl Mode {
 
             mode!(Crops { ref mut output_dir, ref mut pts, ref mut pcts }) => {
                 // clear out crop dir
+                if VERBOSE.load(Ordering::SeqCst) {
+                    println!("Clearing crop dir\n");
+                }
                 let cropdir = Path::new(epdir).join("crops");
                 fs::remove_dir_all(&cropdir).allow_err(|e| e.kind() == io::ErrorKind::NotFound, |_| ())
                                             .chain_err(|| Io("remove", cropdir.clone()))?;
@@ -226,7 +233,7 @@ impl Mode {
         Ok(())
     }
 
-    fn end_frame(&self, fa: u32, img: &mut RgbaImage, filename: &str) -> Result<()> {
+    fn end_frame(&self, fa: u32, apra: &HashMap<u32, (f64, f64)>, img: &mut RgbaImage, filename: &str) -> Result<()> {
         match *self {
             mode!(Movie { ref framedir }) => {
                 let mut to = framedir.path().to_owned();
@@ -245,31 +252,81 @@ impl Mode {
                     let rect = [655, 1200, 928, 704]; // empirical end-effector envelope
                     //          L    B     R     T
 
-                    let bboxb = pts.into_iter()
-                                   .fold([f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY, f64::INFINITY],
-                                         |bb, (x, y)| {
-                                             [f64::min(bb[L], x),
-                                              f64::max(bb[B], y),
-                                              f64::max(bb[R], x),
-                                              f64::min(bb[T], y)]
-                                         });
-                    let bboxb = [cmp::max(i32(bboxb[L] - 25.)?, 1),
-                                 cmp::min(i32(bboxb[B] + 25.)?, i32(img.height())?),
-                                 cmp::min(i32(bboxb[R] + 25.)?, i32(img.width())?),
-                                 cmp::max(i32(bboxb[T] - 25.)?, 1)];
+                    let mut bboxb = pts.into_iter()
+                                       .fold([f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY, f64::INFINITY],
+                                             |bb, (x, y)| {
+                                                 [f64::min(bb[L], x),
+                                                  f64::max(bb[B], y),
+                                                  f64::max(bb[R], x),
+                                                  f64::min(bb[T], y)]
+                                             });
 
-                    if bboxb[B] > bboxb[T] && bboxb[R] > bboxb[L] {
+                    // special case old datasets
+                    if apra.contains_key(&32) && apra.contains_key(&40) {
+                        let bottom = (apra[&32].1 + apra[&40].1)/2.0;
+                        let height = bboxb[B] - bboxb[T];
+                        let width = bboxb[R] - bboxb[L];
+                        if VERBOSE.load(Ordering::SeqCst) {
+                            println!("apra[32] = {:?}, apra[40] = {:?}, bbox = {} x {}", apra[&32], apra[&40], width, height);
+                        }
+                        if bottom < 1000.0 && height > width*2.0 {
+                            // make bbox square-ish
+                            let hcenter = (bboxb[L] + bboxb[R])/2.0;
+                            let fudge = height.min(apra[&40].0 - apra[&32].0 - 200.0);
+                            bboxb[L] = hcenter - fudge/2.0;
+                            bboxb[R] = hcenter + fudge/2.0;
+                        }
+                    }
+
+                    // integerize
+                    let bboxb = [i32(bboxb[L] - 25.)?,
+                                 i32(bboxb[B] + 25.)?,
+                                 i32(bboxb[R] + 25.)?,
+                                 i32(bboxb[T] - 25.)?];
+
+                    if bboxb[L] > 0 && bboxb[T] > 0 && bboxb[B] < i32(img.height())? && bboxb[R] < i32(img.width())? && bboxb[B] > bboxb[T] && bboxb[R] > bboxb[L] {
                         // calculate intersection percentage of rect vs bboxb
                         let bboxb_area = (bboxb[R] - bboxb[L]) * (bboxb[B] - bboxb[T]);
                         let overlap_area = cmp::max(0, cmp::min(rect[R], bboxb[R]) - cmp::max(rect[L], bboxb[L])) *
                                            cmp::max(0, cmp::min(rect[B], bboxb[B]) - cmp::max(rect[T], bboxb[T]));
                         let pct = f64(overlap_area) / f64(bboxb_area);
 
-                        if pct < 0.25 {
-                            let cropped = output_dir.join(format!("{}_crop.png", fa));
-                            img.sub_image(u32(bboxb[L])?, u32(bboxb[T])?, u32(bboxb[R] - bboxb[L])?, u32(bboxb[B] - bboxb[T])?)
-                               .to_image()
-                               .save(&cropped).chain_err(|| Io("save", cropped.clone()))?;
+                        if VERBOSE.load(Ordering::SeqCst) {
+                            println!("Frame {}: overlap = {:.1}%, bbox size = {}\n", fa, pct*100.0, bboxb_area);
+                        }
+
+                        if pct < 0.5 && bboxb_area < 1_000_000 {
+                            fn go(img: &mut RgbaImage, bboxb: &[i32; 4], filename: PathBuf) -> Result<()> {
+                                let mut sub = img.sub_image(u32(bboxb[L])?, u32(bboxb[T])?, u32(bboxb[R] - bboxb[L])?, u32(bboxb[B] - bboxb[T])?).to_image();
+
+                                // resize carefully
+                                let h = sub.height();
+                                let w = sub.width();
+                                if h > w {
+                                    sub = sub.sub_image(0, (h - w) / 2, w, w).to_image();
+                                } else {
+                                    sub = sub.sub_image((w - h) / 2, 0, h, h).to_image();
+                                }
+
+                                imageops::resize(&sub, 256, 256, FilterType::Nearest)
+                                   .save(&filename).chain_err(|| Io("save", filename.clone()))?;
+                                Ok(())
+                            }
+
+                            // if rectangular, split in half
+                            let height = f64(bboxb[B] - bboxb[T]);
+                            let width = f64(bboxb[R] - bboxb[L]);
+                            if height > 1.75*width {
+                                let bb1 = [bboxb[L], bboxb[B] - i32(height/2.0)?, bboxb[R], bboxb[T]];
+                                let bb2 = [bboxb[L], bboxb[B], bboxb[R], bboxb[T] + i32(height/2.0)?];
+                                let cr1 = output_dir.join(format!("{}_top_crop.png", fa));
+                                let cr2 = output_dir.join(format!("{}_bot_crop.png", fa));
+                                go(img, &bb1, cr1)?;
+                                go(img, &bb2, cr2)?;
+                            } else {
+                                let cropped = output_dir.join(format!("{}_crop.png", fa));
+                                go(img, &bboxb, cropped)?;
+                            }
 
                             let boxed = output_dir.join(format!("{}_frame.png", fa));
                             for line in [(L, T), (R, T), (R, B), (L, B), (L, T)].windows(2) {
@@ -363,9 +420,20 @@ impl Mode {
                 for (fa, _) in sorted {
                     if !keepers.contains(&fa) {
                         let frame_file = output_dir.join(format!("{}_frame.png", fa));
-                        let crop_file = output_dir.join(format!("{}_crop.png", fa));
                         fs::remove_file(&frame_file).chain_err(|| Io("delete", frame_file.clone()))?;
-                        fs::remove_file(&crop_file).chain_err(|| Io("delete", crop_file.clone()))?;
+                        let crop_file = output_dir.join(format!("{}_crop.png", fa));
+                        if crop_file.exists() {
+                            fs::remove_file(&crop_file).chain_err(|| Io("delete", crop_file.clone()))?;
+                        } else {
+                            let cf1 = output_dir.join(format!("{}_top_crop.png", fa));
+                            let cf2 = output_dir.join(format!("{}_bot_crop.png", fa));
+                            fs::remove_file(&cf1).chain_err(|| Io("delete", cf1.clone()))?;
+                            fs::remove_file(&cf2).chain_err(|| Io("delete", cf2.clone()))?;
+                        }
+                    } else {
+                        if VERBOSE.load(Ordering::SeqCst) {
+                            println!("Keeping frame {}", fa);
+                        }
                     }
                 }
             }
@@ -397,6 +465,7 @@ quick_main!(|| -> Result<i32> {
         (about: "Helper for rendering stuff onto images/movies")
 
         (@arg EPDIR: *... "Episode directory")
+        (@arg VERBOSE: -v --verbose "Print verbose diagnostics")
         (@arg MODE: -m --mode <MODE>... {|s| Mode::parse(&s)} "Render mode")
         (@arg PT: -p [coords] #{2,2} {|s| s.parse::<f64>()} "Tracked point")
     }.get_matches();
@@ -404,6 +473,10 @@ quick_main!(|| -> Result<i32> {
     let mut modes = matches.values_of("MODE").unwrap()
                            .map(|s| Mode::parse(s).unwrap())
                            .collect::<Vec<_>>();
+
+    if matches.is_present("VERBOSE") {
+        VERBOSE.store(true, Ordering::SeqCst);
+    }
 
     for mode in &mut modes { mode.init(&matches)?; }
 
@@ -522,7 +595,7 @@ quick_main!(|| -> Result<i32> {
                     }
                 }
 
-                for mode in &modes { mode.end_frame(fa, &mut img, &filename)?; }
+                for mode in &modes { mode.end_frame(fa, apra, &mut img, &filename)?; }
 
                 bar.inc(1);
                 Ok(())
