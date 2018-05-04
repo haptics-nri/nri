@@ -96,6 +96,7 @@ struct Movie {
 
 #[derive(Default)]
 struct Crops {
+    scratch: Option<TempDir>,
     output_dir: Option<PathBuf>,
     pts: Option<ThreadLocal<Vec<(f64, f64)>>>,
     pcts: Option<Arc<Mutex<HashMap<u32, f64>>>>,
@@ -153,13 +154,13 @@ impl Mode {
                 *output_filename = Some(Path::new(epdir).join("movie.mp4"));
 
                 // store frames in a temporary directory before running FFMPEG
-                *framedir = Some(TempDir::new("nri").chain_err(|| Io("create", "temp dir".into()))?);
+                *framedir = Some(TempDir::new("nri").chain_err(|| Io("create", "temp dir for movie".into()))?);
 
                 *first_frame = Some(frames.iter().map(|&(num, _, _)| num).min().ok_or("no frames")?);
                 *nframes = Some(frames.len());
             }
 
-            mode!(Crops { ref mut output_dir, ref mut pts, ref mut pcts }) => {
+            mode!(Crops { ref mut scratch, ref mut output_dir, ref mut pts, ref mut pcts }) => {
                 // clear out crop dir
                 if VERBOSE.load(Ordering::SeqCst) {
                     println!("Clearing crop dir\n");
@@ -169,6 +170,7 @@ impl Mode {
                                             .chain_err(|| Io("remove", cropdir.clone()))?;
                 fs::create_dir(&cropdir).chain_err(|| Io("create", cropdir.clone()))?;
 
+                *scratch = Some(TempDir::new("nri").chain_err(|| Io("create", "temp dir for crops".into()))?);
                 *output_dir = Some(cropdir);
 
                 *pts = Some(ThreadLocal::new());
@@ -243,7 +245,7 @@ impl Mode {
                 img.save(&to).chain_err(|| Io("save", to.clone()))?;
             }
 
-            mode!(Crops { ref output_dir, ref pts, ref pcts }) => {
+            mode!(Crops { ref scratch, ref pts, ref pcts }) => {
                 if let Some(pts) = pts.remove() {
                     const L: usize = 0;
                     const B: usize = 1;
@@ -319,16 +321,16 @@ impl Mode {
                             if height > 1.75*width {
                                 let bb1 = [bboxb[L], bboxb[B] - i32(height/2.0)?, bboxb[R], bboxb[T]];
                                 let bb2 = [bboxb[L], bboxb[B], bboxb[R], bboxb[T] + i32(height/2.0)?];
-                                let cr1 = output_dir.join(format!("{}_top_crop.png", fa));
-                                let cr2 = output_dir.join(format!("{}_bot_crop.png", fa));
+                                let cr1 = scratch.path().join(format!("{}_top_crop.png", fa));
+                                let cr2 = scratch.path().join(format!("{}_bot_crop.png", fa));
                                 go(img, &bb1, cr1)?;
                                 go(img, &bb2, cr2)?;
                             } else {
-                                let cropped = output_dir.join(format!("{}_crop.png", fa));
+                                let cropped = scratch.path().join(format!("{}_crop.png", fa));
                                 go(img, &bboxb, cropped)?;
                             }
 
-                            let boxed = output_dir.join(format!("{}_frame.png", fa));
+                            let boxed = scratch.path().join(format!("{}_frame.png", fa));
                             for line in [(L, T), (R, T), (R, B), (L, B), (L, T)].windows(2) {
                                 for lx in bboxb[line[0].0].thru(bboxb[line[1].0]) {
                                     for ly in bboxb[line[0].1].thru(bboxb[line[1].1]) {
@@ -403,7 +405,7 @@ impl Mode {
                 }
             }
 
-            mode!(Crops { ref output_dir, ref mut pcts }) => {
+            mode!(Crops { ref scratch, ref output_dir, ref mut pcts }) => {
                 let pcts = Arc::try_unwrap(pcts.take().unwrap()).unwrap().into_inner().unwrap(); // such unwrap
                 let mut sorted = pcts.iter().collect::<Vec<_>>();
                 sorted.sort_by(|&(_, pct1), &(_, pct2)| pct1.partial_cmp(&pct2).expect("NaN"));
@@ -418,21 +420,20 @@ impl Mode {
                 keepers.truncate(5);
 
                 for (fa, _) in sorted {
-                    if !keepers.contains(&fa) {
-                        let frame_file = output_dir.join(format!("{}_frame.png", fa));
-                        fs::remove_file(&frame_file).chain_err(|| Io("delete", frame_file.clone()))?;
-                        let crop_file = output_dir.join(format!("{}_crop.png", fa));
-                        if crop_file.exists() {
-                            fs::remove_file(&crop_file).chain_err(|| Io("delete", crop_file.clone()))?;
-                        } else {
-                            let cf1 = output_dir.join(format!("{}_top_crop.png", fa));
-                            let cf2 = output_dir.join(format!("{}_bot_crop.png", fa));
-                            fs::remove_file(&cf1).chain_err(|| Io("delete", cf1.clone()))?;
-                            fs::remove_file(&cf2).chain_err(|| Io("delete", cf2.clone()))?;
-                        }
-                    } else {
+                    if keepers.contains(&fa) {
                         if VERBOSE.load(Ordering::SeqCst) {
                             println!("Keeping frame {}", fa);
+                        }
+                        let frame_name = PathBuf::from(format!("{}_frame.png", fa));
+                        fs::copy(scratch.path().join(&frame_name), output_dir.join(&frame_name)).chain_err(|| Io("copy", frame_name.clone()))?;
+                        let crop_name = PathBuf::from(format!("{}_crop.png", fa));
+                        if scratch.path().join(&crop_name).exists() {
+                            fs::copy(scratch.path().join(&crop_name), output_dir.join(&crop_name)).chain_err(|| Io("copy", crop_name.clone()))?;
+                        } else {
+                            let crop1 = PathBuf::from(format!("{}_top_crop.png", fa));
+                            let crop2 = PathBuf::from(format!("{}_bot_crop.png", fa));
+                            fs::copy(scratch.path().join(&crop1), output_dir.join(&crop1)).chain_err(|| Io("copy", crop1.clone()))?;
+                            fs::copy(scratch.path().join(&crop2), output_dir.join(&crop2)).chain_err(|| Io("copy", crop2.clone()))?;
                         }
                     }
                 }
@@ -536,8 +537,6 @@ quick_main!(|| -> Result<i32> {
                 let apra = &aprils[&fa];
                 let ida = apra.keys().collect::<HashSet<_>>(); // tag IDs visible in the current frame
                 for (&fb, aprb) in &aprils {
-                    if fb > fa { break } // only frames up to the current one
-
                     if aprb.len() > 20 { // bail if there aren't enough tags
                         let idb = aprb.keys().collect::<HashSet<_>>();
                         let inter = ida.intersection(&idb).collect::<Vec<_>>();
